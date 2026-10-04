@@ -50,6 +50,69 @@ export function DashboardFilterProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const VALID_PERIODS: TimePeriod[] = ["day", "week", "month", "quarter", "year", "all"];
+
+/**
+ * Gibt einer einzelnen Dashboard-Grafik einen eigenen Zeitraum.
+ * Liegenschaft kommt weiter vom übergeordneten Filter; Zeitraum/Offset
+ * sind lokal und werden über `onChange` dauerhaft gespeichert.
+ */
+export function WidgetPeriodScope({
+  children,
+  initialPeriod,
+  initialOffset,
+  onChange,
+}: {
+  children: ReactNode;
+  initialPeriod?: unknown;
+  initialOffset?: unknown;
+  onChange?: (period: TimePeriod, offset: number) => void;
+}) {
+  const parent = useDashboardFilter();
+  const [period, setPeriodRaw] = useState<TimePeriod>(
+    VALID_PERIODS.includes(initialPeriod as TimePeriod) ? (initialPeriod as TimePeriod) : "day",
+  );
+  const [offset, setOffsetRaw] = useState<number>(
+    typeof initialOffset === "number" && Number.isFinite(initialOffset) ? initialOffset : 0,
+  );
+  const [isPending, startTransition] = useTransition();
+
+  const setSelectedPeriod = useCallback((p: TimePeriod) => {
+    startTransition(() => {
+      setPeriodRaw((prev) => {
+        if (prev === p) return prev;
+        setOffsetRaw(0);
+        onChange?.(p, 0);
+        return p;
+      });
+    });
+  }, [onChange]);
+
+  const setSelectedOffset = useCallback((o: number | ((prev: number) => number)) => {
+    setOffsetRaw((prev) => {
+      const next = typeof o === "function" ? o(prev) : o;
+      setPeriodRaw((p) => { onChange?.(p, next); return p; });
+      return next;
+    });
+  }, [onChange]);
+
+  return (
+    <DashboardFilterContext.Provider
+      value={{
+        selectedLocationId: parent.selectedLocationId,
+        setSelectedLocationId: parent.setSelectedLocationId,
+        selectedPeriod: period,
+        setSelectedPeriod,
+        selectedOffset: offset,
+        setSelectedOffset,
+        isPending: isPending || parent.isPending,
+      }}
+    >
+      {children}
+    </DashboardFilterContext.Provider>
+  );
+}
+
 export function useDashboardFilter(): DashboardFilterContextType {
   const context = useContext(DashboardFilterContext);
   if (!context) {

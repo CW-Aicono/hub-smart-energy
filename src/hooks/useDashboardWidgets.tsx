@@ -256,6 +256,20 @@ export function useDashboardWidgets() {
     }
   };
 
+  /** Speichert den eigenen Zeitraum einer Grafik (config.period / config.offset). */
+  const updateWidgetPeriod = async (widgetType: string, period: string, offset: number) => {
+    const widget = widgets.find((w) => w.widget_type === widgetType);
+    if (!widget?.id || widget.id.startsWith("default-") || widget.id.startsWith("demo")) return;
+    const newConfig = { ...(widget.config || {}), period, offset };
+    const { error } = await supabase
+      .from("dashboard_widgets")
+      .update({ config: newConfig as unknown as Json })
+      .eq("id", widget.id);
+    if (!error) {
+      setWidgets((prev) => prev.map((w) => (w.widget_type === widgetType ? { ...w, config: newConfig } : w)));
+    }
+  };
+
   const updateAllLayouts = async (layouts: Record<string, WidgetLayout>) => {
     const updates = Object.entries(layouts).map(async ([widgetType, layout]) => {
       const widget = widgets.find((w) => w.widget_type === widgetType);
@@ -327,6 +341,7 @@ export function useDashboardWidgets() {
     updateWidgetSize,
     updateWidgetLayout,
     updateAllLayouts,
+    updateWidgetPeriod,
     resetLayouts,
     refetch: fetchWidgets,
   };

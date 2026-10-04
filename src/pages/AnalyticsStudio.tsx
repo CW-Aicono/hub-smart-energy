@@ -16,7 +16,8 @@ import { AnalyticsPeriod } from "@/hooks/useAnalyticsData";
 import { DeviceTreeNode } from "@/hooks/useDeviceTree";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Clapperboard, Play, HelpCircle } from "lucide-react";
+import { Clapperboard, Play, HelpCircle, LineChart as LineChartIcon } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import {
@@ -118,6 +119,9 @@ export default function AnalyticsStudio() {
             <TimeRangeToolbar period={period} offset={offset} onPeriodChange={setPeriod} onOffsetChange={setOffset} />
           </div>
           <div className="flex items-center gap-2">
+            <Button asChild variant="default" size="sm" className="gap-2">
+              <Link to="/analytics-studio/analyse"><LineChartIcon className="h-4 w-4" /> Energieanalyse</Link>
+            </Button>
             <Button
               variant="outline"
               size="sm"

@@ -1,6 +1,8 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **Jede Grafik mit eigenem Zeitraum:** Im Dashboard ändert der Zeitraum nur noch die jeweilige Grafik und bleibt gespeichert.
+- **Neue Energieanalyse:** Unter Energiedaten → Energieanalyse vergleichen Sie beliebige Messstellen, Zeiträume (z. B. Vorjahr), sehen Heatmap und Dauerlinie, beziehen Werte auf m² oder Wetter und exportieren nach CSV/Excel. Mit „Link kopieren“ teilen Sie die Analyse mit Kollegen.
 - **Ladestatus korrigiert sich selbst:** Neue Fernfunktion „Status abfragen“. Zeigt eine Ladestation länger als 2 Stunden „Lädt“, obwohl kein Ladevorgang läuft, fragt das System den echten Status automatisch neu ab.
 - **Schneller Bereichswechsel:** Wer mehrere Rollen hat, wechselt mit einem Klick zwischen Super-Admin, Partner-Portal und eigenem Energie-Dashboard.
 - **Immer aktuell:** Im Benutzermenü und im Profil sehen Sie die App-Version. Gibt es eine neue Version, erscheint oben „Jetzt aktualisieren“ – kein Strg+F5 mehr nötig.
