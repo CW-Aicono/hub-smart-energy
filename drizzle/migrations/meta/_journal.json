@@ -8,6 +8,13 @@
       "when": 1791126469225,
       "tag": "0000_partner_modules_cascade",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791127653853,
+      "tag": "0001_partner_modules_and_mennekes",
+      "breakpoints": true
     }
   ]
 }
