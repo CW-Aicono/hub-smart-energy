@@ -92,6 +92,13 @@ jobs:
             fi
           done
 
+          # Der Workflow selbst bleibt aus main geschützt. Der Migrations-Runner
+          # ist dagegen Anwendungscode und muss neue, von Lovable erzeugte
+          # Drizzle-Migrationen aus staging kennen.
+          if git cat-file -e "${STAGING_SHA}:scripts/apply-migrations.sh" 2>/dev/null; then
+            git checkout "${STAGING_SHA}" -- scripts/apply-migrations.sh
+          fi
+
           git add -A
           TARGET_TREE="$(git write-tree)"
           MAIN_TREE="$(git rev-parse "${CI_BASELINE}^{tree}")"
