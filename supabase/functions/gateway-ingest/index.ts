@@ -983,7 +983,7 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
 
   return json({
     success: true,
-    inserted: readings.length,
+    inserted: ownedReadings.length,
     skipped: skipped.length,
     skipped_details: skipped.length > 0 ? skipped : undefined,
     sender: senderId,
