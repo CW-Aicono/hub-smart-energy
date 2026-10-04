@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { findAuthUserByEmail } from "../_shared/invite-conflict.ts";
 
 /**
  * Check whether an email address can be used for a new invitation.

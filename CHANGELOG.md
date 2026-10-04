@@ -3,6 +3,8 @@
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## 2026-10-04
+### Fix
+- v1.2.1 – Einladungen: `findAuthUserByEmail` (invite-conflict.ts, auch check-email-availability) nutzt neue RPC `get_auth_user_by_email` (SECURITY DEFINER, nur service_role) statt `listUsers(perPage:1000)`, das der Auth-Dienst ablehnte → „Benutzer-Lookup fehlgeschlagen“. Fallback paginiert mit 50. Migration `0008_get_auth_user_by_email.sql`.
 ### Neu
 - v1.2.0 – Abrechnung: `module_prices.charge_point_price_monthly`/`industry_charge_point_price_monthly` und `tenant_modules.charge_point_price_override` (Pauschale + Preis je aktivem Ladepunkt frei kombinierbar). Neue Tabelle `tenant_module_discounts` (percent/absolute, valid_from/valid_until, RLS: Super-Admin alles, Partner/Tenant-Admin lesen) und RPC `get_active_charge_point_counts` (Heartbeat ≤ 30 Tage, berechtigungsgeprüft). `generate-monthly-invoices`: Zeilen `module_charge_points` (Menge × Preis, aktiv = Heartbeat im Abrechnungsmonat) und `discount` (günstigster überlappender Rabatt, gedeckelt). Edge Function `partner-set-tenant-discount` (Partner-Admin, eigener Mandant, Portfolio-Check). UI: Modulpreise-Spalte „je aktivem Ladepunkt“ mit Gesamtvorschau, Mandanten-Detail (Super-Admin/Partner) mit Ladepunkt-Abrechnung + Vorschau und Rabattverwaltung; Monatssumme inkl. Ladepunkte/Rabatt. Migration `0007_billing_charge_point_price_and_discounts.sql`. Handbuch ergänzt.
 - Semantische Versionierung: sichtbare Version = `package.json` `version` (MAJOR.MINOR.PATCH, aktuell 1.1.0), Anzeige „v1.1.0“; Commit-Hash nur noch im Tooltip/Kopie (`formatAppVersionDetails`) und in `version.json` für die Update-Erkennung.
