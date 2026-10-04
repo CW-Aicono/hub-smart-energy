@@ -914,6 +914,16 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             </ul>
           </section>
           <section>
+            <h4 className="font-semibold mb-2">{T("manual.acc.billingTitle")}</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>{T("manual.acc.billingItem1")}</li>
+              <li>{T("manual.acc.billingItem2")}</li>
+              <li>{T("manual.acc.billingItem3")}</li>
+              <li>{T("manual.acc.billingItem4")}</li>
+              <li>{T("manual.acc.billingItem5")}</li>
+            </ul>
+          </section>
+          <section>
             <h4 className="font-semibold mb-2">{T("manual.acc.versionTitle")}</h4>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
               <li>{T("manual.acc.versionItem1")}</li>
