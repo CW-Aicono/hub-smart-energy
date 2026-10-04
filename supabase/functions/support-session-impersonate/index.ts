@@ -16,8 +16,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// 15 Minuten Sitzungsdauer
-const SESSION_TTL_MS = 15 * 60 * 1000;
+// Kein Arbeits-Zeitlimit: Sitzung läuft bis "Beenden". 24h = nur Aufräum-Grenze
+// für vergessene Sitzungen (close_stale_support_sessions).
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
