@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Briefcase, Cpu, ShieldCheck } from "lucide-react";
@@ -8,7 +9,11 @@ import { setAreaPreference, AREA_PATHS, type AppArea } from "@/lib/areaPreferenc
 interface AreaSwitcherProps {
   current: AppArea;
   className?: string;
-  /** Fest oben rechts im Fenster anzeigen (einheitlich in allen Bereichen). */
+  /**
+   * Als eigene Kopfleiste oben rechts im Inhaltsbereich anzeigen.
+   * Die Leiste liegt im normalen Seitenfluss (kein Overlay) und schiebt den
+   * Seiteninhalt nach unten, statt ihn zu verdecken.
+   */
   floating?: boolean;
 }
 
@@ -18,6 +23,30 @@ const META: Record<AppArea, { label: string; Icon: typeof Cpu }> = {
   ems: { label: "Technisch", Icon: Cpu },
 };
 
+const SLOT_ATTR = "data-area-switcher-slot";
+
+/** Legt einen Slot als erstes Kind des Haupt-Inhaltsbereichs (<main>) an. */
+function useMainSlot(enabled: boolean) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const main = document.querySelector("main");
+    if (!main) return;
+    let el = main.querySelector<HTMLElement>(`:scope > [${SLOT_ATTR}]`);
+    const created = !el;
+    if (!el) {
+      el = document.createElement("div");
+      el.setAttribute(SLOT_ATTR, "");
+      main.prepend(el);
+    }
+    setSlot(el);
+    return () => {
+      if (created) el?.remove();
+    };
+  }, [enabled]);
+  return slot;
+}
+
 /**
  * Umschalter zwischen Super-Admin, Partner-Portal und EMS.
  * Erscheint nur bei mindestens zwei berechtigten Bereichen.
@@ -25,6 +54,7 @@ const META: Record<AppArea, { label: string; Icon: typeof Cpu }> = {
 export function AreaSwitcher({ current, className, floating = false }: AreaSwitcherProps) {
   const { canSwitch, availableAreas } = useAreaAccess();
   const navigate = useNavigate();
+  const slot = useMainSlot(floating && canSwitch);
 
   if (!canSwitch) return null;
 
@@ -45,7 +75,6 @@ export function AreaSwitcher({ current, className, floating = false }: AreaSwitc
       aria-label="Bereich wechseln"
       className={cn(
         "inline-flex items-center gap-1 rounded-full border-2 border-border bg-card p-1",
-        floating && "shadow-lg",
         className,
       )}
     >
@@ -61,7 +90,7 @@ export function AreaSwitcher({ current, className, floating = false }: AreaSwitc
             className={cn(base, current === area ? active : inactive)}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" />
-            <span className={floating ? "hidden sm:inline" : undefined}>{label}</span>
+            <span className="whitespace-nowrap">{label}</span>
           </button>
         );
       })}
@@ -69,10 +98,11 @@ export function AreaSwitcher({ current, className, floating = false }: AreaSwitc
   );
 
   if (!floating) return pill;
-  // Immer an derselben Stelle oben rechts – unabhängig vom Bereich.
+  if (!slot) return null;
+  // Eigene Kopfleiste im Seitenfluss – immer rechts oben, verdeckt nichts.
   return createPortal(
-    <div className="fixed top-3 right-4 z-50 print:hidden">{pill}</div>,
-    document.body,
+    <div className="flex justify-end border-b bg-background px-4 py-2 print:hidden">{pill}</div>,
+    slot,
   );
 }
 
