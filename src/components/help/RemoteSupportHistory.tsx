@@ -27,8 +27,9 @@ function duration(start: string, end: string | null) {
 
 function SessionChanges({ session }: { session: SessionRow }) {
   const { t } = useTranslation();
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading, isError } = useQuery({
     queryKey: ["support-session-changes", session.id],
+    retry: false,
     queryFn: async () => {
       // Direkt zugeordnete Einträge + Einträge des Support-Users im Zeitfenster
       let q = supabase
@@ -50,7 +51,13 @@ function SessionChanges({ session }: { session: SessionRow }) {
     },
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">…</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground">Änderungen werden geladen …</p>;
+  if (isError)
+    return (
+      <p className="text-sm text-muted-foreground">
+        Das Änderungsprotokoll ist auf diesem System noch nicht eingerichtet. Es erscheint nach dem nächsten Update.
+      </p>
+    );
   if (data.length === 0) return <p className="text-sm text-muted-foreground">{t("help.remoteHistoryNoChanges" as any)}</p>;
   return (
     <ul className="space-y-1">
@@ -99,7 +106,9 @@ export default function RemoteSupportHistory() {
         <div className="divide-y rounded-lg border">
           {sessions.map((s) => {
             const isOpen = open === s.id;
-            const running = !s.ended_at && !s.is_manual;
+            // Ohne Ende und älter als 24 h = nicht sauber beendet (wird automatisch bereinigt)
+            const stale = !s.ended_at && Date.now() - new Date(s.started_at).getTime() > 24 * 3600 * 1000;
+            const running = !s.ended_at && !s.is_manual && !stale;
             return (
               <div key={s.id} className="p-3">
                 <button
@@ -110,9 +119,10 @@ export default function RemoteSupportHistory() {
                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   <span className="text-sm font-medium">{fmtDate(s.started_at)}</span>
                   <span className="text-sm text-muted-foreground">
-                    {s.ended_at ? `– ${fmtTime(s.ended_at)}` : ""} · {duration(s.started_at, s.ended_at)}
+                    {s.ended_at ? `– ${fmtTime(s.ended_at)} · ${duration(s.started_at, s.ended_at)}` : stale ? "" : `· ${duration(s.started_at, null)}`}
                   </span>
                   {running && <Badge variant="destructive">{t("help.remoteHistoryRunning" as any)}</Badge>}
+                  {stale && <Badge variant="outline">nicht beendet</Badge>}
                   {s.reason && <span className="text-sm text-muted-foreground truncate">{s.reason}</span>}
                 </button>
                 {isOpen && (
