@@ -263,7 +263,7 @@ const Help = () => {
                 </Button>
               )}
               <Badge variant="outline" className="text-xs">
-                {t("help.version")} {APP_VERSION}
+                {t("help.version")} {formatAppVersion()}
               </Badge>
             </div>
           </div>
