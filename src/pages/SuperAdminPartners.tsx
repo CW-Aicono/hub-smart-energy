@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send, Search } from "lucide-react";
+import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send, Search, Package } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { AuditLogList } from "@/components/audit/AuditLogList";
 import { writeAuditLog } from "@/lib/auditLog";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+import PartnerModulesDialog from "@/components/super-admin/PartnerModulesDialog";
 
 type PartnerSortKey = "name" | "slug" | "contact" | "members" | "billing_mode" | "status";
 
@@ -561,6 +562,9 @@ export default function SuperAdminPartners() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right space-x-1 whitespace-nowrap">
+                      <Button variant="outline" size="sm" onClick={() => setModulesPartner(p)} title="Modul-Portfolio des Partners">
+                        <Package className="h-3.5 w-3.5 mr-1" /> Module
+                      </Button>
                       {needsInvite ? (
                         <Button variant="outline" size="sm" onClick={() => openInviteDialog(p, "new")}>
                           <Mail className="h-3.5 w-3.5 mr-1" /> Einladen
