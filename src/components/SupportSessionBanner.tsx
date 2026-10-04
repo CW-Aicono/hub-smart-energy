@@ -63,7 +63,7 @@ export default function SupportSessionBanner() {
       onClick={endSession}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") endSession(); }}
       title="Klicken zum Beenden der Support-Sitzung"
-      className="fixed top-0 left-0 right-0 z-[60] bg-destructive text-destructive-foreground px-4 pb-3 flex items-center justify-center gap-4 shadow-lg animate-in slide-in-from-top-2 cursor-pointer hover:brightness-110 transition"
+      className="sticky top-0 left-0 right-0 z-[60] w-full bg-destructive text-destructive-foreground px-4 pb-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 shadow-lg animate-in slide-in-from-top-2 cursor-pointer hover:brightness-110 transition"
       style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
     >
       <ShieldAlert className="h-4 w-4 shrink-0" />
