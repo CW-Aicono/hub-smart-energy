@@ -235,7 +235,7 @@ export default function EnergyAnalysis() {
                 </Select>
                 <div className="flex items-center gap-3 pt-1">
                   <Tabs value={state.quantity} onValueChange={(v) => update({ quantity: v as "energy" | "power" })}>
-                    <TabsList className="h-8">
+                    <TabsList className="h-8 inline-flex w-auto">
                       <TabsTrigger value="energy" className="text-xs">Energie</TabsTrigger>
                       <TabsTrigger value="power" className="text-xs">Leistung</TabsTrigger>
                     </TabsList>
@@ -388,7 +388,7 @@ export default function EnergyAnalysis() {
                     <tr className="border-b">
                       <th className="text-left py-1.5">Messstelle</th><th className="text-right">Summe</th><th className="text-right">Mittel</th>
                       <th className="text-right">Min</th><th className="text-right">Max</th><th className="text-right">Grundlast</th>
-                      {cmpRange && <><th className="text-right">Vergleich</th><th className="text-right">Abweichung</th></>}
+                      {cmpRange && state.view === "chart" && <><th className="text-right">Vergleich</th><th className="text-right">Abweichung</th></>}
                     </tr>
                   </thead>
                   <tbody>
@@ -408,7 +408,7 @@ export default function EnergyAnalysis() {
                           <td className="text-right">{fmt(st.min)}</td>
                           <td className="text-right">{fmt(st.max)}</td>
                           <td className="text-right">{fmt(st.base)}</td>
-                          {cmpRange && <>
+                          {cmpRange && state.view === "chart" && <>
                             <td className="text-right">{fmt(b)}</td>
                             <td className={`text-right ${Number.isFinite(diff) ? (diff > 0 ? "text-destructive" : "text-primary") : ""}`}>
                               {Number.isFinite(diff) ? `${diff > 0 ? "+" : ""}${fmt(diff)} ${s.unit} (${b ? fmt((diff / b) * 100, 1) : "–"} %)` : "–"}
