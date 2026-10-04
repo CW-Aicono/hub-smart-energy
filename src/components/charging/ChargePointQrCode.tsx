@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { QrCode, Printer } from "lucide-react";
 import QRCode from "qrcode";
+const __esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string,string>)[c]);
 
 interface ChargePointQrCodeProps {
   ocppId: string;
@@ -47,7 +48,7 @@ export default function ChargePointQrCode({ ocppId, name, address, connectorId, 
         <!DOCTYPE html>
         <html>
         <head>
-          <title>QR-Code: ${displayName}</title>
+          <title>QR-Code: ${__esc(displayName)}</title>
           <style>
             body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; }
             .qr-container { display: inline-block; border: 2px solid #e5e7eb; border-radius: 16px; padding: 32px; }
@@ -61,10 +62,10 @@ export default function ChargePointQrCode({ ocppId, name, address, connectorId, 
         </head>
         <body>
           <div class="qr-container">
-            <h1>${displayName}</h1>
-            ${address ? `<p class="address">${address}</p>` : '<p class="address">&nbsp;</p>'}
+            <h1>${__esc(displayName)}</h1>
+            ${address ? `<p class="address">${__esc(address)}</p>` : '<p class="address">&nbsp;</p>'}
             <img src="${dataUrl}" width="300" height="300" />
-            <div class="ocpp-id">${ocppId}</div>
+            <div class="ocpp-id">${__esc(ocppId)}</div>
             <p class="hint">QR-Code scannen, um den Ladevorgang zu starten</p>
           </div>
         </body>

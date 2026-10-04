@@ -272,7 +272,7 @@ async function handle(action: string, body: Record<string, unknown>) {
           .from("charging_user_rfid_tags")
           .select("user:charging_users!inner(id, status, group_id)")
           .eq("tenant_id", tenantId)
-          .ilike("tag", normalizedIdTag)
+          .ilike("tag", normalizedIdTag.replace(/[\\%_]/g, (c) => "\\" + c))
           .maybeSingle();
         user = (tagRow as any)?.user ?? null;
         error = tagErr;
@@ -283,7 +283,7 @@ async function handle(action: string, body: Record<string, unknown>) {
           .from("charging_users")
           .select("id, status, group_id")
           .eq("tenant_id", tenantId)
-          .ilike("app_tag", normalizedIdTag)
+          .ilike("app_tag", normalizedIdTag.replace(/[\\%_]/g, (c) => "\\" + c))
           .maybeSingle();
         user = result.data;
         error = result.error;
