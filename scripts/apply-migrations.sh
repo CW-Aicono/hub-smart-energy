@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Spielt alle neuen Migrations aus supabase/migrations/ gegen den self-hosted Postgres.
+# Spielt alle neuen Migrations aus supabase/migrations/ und drizzle/migrations/
+# gegen den self-hosted Postgres.
 # Bereits applyte Migrations werden in der Tabelle _deploy_migrations getrackt und uebersprungen.
 # Eine fehlschlagende Migration bricht ab und gibt Exit-Code 1 zurueck.
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-/opt/hub-smart-energy}"
 MIG_DIR="${REPO_ROOT}/supabase/migrations"
+DRIZZLE_MIG_DIR="${REPO_ROOT}/drizzle/migrations"
 DB_CONTAINER="${DB_CONTAINER:-supabase-db}"
 DB_USER="${DB_USER:-supabase_admin}"
 DB_NAME="${DB_NAME:-postgres}"
@@ -25,8 +27,8 @@ filter_psql_noise() {
   grep -vE '^(ALTER|CREATE|DROP|GRANT|REVOKE|COMMENT|COPY|SET|CALL|TRUNCATE|INSERT|UPDATE|DELETE|VALUES|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|REINDEX|VACUUM|ANALYZE|CLUSTER|LOCK|LISTEN|NOTIFY|SELECT|FETCH|MOVE|CLOSE|DECLARE|PREPARE|EXECUTE|DEALLOCATE|EXPLAIN|REASSIGN|SECURITY|REFRESH|IMPORT|LOAD|CHECKPOINT|DISCARD|SHOW|RESET) ?[A-Z0-9_-]*$|^[[:space:]]*setval[[:space:]]*$|^[[:space:]]*-+[[:space:]]*$|^[[:space:]]*[0-9]+[[:space:]]*$|^\([0-9]+ rows?\)$|^[[:space:]]*$' || true
 }
 
-if [ ! -d "$MIG_DIR" ]; then
-  log "Kein Migrations-Verzeichnis unter $MIG_DIR - skipping."
+if [ ! -d "$MIG_DIR" ] && [ ! -d "$DRIZZLE_MIG_DIR" ]; then
+  log "Keine Migrations-Verzeichnisse gefunden - skipping."
   exit 0
 fi
 
@@ -43,9 +45,28 @@ SQL
 # sonst konsumiert `docker exec -i` innerhalb der Schleife den Pipe-stdin und die Iteration bricht
 # nach der ersten Datei ab.
 migration_files=()
-while IFS= read -r -d '' file; do
-  migration_files+=("$file")
-done < <(find "$MIG_DIR" -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
+if [ -d "$MIG_DIR" ]; then
+  while IFS= read -r -d '' file; do
+    migration_files+=("$file")
+  done < <(find "$MIG_DIR" -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
+fi
+if [ -d "$DRIZZLE_MIG_DIR" ]; then
+  while IFS= read -r -d '' file; do
+    migration_files+=("$file")
+  done < <(find "$DRIZZLE_MIG_DIR" -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
+fi
+
+# Existing Supabase migrations keep their historic filename key. Drizzle
+# migrations use a namespaced key so generic names such as 0000_*.sql cannot
+# collide with another migration source.
+migration_key() {
+  local file="$1"
+  if [[ "$file" == "$DRIZZLE_MIG_DIR/"* ]]; then
+    printf 'drizzle/%s' "$(basename "$file")"
+  else
+    basename "$file"
+  fi
+}
 
 # Bootstrap: auf einem bestehenden Server, wo bereits alle Migrations appliziert sind,
 # einmalig mit BOOTSTRAP=1 aufrufen. Markiert alle vorhandenen .sql als applied, ohne sie auszufuehren.
@@ -54,7 +75,7 @@ if [ "${BOOTSTRAP:-0}" = "1" ]; then
   {
     echo "BEGIN;"
     for file in "${migration_files[@]}"; do
-      filename="$(basename "$file")"
+      filename="$(migration_key "$file")"
       escaped="$(printf '%s' "$filename" | sed "s/'/''/g")"
       echo "INSERT INTO public._deploy_migrations (filename) VALUES ('$escaped') ON CONFLICT DO NOTHING;"
     done
@@ -143,7 +164,7 @@ AUTOHEAL_MAX_DEPTH=5
 mark_applied() {
   local f="$1"
   local fn escaped
-  fn="$(basename "$f")"
+  fn="$(migration_key "$f")"
   escaped="$(printf '%s' "$fn" | sed "s/'/''/g")"
   psql_exec -c "INSERT INTO public._deploy_migrations (filename) VALUES ('$escaped') ON CONFLICT DO NOTHING" > /dev/null
 }
@@ -405,7 +426,7 @@ run_migration_with_autoheal() {
 }
 
 for file in "${migration_files[@]}"; do
-  filename="$(basename "$file")"
+  filename="$(migration_key "$file")"
   escaped="$(printf '%s' "$filename" | sed "s/'/''/g")"
 
   already="$(psql_exec -At -c "SELECT 1 FROM public._deploy_migrations WHERE filename = '$escaped'")"

@@ -20,12 +20,18 @@ Pfad auf dem Server: `/opt/hub-smart-energy`
 3. SSH → Server → `scripts/deploy.sh <sha>`:
    - `pg_dumpall` → `/opt/hub-smart-energy/backups/<timestamp>.sql`
    - `git fetch + reset --hard origin/main`
-   - `scripts/apply-migrations.sh` spielt neue SQLs aus `supabase/migrations/`
+    - `scripts/apply-migrations.sh` spielt neue SQLs aus `supabase/migrations/` und `drizzle/migrations/`
    - `docker pull` + `docker compose up -d frontend functions`
    - `curl` Healthcheck auf `https://ems.aicono.org/`
    - Bei jedem Fehler: automatisches `scripts/rollback.sh` (DB + Code zurück).
 
 ## DB-Aenderungen: nur per Migration, nie per Studio-UI/SQL-Editor
+
+Neue Schema-Aenderungen und gemeinsam genutzte Stammdaten werden mit dem
+Lovable-Migrationswerkzeug erzeugt. Die dabei unter `drizzle/migrations/`
+angelegten SQL-Dateien werden genauso wie die historischen Dateien unter
+`supabase/migrations/` automatisch auf Produktion angewendet. Direkte
+Cloud-Aenderungen ohne Migrationsdatei sind nicht zulaessig.
 
 `deploy-prod.yml` synct ausschliesslich Dateien aus dem Git-Tree von `staging`
 nach `main` (siehe oben). **Jede** Datenbank-Aenderung, die in Lovable/staging
