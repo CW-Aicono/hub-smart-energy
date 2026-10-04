@@ -12,8 +12,20 @@
 - **Rabatte sichtbar machen:** Neue Spalte „Rabatt“ in der Modultabelle mit einem Knopf „+ Rabatt“ je Modul. Ist ein Rabatt aktiv, steht dort ein Hinweis wie „−50 % bis 31.12.“. Die Rabattliste zieht direkt unter die Tabelle, oberhalb der Monatssumme, statt ganz unten auf der Seite.
 - Die Monatssumme zeigt nachvollziehbar: Pauschalen + Ladepunkte − Rabatt = Summe.
 
-## 3. Rechnung
+## 3. Rabatte auch für Bundles, mit Laufzeit und Zahlungsart
+- Im Rabatt-Dialog können Sie neben Modulen und „alle Module“ auch ein **Bundle** auswählen, das dem Kunden zugeordnet ist.
+- Art des Rabatts: Prozent oder Betrag in €, wie bei den Modulen.
+- **Laufzeit:** Sie geben eine Anzahl ein und wählen **Monate** oder **Jahre**, z. B. 3 Monate oder 1 Jahr. Ohne Laufzeit gilt der Rabatt dauerhaft. Das Enddatum wird automatisch berechnet und angezeigt.
+- **Zahlungsart** je Rabatt:
+  - **Monatlich**: Der Rabatt wird jeden Monat verrechnet.
+  - **Vorkasse**: Der Kunde zahlt die ganze Laufzeit im Voraus. Es gibt eine Rechnung über Laufzeit × Monatspreis abzüglich Rabatt. Für die bezahlten Monate entstehen danach keine weiteren Rechnungszeilen.
+  - **Einmalzahlung**: Ein fester Gesamtbetrag für die Laufzeit, einmalig in Rechnung gestellt; danach ebenfalls keine Monatszeilen.
+- Nach Ablauf der Laufzeit gilt automatisch wieder der normale monatliche Preis.
+- Partner dürfen Bundle-Rabatte nur für eigene Kunden vergeben und nur, wenn alle Module des Bundles in ihrem Portfolio sind. Das wird auf dem Server geprüft.
+
+## 4. Rechnung
 - Die Ladepunkt-Zeile wird nur noch für „Ladeinfrastruktur“ erzeugt. Sie verwendet den Preis, der zum Kunden passt (Partner-Einkauf, Mitglied oder Standard, jeweils Kommune oder Industrie).
+- Bundle-Rabatte erscheinen als eigene Zeile. Vorkasse und Einmalzahlung erscheinen als eigene Zeile mit Angabe der Laufzeit; in den abgedeckten Monaten wird das Modul bzw. Bundle nicht nochmal berechnet.
 
 ## 4. Dokumentation
 - Benutzerhandbuch in allen 4 Sprachen angepasst (Abschnitt Abrechnung).
