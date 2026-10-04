@@ -18,7 +18,7 @@ import { ArrowLeft, Pencil, Building2, MapPin, Package, Activity } from "lucide-
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { ALL_MODULES } from "@/hooks/useTenantModules";
-import { TenantChargePointBillingCard, TenantDiscountsCard } from "@/components/billing/TenantBillingExtras";
+import { ChargePointSubLine, ModuleDiscountCell, TenantDiscountsCard } from "@/components/billing/TenantBillingExtras";
 import SavingsShareReadOnly from "@/components/savings-share/SavingsShareReadOnly";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
@@ -243,12 +243,24 @@ export default function PartnerTenantDetail() {
                   const allowed = partnerModules.includes(m.code);
                   const disabled = togglingModule === m.code || (!allowed && !isOn);
                   return (
-                    <div key={m.code} className="flex items-center justify-between gap-4 py-2">
+                    <div key={m.code} className="py-2 space-y-2">
+                    <div className="flex items-center justify-between gap-4">
                       <div className="min-w-0">
                         <p className={allowed ? "text-sm font-medium" : "text-sm font-medium text-muted-foreground"}>{m.label}</p>
                         {!allowed && <p className="text-xs text-muted-foreground">Nicht in Ihrem Partner-Portfolio</p>}
                       </div>
-                      <Switch checked={isOn} disabled={disabled} onCheckedChange={(v) => toggleModule(m.code, v)} />
+                      <div className="flex items-center gap-3">
+                        {isOn && tenantId && (
+                          <ModuleDiscountCell tenantId={tenantId} code={m.code} modules={modules} canEdit={isPartnerAdmin && allowed}
+                            isKommune={tenant?.is_kommune !== false} isMember={!!tenant?.is_aicono_member} />
+                        )}
+                        <Switch checked={isOn} disabled={disabled} onCheckedChange={(v) => toggleModule(m.code, v)} />
+                      </div>
+                    </div>
+                    {m.code === "ev_charging" && isOn && tenantId && (
+                      <ChargePointSubLine tenantId={tenantId} modules={modules.map((x: any) => ({ ...x, is_enabled: true }))}
+                        isKommune={tenant?.is_kommune !== false} isMember={!!tenant?.is_aicono_member} />
+                    )}
                     </div>
                   );
                 })}
@@ -258,8 +270,6 @@ export default function PartnerTenantDetail() {
 
           {tenantId && (
             <>
-              <TenantChargePointBillingCard tenantId={tenantId} modules={modules} mode="partner"
-                isKommune={tenant?.is_kommune !== false} isMember={!!tenant?.is_aicono_member} canEdit={false} />
               <TenantDiscountsCard tenantId={tenantId} modules={modules} mode="partner" allowedModules={partnerModules} canEdit={isPartnerAdmin}
                 isKommune={tenant?.is_kommune !== false} isMember={!!tenant?.is_aicono_member} />
             </>
