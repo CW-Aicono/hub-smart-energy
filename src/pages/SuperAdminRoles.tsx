@@ -268,6 +268,28 @@ const SuperAdminRoles = () => {
           )}
         </div>
       </main>
+      <AlertDialog open={!!revokeTarget} onOpenChange={(o) => { if (!o) setRevokeTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("roles.revoke_title")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="block font-medium text-foreground">{revokeTarget?.name} ({revokeTarget?.email})</span>
+              <span className="block mt-2">{t("roles.revoke_desc")}</span>
+              {revokeTarget?.user_id === user?.id && <span className="block mt-2 text-destructive">{t("roles.revoke_self_warning")}</span>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel_action")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={revokeRole.isPending}
+              onClick={(e) => { e.preventDefault(); if (revokeTarget) revokeRole.mutate(revokeTarget.user_id); }}
+            >
+              {t("roles.revoke_confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
