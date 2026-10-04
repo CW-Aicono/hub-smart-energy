@@ -85,6 +85,13 @@
       "when": 1791153415263,
       "tag": "0011_tenant_scope_hardening_commands_wallbox_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791153435476,
+      "tag": "0012_invoice_files_tenant_scoped_storage",
+      "breakpoints": true
     }
   ]
 }
