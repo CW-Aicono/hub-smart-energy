@@ -16,7 +16,7 @@ import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const APP_VERSION = "1.1.0";
+import { formatAppVersion } from "@/lib/appVersion";
 
 type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations" | "arbitrageTrading" | "tasks" | "tenantElectricity" | "energyReport" | "dataManagement";
 
@@ -102,6 +102,18 @@ const Help = () => {
   ];
 
   const changelog = [
+    {
+      version: "1.1.0",
+      date: "2026-10-04",
+      changes: [
+        { type: "feature", textKey: "help.changelog110Feature1" },
+        { type: "feature", textKey: "help.changelog110Feature2" },
+        { type: "feature", textKey: "help.changelog110Feature3" },
+        { type: "feature", textKey: "help.changelog110Feature4" },
+        { type: "improvement", textKey: "help.changelog110Improvement1" },
+        { type: "improvement", textKey: "help.changelog110Improvement2" },
+      ],
+    },
     {
       version: "1.0.9",
       date: "2026-03-03",
