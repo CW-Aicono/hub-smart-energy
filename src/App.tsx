@@ -139,6 +139,7 @@ const PublicChargeStatus = lazy(() => import("./pages/PublicChargeStatus"));
 const BoardHome = lazy(() => import("./pages/board/BoardHome"));
 const BoardTileDetail = lazy(() => import("./pages/board/BoardTileDetail"));
 const AnalyticsStudio = lazy(() => import("./pages/AnalyticsStudio"));
+const EnergyAnalysis = lazy(() => import("./pages/EnergyAnalysis"));
 
 
 const queryClient = new QueryClient({
@@ -238,6 +239,7 @@ const App = () => (
                       <Route path="/locations/:id" element={<M><LocationDetail /></M>} />
                       <Route path="/energy-data" element={<M><EnergyData /></M>} />
                       <Route path="/analytics-studio" element={<M><AnalyticsStudio /></M>} />
+                      <Route path="/analytics-studio/analyse" element={<M><EnergyAnalysis /></M>} />
                       <Route path="/meters" element={<M><MetersOverview /></M>} />
                       <Route path="/live-values" element={<M><LiveValues /></M>} />
                       <Route path="/integrations" element={<M><Integrations /></M>} />
