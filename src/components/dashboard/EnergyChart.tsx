@@ -742,6 +742,13 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           <CardTitle className="font-display text-lg">
             {t("chart.title" as any)} ({unitLabel})
           </CardTitle>
+          <div className="flex items-center gap-1">
+          <OpenInAnalysisButton
+            period={period}
+            meterIds={meters
+              .filter((m) => !m.is_archived && m.is_main_meter && (!locationId || m.location_id === locationId))
+              .map((m) => m.id)}
+          />
           <Select value={period} onValueChange={handlePeriodChange}>
             <SelectTrigger className="w-[120px] h-8 text-xs">
               <SelectValue />

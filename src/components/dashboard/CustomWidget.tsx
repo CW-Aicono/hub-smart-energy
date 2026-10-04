@@ -571,6 +571,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
               ))}
             </SelectContent>
           </Select>
+          </div>
         </div>
         {selectedPeriod !== "all" && (
           <div className="flex items-center justify-end gap-1">
