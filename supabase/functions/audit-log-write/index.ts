@@ -105,11 +105,28 @@ Deno.serve(async (req) => {
     const ip = xff.split(",")[0]?.trim() || null;
     const userAgent = req.headers.get("user-agent") ?? null;
 
+    // Remote-Support: Aenderungen des Support-Users der offenen Sitzung zuordnen,
+    // damit der Kunde sie im Remote-Protokoll sieht.
+    let supportSessionId: string | null = null;
+    let supportTenantId: string | null = null;
+    {
+      const { data: ss } = await admin
+        .from("support_sessions")
+        .select("id, tenant_id")
+        .eq("impersonated_user_id", user.id)
+        .is("ended_at", null)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (ss) { supportSessionId = ss.id; supportTenantId = ss.tenant_id; }
+    }
+
     const { error: insertErr } = await admin.from("audit_logs").insert({
+      support_session_id: supportSessionId,
       actor_user_id: user.id,
       actor_email: user.email ?? null,
       actor_role: actorRole,
-      tenant_id: body.tenant_id ?? null,
+      tenant_id: body.tenant_id ?? supportTenantId ?? null,
       partner_id: body.partner_id ?? null,
       action: body.action,
       entity_type: body.entity_type,
