@@ -4,13 +4,13 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
-import { ShieldAlert, RefreshCw, LogOut } from "lucide-react";
+import { ShieldAlert, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { clearImpersonation, getActiveSupportSessionId, getActiveSupportTenantId, isImpersonating, endImpersonationAndReturn } from "@/lib/supportView";
 
 export default function SupportSessionBanner() {
-  const { isActive, session, secondsLeft, showCountdown, extendSession } = useSupportSession();
+  const { isActive, session } = useSupportSession();
   const { t } = useTranslation();
   const { isSuperAdmin } = useSuperAdmin();
   const queryClient = useQueryClient();
@@ -19,12 +19,6 @@ export default function SupportSessionBanner() {
   if (!isActive) return null;
   // Super-Admins haben eine eigene Impersonation-Leiste mit Beenden-Button
   if (isSuperAdmin) return null;
-
-  const mins = Math.floor((secondsLeft ?? 0) / 60);
-  const secs = (secondsLeft ?? 0) % 60;
-  const timeStr = showCountdown
-    ? `${secs}s`
-    : `${mins}:${secs.toString().padStart(2, "0")}`;
 
   const endSession = async () => {
     if (!session) return;
@@ -70,20 +64,9 @@ export default function SupportSessionBanner() {
       <span className="text-sm font-semibold">
         {t("support_banner.active" as any)}
       </span>
-      <span className="text-sm tabular-nums font-mono">
-        {timeStr}
+      <span className="text-sm">
+        seit {new Date(session!.started_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr
       </span>
-      {showCountdown && (
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={(e) => { e.stopPropagation(); extendSession(); }}
-          className="h-7 text-xs gap-1"
-        >
-          <RefreshCw className="h-3 w-3" />
-          {t("support_banner.extend" as any)}
-        </Button>
-      )}
       <Button
         size="sm"
         variant="secondary"
