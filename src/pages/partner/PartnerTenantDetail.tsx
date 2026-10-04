@@ -18,6 +18,7 @@ import { ArrowLeft, Pencil, Building2, MapPin, Package, Activity } from "lucide-
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { ALL_MODULES } from "@/hooks/useTenantModules";
+import { TenantChargePointBillingCard, TenantDiscountsCard } from "@/components/billing/TenantBillingExtras";
 import SavingsShareReadOnly from "@/components/savings-share/SavingsShareReadOnly";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
@@ -79,7 +80,7 @@ export default function PartnerTenantDetail() {
     queryFn: async () => {
       const { data } = await supabase
         .from("tenant_modules")
-        .select("module_code, is_enabled, enabled_at")
+        .select("id, module_code, is_enabled, enabled_at, price_override, charge_point_price_override")
         .eq("tenant_id", tenantId!)
         .eq("is_enabled", true);
       return (data ?? []) as any[];
@@ -254,6 +255,15 @@ export default function PartnerTenantDetail() {
               </div>
             </CardContent>
           </Card>
+
+          {tenantId && (
+            <>
+              <TenantChargePointBillingCard tenantId={tenantId} modules={modules} mode="partner"
+                isKommune={tenant?.is_kommune !== false} isMember={!!tenant?.is_aicono_member} canEdit={false} />
+              <TenantDiscountsCard tenantId={tenantId} modules={modules} mode="partner" allowedModules={partnerModules}
+                isKommune={tenant?.is_kommune !== false} isMember={!!tenant?.is_aicono_member} />
+            </>
+          )}
 
           <Card>
             <CardHeader><CardTitle>Lizenzen</CardTitle></CardHeader>
