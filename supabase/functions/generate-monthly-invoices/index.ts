@@ -330,7 +330,12 @@ Deno.serve(async (req) => {
           (li: any) => li.type === "support" && !newSessionIds.has(li.session_id)
         );
         const keptSupportTotal = keptSupportLines.reduce((s: number, li: any) => s + Number(li.amount ?? 0), 0);
-        const mergedLines = [...moduleLineItems, ...keptSupportLines, ...supportLineItems];
+        // Bereits berechnete Vorkasse/Einmalzahlung bei Neuberechnung behalten
+        const newDiscountIds = new Set(moduleLineItems.map((li: any) => li.discount_id).filter(Boolean));
+        const keptPrepaid = (existingLines as any[]).filter((li: any) => (li.type === "prepaid" || li.type === "one_time") && !newDiscountIds.has(li.discount_id));
+        const keptPrepaidTotal = keptPrepaid.reduce((s2: number, li: any) => s2 + Number(li.amount ?? 0), 0);
+        moduleTotal += keptPrepaidTotal;
+        const mergedLines = [...moduleLineItems, ...keptPrepaid, ...keptSupportLines, ...supportLineItems];
         const mergedSupportTotal = keptSupportTotal + supportTotal;
 
         invoicesToUpdate.push({
