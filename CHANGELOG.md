@@ -3,6 +3,8 @@
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## 2026-10-07
+### Neu
+- Benutzerverwaltung (Portal): Partner-Mitgliedschaften werden jetzt unter dem Nutzernamen angezeigt („Partner-Admin: <Name>" / „Partner-Mitglied: <Name>"); Löschdialog warnt, wenn der Nutzer Partner-Mitglied/Admin ist.
 ### Behoben
 - v1.6.1: Roadmap-Menü/-Route nur im Staging (`isStagingEnvironment`), neuer Status `waiting` („Wartet auf Nutzer“); Board mit offenen/erledigten Punkten abgeglichen (Daten, Staging).
 - „Database error deleting user“ (nrgy-hub@web.de): Konto war einziger Partner-Admin von „AICONO Partner GmbH“; Trigger `prevent_last_partner_admin_removal` blockierte die Lösch-Kaskade. Trigger lässt jetzt Systemkontext (Konto-Löschung) und Portal-Admins durch; normale Partner-Admins bleiben geschützt (Migration 0019).

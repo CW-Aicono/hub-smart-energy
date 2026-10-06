@@ -249,6 +249,11 @@ const SuperAdminUsers = () => {
             <AlertDialogDescription>
               <span className="block font-medium text-foreground">{deleteTarget?.contact_person || "–"} ({deleteTarget?.email})</span>
               <span className="block mt-2">Möchten Sie diesen Benutzer wirklich unwiderruflich löschen? Konto, Profil und alle Rollen werden entfernt. Dies kann nicht rückgängig gemacht werden.</span>
+              {deleteTarget && deleteTarget.partnerships.length > 0 && (
+                <span className="block mt-2 text-amber-600 dark:text-amber-500">
+                  Hinweis: Dieser Nutzer ist {deleteTarget.partnerships.some((p) => p.role === "partner_admin") ? "Partner-Admin" : "Mitglied"} bei {deleteTarget.partnerships.map((p) => p.partnerName).join(", ")}. Die Mitgliedschaft wird mit entfernt.
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
