@@ -127,6 +127,13 @@
       "when": 1791313994391,
       "tag": "0017_legal_pages_updated_by_set_null",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791314201096,
+      "tag": "0018_fix_ban_infinity",
+      "breakpoints": true
     }
   ]
 }

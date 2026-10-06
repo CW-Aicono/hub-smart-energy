@@ -3,6 +3,7 @@
 ## Core
 AICONO EMS is a B2B multi-tenant energy dashboard (Supabase + React + Edge Functions).
 Strict multi-tenancy: always use `.eq("tenant_id", tenant.id)` or `useTenantQuery`.
+Antworten an den Nutzer IMMER auf Deutsch.
 Dark theme (Blue/Teal/White), capsule shapes, Montserrat/Inter, AICONO CI.
 Use Open-Meteo exclusively for weather/forecasts. No OpenWeather.
 All PV Actuals and future predictions are positive absolutes, colored Green (HSL 152 55% 42%).
