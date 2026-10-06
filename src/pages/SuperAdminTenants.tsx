@@ -1,6 +1,6 @@
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import { useTenants } from "@/hooks/useTenants";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
@@ -201,7 +201,7 @@ const SuperAdminTenants = () => {
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__platform__">Direkt AICONO (Super-Admin)</SelectItem>
+                        <SelectItem value="__platform__">Direkt AICONO (Portal-Admin)</SelectItem>
                         {partnerOptions.map((p: any) => (
                           <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                         ))}

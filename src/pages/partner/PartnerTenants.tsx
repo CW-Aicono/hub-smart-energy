@@ -13,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import { useToast } from "@/hooks/use-toast";
 import { beginImpersonation } from "@/lib/supportView";
+import { useTenantOptional } from "@/hooks/useTenant";
+import { setAreaPreference } from "@/lib/areaPreference";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 interface Row {
@@ -38,6 +40,7 @@ export default function PartnerTenants() {
   const canCreate = permissions.createTenant;
   const { toast } = useToast();
   const navigate = useNavigate();
+  const ownTenantId = useTenantOptional()?.tenant?.id ?? null;
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -134,6 +137,12 @@ export default function PartnerTenants() {
   };
 
   const handleStartRemoteSupport = async (tenantId: string) => {
+    // Eigener Mandant: direkt öffnen, keine Remote-Sitzung nötig.
+    if (ownTenantId && ownTenantId === tenantId) {
+      setAreaPreference("ems");
+      navigate("/", { replace: true });
+      return;
+    }
     setStartingSupportFor(tenantId);
     try {
       const { data: cur } = await supabase.auth.getSession();
@@ -146,7 +155,12 @@ export default function PartnerTenants() {
         "support-session-impersonate",
         { body: { target_tenant_id: tenantId, reason: "Partner Remote-Support" } },
       );
-      if (impErr) throw impErr;
+      if (impErr) {
+        let msg = impErr.message;
+        try { msg = (await (impErr as any)?.context?.json())?.error ?? msg; } catch { /* noop */ }
+        if ((impErr as any)?.context?.status === 403) msg = "Der Kunde hat Remote-Support nicht freigegeben. " + (msg ?? "");
+        throw new Error(msg);
+      }
       if (!imp?.access_token) throw new Error(imp?.error || "Impersonation fehlgeschlagen");
       beginImpersonation({
         sessionId: imp.session_id,
@@ -204,14 +218,14 @@ export default function PartnerTenants() {
                 </div>
                 <div className="border-t my-2" />
                 <p className="text-xs text-muted-foreground">
-                  Optional: Tenant-Administrator direkt einladen. Lassen Sie die Felder leer, wenn die Einladung später erfolgen soll.
+                  Optional: Kunden-Admin direkt einladen. Lassen Sie die Felder leer, wenn die Einladung später erfolgen soll.
                 </p>
                 <div className="space-y-2">
-                  <Label>E-Mail Tenant-Admin</Label>
+                  <Label>E-Mail Kunden-Admin</Label>
                   <Input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@firma.de" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Name Tenant-Admin</Label>
+                  <Label>Name Kunden-Admin</Label>
                   <Input value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Max Mustermann" />
                 </div>
               </div>

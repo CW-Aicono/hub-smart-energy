@@ -99,6 +99,48 @@
       "when": 1791275778060,
       "tag": "0013_remote_consent_and_invite_accept",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791307397214,
+      "tag": "0014_invoice_document_type_and_unified_prices",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791313490281,
+      "tag": "0015_aicono_portal_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791313543438,
+      "tag": "0016_guard_portal_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791313994391,
+      "tag": "0017_legal_pages_updated_by_set_null",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791314201096,
+      "tag": "0018_fix_ban_infinity",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791315646886,
+      "tag": "0019_partner_admin_guard_system_bypass",
+      "breakpoints": true
     }
   ]
 }

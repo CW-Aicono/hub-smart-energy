@@ -388,7 +388,7 @@ function EditDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader><DialogTitle>Tenant bearbeiten</DialogTitle></DialogHeader>
         <CardDescription>
-          Status, Lifecycle und Abrechnungs-Felder sind dem Super-Admin vorbehalten.
+          Status, Lifecycle und Abrechnungs-Felder sind dem Portal-Admin vorbehalten.
         </CardDescription>
         <div className="grid md:grid-cols-2 gap-3 pt-2">
           <div className="md:col-span-2 space-y-2"><Label>Name</Label>

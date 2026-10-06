@@ -1,6 +1,12 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **v1.6.2:** Die Portal-Benutzerliste zeigt wieder Benutzer und ihre Partner-Zugehörigkeit. Einheitliche Bezeichnungen: Portal-Admin, Partner-Admin und Kunden-Admin; Zugriffsrechte bleiben unverändert.
+- **v1.6.1:** Die Roadmap ist nur noch im Testsystem sichtbar und hat den Status „Wartet auf Nutzer“. Benutzer, die einziger Partner-Admin waren, lassen sich wieder löschen.
+- **v1.6.0 – AICONO Portal:** Der Portal-Admin-Bereich heißt jetzt AICONO Portal und ist übersichtlich in Übersicht, Kaufmännisch, Technisch und Verwaltung gegliedert. Mitarbeiter erhalten gezielt die Rolle Kaufmännisch oder Technisch und sehen nur ihre Bereiche.
+- **v1.5.0 – Einheitspreise & Abo-Belege:** Alle Kunden zahlen denselben Modulpreis; Nachlässe gibt es über Rabatte und Promotionen. Ergibt eine Monatsabrechnung 0 €, wird keine Rechnung erstellt, sondern ein Abo-Beleg, der nicht an die Buchhaltung geht.
+- **v1.4.2 – Rollen sauber getrennt:** In einem Mandanten werden Personen jetzt „entfernt“ statt gelöscht; Konto und weitere Rollen bleiben erhalten. „EMS öffnen“ öffnet den eigenen Mandanten direkt. Modul-Schalter für Partner reagieren sofort und melden Fehler.
+- **v1.4.1 – Zähler-Verknüpfung:** Datengateway und Sensor eines Geräts bleiben nach dem Speichern zuverlässig erhalten, sodass wieder Messwerte ankommen. Der irreführende Hinweis „Keine Zähler angelegt“ erscheint nicht mehr, wenn Gateway-Zähler vorhanden sind.
 - **v1.4.0 – Ladeleistung & Lastgang:** Neues Dashboard-Feld zeigt die aktuelle Ladeleistung jedes Ladepunkts (einblenden über „Im Dashboard anzeigen“ unter Ladeinfrastruktur). In der Energieanalyse lässt sich der Jahreslastgang in 15-Minuten-Werten als Excel exportieren. Bei Geräten kann der Sensor neu gewählt werden, alte Integrationen lassen sich löschen, nach einer Remote-Sitzung kehren Sie in Ihren Ausgangsbereich zurück, und Partner-Module lassen sich wieder speichern.
 - **v1.3.2 – Korrekturen:** Im Remote-Verlauf werden die Änderungen der Support-Sitzung wieder angezeigt. Die Ladepunkt-Übersicht zeigt nicht mehr „Belegt“, wenn die Wallbox „frei“ meldet. Hängengebliebene Ladevorgänge ohne Energie werden automatisch abgeschlossen.
 - **v1.3.1 – Remote & Einladungen:** Ist „Remote-Zugriff erlauben“ ausgeschaltet, kann sich niemand mehr per Remote einwählen; beim Ausschalten wird eine laufende Sitzung sofort beendet. Angemeldete Nutzer erscheinen nicht mehr zusätzlich als offene Einladung.
@@ -11,15 +17,15 @@
 - **Klare Versionsnummern:** Die Version heißt jetzt z. B. „v1.1.0“ (Major = große Umstellung, Minor = neue Funktionen, Patch = Fehlerbehebung). Die technische Build-Kennung steht nur noch im Hintergrund.
 - **Benutzerhandbuch aktualisiert:** Neues Kapitel „Konto, Rollen & Support“ sowie Ergänzungen zu Energieanalyse und Ladepunkten.
 - **Versionsanzeige synchron:** Unter Hilfe & Support sehen Sie oben rechts jetzt dieselbe Versionsnummer wie in der Seitenleiste; der Versionsverlauf enthält den neuen Eintrag v1.1.0.
-- **Firmenname geschützt:** Den Firmennamen ändern nur Administratoren des Mandanten, Partner-Admins oder AICONO-Super-Admins.
-- **Strengere Rechteprüfung:** Mandanten-Zuordnung und E-Mail eines Kontos ändern nur noch AICONO-Super-Admins; E-Mail-Vorlagen bearbeiten nur Administratoren.
+- **Firmenname geschützt:** Den Firmennamen ändern nur Administratoren des Mandanten, Partner-Admins oder AICONO-Portal-Admins.
+- **Strengere Rechteprüfung:** Mandanten-Zuordnung und E-Mail eines Kontos ändern nur noch AICONO-Portal-Admins; E-Mail-Vorlagen bearbeiten nur Administratoren.
 - **Gesperrt heißt jetzt wirklich gesperrt:** Gesperrte Benutzer können sich nicht mehr anmelden und werden aus laufenden Sitzungen abgemeldet.
-- **Bereichswechsel immer oben rechts:** Der Umschalter Super-Admin / Kaufmännisch / Technisch sitzt jetzt in allen Bereichen an derselben Stelle – in einer eigenen schmalen Kopfleiste, sodass er keine Seiteninhalte mehr verdeckt.
-- **Super-Admin-Verwaltung ohne Konsole:** Super-Admin-Rollen lassen sich unter Rollen & Rechte entziehen, Plattform-Benutzer unter Benutzer löschen – jeweils mit Sicherheitsabfrage. Der letzte Super-Admin ist geschützt.
+- **Bereichswechsel immer oben rechts:** Der Umschalter Portal-Admin / Kaufmännisch / Technisch sitzt jetzt in allen Bereichen an derselben Stelle – in einer eigenen schmalen Kopfleiste, sodass er keine Seiteninhalte mehr verdeckt.
+- **Portal-Admin-Verwaltung ohne Konsole:** Portal-Admin-Rollen lassen sich unter Rollen & Rechte entziehen, Plattform-Benutzer unter Benutzer löschen – jeweils mit Sicherheitsabfrage. Der letzte Portal-Admin ist geschützt.
 - **Jede Grafik mit eigenem Zeitraum:** Im Dashboard ändert der Zeitraum nur noch die jeweilige Grafik und bleibt gespeichert.
 - **Neue Energieanalyse:** Unter Energiedaten → Energieanalyse vergleichen Sie beliebige Messstellen, Zeiträume (z. B. Vorjahr), sehen Heatmap und Dauerlinie, beziehen Werte auf m² oder Wetter und exportieren nach CSV/Excel. Mit „Link kopieren“ teilen Sie die Analyse mit Kollegen.
 - **Ladestatus korrigiert sich selbst:** Neue Fernfunktion „Status abfragen“. Zeigt eine Ladestation länger als 2 Stunden „Lädt“, obwohl kein Ladevorgang läuft, fragt das System den echten Status automatisch neu ab.
-- **Schneller Bereichswechsel:** Wer mehrere Rollen hat, wechselt mit einem Klick zwischen Super-Admin, Partner-Portal und eigenem Energie-Dashboard.
+- **Schneller Bereichswechsel:** Wer mehrere Rollen hat, wechselt mit einem Klick zwischen Portal-Admin, Partner-Portal und eigenem Energie-Dashboard.
 - **Immer aktuell:** Im Benutzermenü und im Profil sehen Sie die App-Version. Gibt es eine neue Version, erscheint oben „Jetzt aktualisieren“ – kein Strg+F5 mehr nötig.
 - **Fernwartung ohne Zeitdruck und nachvollziehbar:** Eine Remote-Sitzung läuft, bis sie beendet wird. Unter Hilfe → Remote-Support sehen Sie jetzt, wann und wie lange eine Sitzung stattfand und was dabei geändert wurde. Schalten Sie Remote-Support aus, endet eine laufende Sitzung sofort.
 - **Ein Konto, mehrere Rollen:** Mit derselben E-Mail-Adresse können Sie Mandant, Partner und Administrator sein und oben links zwischen „Kaufmännisch" und „Technisch" wechseln.

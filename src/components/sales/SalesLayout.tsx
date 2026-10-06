@@ -126,8 +126,8 @@ export function SalesLayout({ children, title = "Sales Scout", showBack, backTo,
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate("/super-admin")}
-                title="Zum Super-Admin"
-                aria-label="Zum Super-Admin"
+                title="Zum Portal-Admin"
+                aria-label="Zum Portal-Admin"
               >
                 <LayoutDashboard className="h-4 w-4" />
               </Button>

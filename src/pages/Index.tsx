@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import { useTenant } from "@/hooks/useTenant";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";

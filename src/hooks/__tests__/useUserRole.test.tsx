@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createTestWrapper, createDemoWrapper } from "@/test/helpers";
 
 // Mock supabase
@@ -28,6 +29,13 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 
+function withQueryClient(Wrapper: ReturnType<typeof createTestWrapper>) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return function QueryWrapper({ children }: { children: React.ReactNode }) {
+    return <QueryClientProvider client={client}><Wrapper>{children}</Wrapper></QueryClientProvider>;
+  };
+}
+
 describe("useUserRole", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -35,7 +43,7 @@ describe("useUserRole", () => {
 
   it("returns admin role and isAdmin=true in demo mode", async () => {
     const { useUserRole } = await import("@/hooks/useUserRole");
-    const wrapper = createDemoWrapper();
+    const wrapper = withQueryClient(createDemoWrapper());
     const { result } = renderHook(() => useUserRole(), { wrapper });
 
     // In demo mode, loading should be false immediately and role should be admin
@@ -46,7 +54,7 @@ describe("useUserRole", () => {
 
   it("returns null role when no user is logged in", async () => {
     const { useUserRole } = await import("@/hooks/useUserRole");
-    const wrapper = createTestWrapper("/");
+    const wrapper = withQueryClient(createTestWrapper("/"));
     const { result } = renderHook(() => useUserRole(), { wrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -56,7 +64,7 @@ describe("useUserRole", () => {
 
   it("isAdmin is false for non-admin roles", async () => {
     const { useUserRole } = await import("@/hooks/useUserRole");
-    const wrapper = createTestWrapper("/");
+    const wrapper = withQueryClient(createTestWrapper("/"));
     const { result } = renderHook(() => useUserRole(), { wrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));

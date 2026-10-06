@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
       if (!catalog || catalog.length === 0) {
         return new Response(
           JSON.stringify({
-            error: "Kein Gerät im Katalog verfügbar. Bitte Geräte-Katalog im Super-Admin pflegen.",
+            error: "Kein Gerät im Katalog verfügbar. Bitte Geräte-Katalog im Portal-Admin pflegen.",
           }),
           {
             status: 422,

@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import { useInfraMetrics } from "@/hooks/useInfraMetrics";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import { Download, Upload, Trash2, FileArchive, Info, Loader2 } from "lucide-react";
 
 const BUCKET = "loxone-master";
@@ -126,7 +126,7 @@ export default function LoxoneMasterProject() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Neue Version hochladen</CardTitle>
             <CardDescription>
-              Nur Super-Admins. Datei muss die Endung <code>.Loxone</code> haben (Export aus Loxone Config).
+              Nur Portal-Admins. Datei muss die Endung <code>.Loxone</code> haben (Export aus Loxone Config).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

@@ -109,7 +109,7 @@ const handler = async (req: Request): Promise<Response> => {
       // Only super_admins may invite super_admins
       if (isSuperAdminInvite && !callerIsSuper) {
         return new Response(
-          JSON.stringify({ success: false, error: "Nur Super-Admins dürfen Plattform-Administratoren einladen." }),
+          JSON.stringify({ success: false, error: "Nur Portal-Admins dürfen Plattform-Administratoren einladen." }),
           { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }

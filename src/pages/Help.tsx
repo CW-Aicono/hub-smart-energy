@@ -102,6 +102,32 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.6.2", date: "2026-10-06", changes: [{ type: "fix", textKey: "help.changelog162Fix1" }] },
+    {
+      version: "1.6.1",
+      date: "2026-10-07",
+      changes: [{ type: "improvement", textKey: "help.changelog161Improvement1" }, { type: "fix", textKey: "help.changelog161Fix1" }],
+    },
+    {
+      version: "1.6.0",
+      date: "2026-10-07",
+      changes: [{ type: "feature", textKey: "help.changelog160Feature1" }],
+    },
+    {
+      version: "1.5.0",
+      date: "2026-10-07",
+      changes: [{ type: "feature", textKey: "help.changelog150Feature1" }],
+    },
+    {
+      version: "1.4.2",
+      date: "2026-10-07",
+      changes: [{ type: "fix", textKey: "help.changelog142Fix1" }],
+    },
+    {
+      version: "1.4.1",
+      date: "2026-10-07",
+      changes: [{ type: "fix", textKey: "help.changelog141Fix1" }],
+    },
     {
       version: "1.4.0",
       date: "2026-10-07",

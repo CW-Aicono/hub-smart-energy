@@ -1,7 +1,7 @@
 import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndReturn } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import { useTenantModules, ALL_MODULES } from "@/hooks/useTenantModules";
 import { ChargePointSubLine, ModuleDiscountCell, TenantDiscountsCard, useTenantModuleCost } from "@/components/billing/TenantBillingExtras";
 import { useTenantLicense } from "@/hooks/useTenantLicense";
@@ -87,7 +87,7 @@ const InviteTenantAdminDialog = ({ tenantId, tenantName, onSuccess }: InviteTena
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Mandanten-Admin einladen</DialogTitle>
+          <DialogTitle>Kunden-Admin einladen</DialogTitle>
           <DialogDescription>Neuen Benutzer für <strong>{tenantName}</strong> einladen.</DialogDescription>
         </DialogHeader>
         {!inviteLink ? (
@@ -106,7 +106,7 @@ const InviteTenantAdminDialog = ({ tenantId, tenantName, onSuccess }: InviteTena
               <Select value={role} onValueChange={(v: any) => setRole(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" />Administrator</div></SelectItem>
+                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" />Kunden-Admin</div></SelectItem>
                   <SelectItem value="user"><div className="flex items-center gap-2"><User className="h-4 w-4" />Benutzer</div></SelectItem>
                 </SelectContent>
               </Select>
@@ -473,13 +473,17 @@ const SuperAdminTenantDetail = () => {
 
   const handleDeleteUser = async (userId: string, email: string | null) => {
     try {
-      const { data, error } = await supabase.functions.invoke("delete-user", { body: { userId } });
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke("remove-user-from-tenant", { body: { userId, tenantId: id } });
+      if (error) {
+        let msg = error.message;
+        try { msg = (await (error as any)?.context?.json())?.error ?? msg; } catch { /* noop */ }
+        throw new Error(msg);
+      }
       if (data?.success === false) throw new Error(data.error);
-      toast.success(`Benutzer ${email ?? ""} gelöscht`);
+      toast.success(`${email ?? "Person"} aus dem Mandanten entfernt (Konto bleibt bestehen)`);
       refreshUsers();
     } catch (err: any) {
-      toast.error("Löschen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
+      toast.error("Entfernen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
     }
   };
 
@@ -768,30 +772,6 @@ const SuperAdminTenantDetail = () => {
                           <Input type="email" value={tenantInfoForm.contact_email} onChange={(e) => setTenantInfoForm(f => ({ ...f, contact_email: e.target.value }))} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-6 pt-2 flex-wrap">
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            id="aicono-member"
-                            checked={tenantInfoForm.is_aicono_member}
-                            onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_aicono_member: v }))}
-                          />
-                          <Label htmlFor="aicono-member" className="flex items-center gap-2">
-                            <Award className="h-4 w-4" />
-                            Mitglied im AICONO e.&thinsp;V.
-                          </Label>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            id="is-kommune"
-                            checked={tenantInfoForm.is_kommune}
-                            onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_kommune: v }))}
-                          />
-                          <Label htmlFor="is-kommune" className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4" />
-                            Kommune
-                          </Label>
-                        </div>
-                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -833,20 +813,6 @@ const SuperAdminTenantDetail = () => {
                           <div>
                             <p className="text-sm font-medium text-muted-foreground">Kontakt-E-Mail</p>
                             <p>{tenant?.contact_email ?? "–"}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <Award className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Mitglied im AICONO e.&thinsp;V.</p>
-                            <p>{(tenant as any)?.is_aicono_member ? <Badge variant="default" className="text-xs">Ja</Badge> : "Nein"}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Sektor</p>
-                            <p>{(tenant as any)?.is_kommune !== false ? <Badge variant="outline" className="text-xs">Kommune</Badge> : <Badge variant="outline" className="text-xs">Industrie</Badge>}</p>
                           </div>
                         </div>
                         <div className="flex items-start gap-2">
@@ -907,7 +873,6 @@ const SuperAdminTenantDetail = () => {
                         <SortableHead sortKey="global" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-36">
                           <span className="inline-flex items-center gap-1 justify-end">
                             Standardpreis
-                            {(tenant as any)?.is_aicono_member && <Award className="h-4 w-4 text-primary" />}
                           </span>
                         </SortableHead>
                         <SortableHead sortKey="override" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-44">{t("tenant_detail.individual_price")}</SortableHead>

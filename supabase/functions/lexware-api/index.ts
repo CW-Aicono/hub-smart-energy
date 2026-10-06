@@ -82,6 +82,11 @@ Deno.serve(async (req) => {
         try {
           // Delay between invoices to avoid rate limits
           if (results.length > 0) await sleep(600);
+          // Abo-Belege (0 €) sind keine Rechnungen und werden nie übertragen
+          if (inv.document_type === "subscription_notice" || !(Number(inv.amount) > 0)) {
+            results.push({ invoiceId: inv.id, status: "skipped", reason: "subscription_notice" });
+            continue;
+          }
           // Skip already synced
           if (inv.lexware_invoice_id) {
             results.push({ invoiceId: inv.id, status: "skipped", reason: "already_synced", lexwareId: inv.lexware_invoice_id });

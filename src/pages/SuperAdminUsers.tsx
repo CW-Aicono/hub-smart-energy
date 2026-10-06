@@ -30,6 +30,7 @@ interface PlatformUser {
   is_blocked: boolean;
   created_at: string;
   role: "admin" | "user" | "super_admin";
+  partnerships: { partnerName: string; role: string }[];
 }
 
 type SortKey = "username" | "role" | "status" | "created_at";
@@ -42,7 +43,7 @@ const SuperAdminUsers = () => {
   const queryClient = useQueryClient();
   const { t } = useSATranslation();
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["super-admin-users"],
     queryFn: async () => {
       const { data: profiles, error: pErr } = await supabase
@@ -52,11 +53,18 @@ const SuperAdminUsers = () => {
       if (pErr) throw pErr;
       const { data: roles, error: rErr } = await supabase.from("user_roles").select("*");
       if (rErr) throw rErr;
+      const { data: memberships, error: mErr } = await supabase
+        .from("partner_members")
+        .select("user_id, partner_role, partners(name)");
+      if (mErr) throw mErr;
       return (profiles || []).map((p: any): PlatformUser => {
         // A user can have several role rows – show the highest one
         const own = (roles || []).filter((r: any) => r.user_id === p.user_id).map((r: any) => r.role);
         const role: PlatformUser["role"] = own.includes("super_admin") ? "super_admin" : own.includes("admin") ? "admin" : "user";
-        return { id: p.id, user_id: p.user_id, email: p.email, contact_person: p.contact_person, is_blocked: p.is_blocked, created_at: p.created_at, role };
+        const partnerships = (memberships || [])
+          .filter((m: any) => m.user_id === p.user_id)
+          .map((m: any) => ({ partnerName: m.partners?.name ?? "?", role: m.partner_role as string }));
+        return { id: p.id, user_id: p.user_id, email: p.email, contact_person: p.contact_person, is_blocked: p.is_blocked, created_at: p.created_at, role, partnerships };
       });
     },
   });
@@ -90,7 +98,7 @@ const SuperAdminUsers = () => {
   const deleteUser = useMutation({
     mutationFn: async (target: PlatformUser) => {
       if (target.user_id === user?.id) throw new Error("Sie können Ihr eigenes Konto nicht löschen.");
-      if (target.role === "super_admin" && superAdminCount <= 1) throw new Error("Der letzte Super-Admin kann nicht gelöscht werden.");
+      if (target.role === "super_admin" && superAdminCount <= 1) throw new Error("Der letzte Portal-Admin kann nicht gelöscht werden.");
       const { data, error } = await supabase.functions.invoke("delete-user", { body: { userId: target.user_id } });
       if (error) {
         let msg = error.message;
@@ -156,6 +164,11 @@ const SuperAdminUsers = () => {
                 <TableBody>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
+                  ) : isError ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-destructive">
+                      <p>{t("error.generic")}</p>
+                      <Button variant="outline" className="mt-2" onClick={() => refetch()}>{t("common.retry")}</Button>
+                    </TableCell></TableRow>
                   ) : sorted.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("users.not_found")}</TableCell></TableRow>
                   ) : (
@@ -165,6 +178,15 @@ const SuperAdminUsers = () => {
                           <div>
                             <p className="font-medium">{u.contact_person || "–"}</p>
                             <p className="text-xs text-muted-foreground">{u.email}</p>
+                            {u.partnerships.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {u.partnerships.map((pm, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {pm.role === "partner_admin" ? "Partner-Admin" : "Partner-Mitglied"}: {pm.partnerName}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -206,7 +228,7 @@ const SuperAdminUsers = () => {
                               const blocked = isSelf || isLast;
                               return (
                                 <Button variant="ghost" size="icon" aria-label="Benutzer löschen"
-                                  title={isSelf ? "Eigenes Konto kann nicht gelöscht werden" : isLast ? "Letzter Super-Admin kann nicht gelöscht werden" : "Benutzer löschen"}
+                                  title={isSelf ? "Eigenes Konto kann nicht gelöscht werden" : isLast ? "Letzter Portal-Admin kann nicht gelöscht werden" : "Benutzer löschen"}
                                   disabled={blocked || deleteUser.isPending}
                                   onClick={() => setDeleteTarget(u)}
                                 >
@@ -232,6 +254,11 @@ const SuperAdminUsers = () => {
             <AlertDialogDescription>
               <span className="block font-medium text-foreground">{deleteTarget?.contact_person || "–"} ({deleteTarget?.email})</span>
               <span className="block mt-2">Möchten Sie diesen Benutzer wirklich unwiderruflich löschen? Konto, Profil und alle Rollen werden entfernt. Dies kann nicht rückgängig gemacht werden.</span>
+              {deleteTarget && deleteTarget.partnerships.length > 0 && (
+                <span className="block mt-2 text-amber-600 dark:text-amber-500">
+                  Hinweis: Dieser Nutzer ist {deleteTarget.partnerships.some((p) => p.role === "partner_admin") ? "Partner-Admin" : "Mitglied"} bei {deleteTarget.partnerships.map((p) => p.partnerName).join(", ")}. Die Mitgliedschaft wird mit entfernt.
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -2,7 +2,25 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## 2026-10-06 – v1.6.2
+- Benutzerliste: falsches `partner_members.role` durch `partner_role` ersetzt; Abfragefehler werden nicht mehr als leere Liste angezeigt.
+- Sichtbare Rollenbezeichnungen Portal-Admin, Partner-Admin und Kunden-Admin vereinheitlicht; Rollenwerte, Adressen und Sicherheitsprüfungen bleiben unverändert.
+- Handbuch (DE/EN/ES/NL), Versionsverlauf und Staging-Roadmap aktualisiert.
+
 ## 2026-10-07
+### Neu
+- Benutzerverwaltung (Portal): Partner-Mitgliedschaften werden jetzt unter dem Nutzernamen angezeigt („Partner-Admin: <Name>" / „Partner-Mitglied: <Name>"); Löschdialog warnt, wenn der Nutzer Partner-Mitglied/Admin ist.
+### Behoben
+- v1.6.1: Roadmap-Menü/-Route nur im Staging (`isStagingEnvironment`), neuer Status `waiting` („Wartet auf Nutzer“); Board mit offenen/erledigten Punkten abgeglichen (Daten, Staging).
+- „Database error deleting user“ (nrgy-hub@web.de): Konto war einziger Partner-Admin von „AICONO Partner GmbH“; Trigger `prevent_last_partner_admin_removal` blockierte die Lösch-Kaskade. Trigger lässt jetzt Systemkontext (Konto-Löschung) und Portal-Admins durch; normale Partner-Admins bleiben geschützt (Migration 0019).
+- Eigentliche Ursache „Database error loading user“: gesperrte Konten hatten `banned_until = infinity`, das der Auth-Dienst nicht lesen kann → Löschen/Laden gesperrter Konten scheiterte. Sperre setzt jetzt 2999-12-31, Bestand umgestellt (Migration 0018). Zweitkonto h.verst+partner: Super-Admin entzogen, gesperrt, Profil-E-Mail korrigiert (Daten, Staging).
+- Benutzer löschen scheiterte („Database error loading user“): `legal_pages.updated_by` verwies ohne ON DELETE auf auth.users und blockierte das Löschen von Konten, die Rechtstexte bearbeitet hatten. Jetzt ON DELETE SET NULL (Migration 0017); `delete-user` mit aktuellen Schutzregeln neu ausgerollt.
+### Neu
+- v1.6.0: AICONO Portal. Enum `app_role` + `portal_commercial`/`portal_technical`; SQL `portal_roles`, `is_portal_member`, `can_portal_read/write` (Bereiche overview/commercial/technical/roadmap/admin); zusätzliche Policies `portal_read`/`portal_write` auf Kunden-, Abrechnungs- und Technik-Tabellen (Migration 0015). `guard_privileged_roles` schützt auch Portal-Rollen (0016). `SuperAdminWrapper` prüft Bereich je Adresse (Kein Zugriff / Nur Ansicht); Seiten nutzen `usePortalMember`; Seitenleiste gruppiert; `PortalStaffCard` unter Portal-Rollen. super_admin = Portal-Admin, bestehende Policies/Edge Functions unverändert (Edge Functions mit reiner super_admin-Prüfung bleiben Portal-Admins vorbehalten).
+- v1.5.0: Einheitspreise – `useModulePrices` liefert für alle Varianten `standard_price`/`standard_charge_point_price_monthly` bzw. Partnerpreis; Preismaske nur noch Partner-Einkauf + Standardpreis; Mitglied/Kommune-Schalter im Mandanten entfernt; alte Spalten DEPRECATED (Migration 0014). `tenant_invoices.document_type` (`invoice`/`subscription_notice`); generate-monthly-invoices: keine 0-€-Modulzeilen, 0-€-Ergebnis → Abo-Beleg ohne Rechnungsnummer; lexware-api und SEPA überspringen Abo-Belege; Rechnungsliste mit Filter/Kennzeichnung.
+### Behoben
+- v1.4.2: Neue Edge Function `remove-user-from-tenant` (Tenant-Admin/Partner-Admin/Super-Admin, Selbst- und Letzter-Admin-Schutz, Audit) ersetzt `delete-user` in Tenant-Benutzerliste und Super-Admin-Mandantendetail; Konto + super_admin/partner_members bleiben. PartnerTenants: eigener Tenant öffnet direkt (keine Impersonation), 403 verständlich. PartnerModulesDialog: optimistisch, 15-s-Timeout, Rollback, Refetch.
+- v1.4.1: EditMeterDialog leerte beim Öffnen Gateway/Sensor, solange Integrationen noch luden (Race) → Speichern löschte `location_integration_id`/`sensor_uuid`, keine Messwerte. Effekt wartet jetzt auf Laden und leert nie automatisch; fehlendes Gateway wird nur angezeigt. MeterManagement: „Keine Zähler angelegt“ nur, wenn auch keine Gateway-Zähler existieren.
 ### Neu / Behoben
 - v1.4.0: Widget `charge_point_power` (letzter OCPP `Power.Active.Import` je Ladepunkt, 30 s Polling) + Knopf „Im Dashboard anzeigen“ in ChargingPoints. `loadProfileExport.ts`: Jahreslastgang 15 min (7-Tage-Abschnitte über `get_power_series_auto`) als Excel in EnergyAnalysis. EditMeterDialog: fehlende Integration/Sensor wird erkannt und muss neu gewählt werden. Integration-Unlink löscht verwaiste Integration; Integrationen-Seite bietet Löschen für verwaiste Einträge. Remote-Ende kehrt in Ausgangsbereich (Partner/Super-Admin) zurück. Neue Edge Function `super-admin-set-partner-module` (Super-Admin-Prüfung serverseitig) ersetzt direkte RLS-Schreibzugriffe auf `partner_modules`.
 

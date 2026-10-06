@@ -60,7 +60,7 @@ const Roles = () => {
   const adminVirtualRole = {
     id: "admin-system",
     tenant_id: "",
-    name: "Administrator",
+    name: t("roles.admin"),
     description: t("roles.adminFullAccess" as any),
     is_system_role: true,
     created_at: "",
