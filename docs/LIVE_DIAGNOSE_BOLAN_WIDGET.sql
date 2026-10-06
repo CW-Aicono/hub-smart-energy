@@ -10,7 +10,7 @@ FROM cron.job_run_details d JOIN cron.job j ON j.jobid = d.jobid
 WHERE j.jobname ILIKE '%gateway-periodic-sync%' ORDER BY d.start_time DESC LIMIT 5;
 
 \echo '3) Pausiert?'
-SELECT * FROM public.worker_controls WHERE key IN ('gateway_periodic_sync','shelly_periodic_sync');
+SELECT * FROM public.worker_controls WHERE worker_key IN ('gateway_periodic_sync','shelly_periodic_sync');
 
 \echo '4) Bolan-Zähler: Zuordnung und letzter gespeicherter Wert'
 SELECT m.name, m.capture_type, m.is_archived, m.sensor_uuid, m.source_unit_power,

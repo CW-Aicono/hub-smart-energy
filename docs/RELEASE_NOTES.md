@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.6.3
+- Dashboard-Grafiken zeigen jetzt deutlich an, wenn ein Zähler keine gespeicherten Werte liefert.
+- Portal-Admins können Module eines Kunden direkt freischalten.
+- Das Änderungsprotokoll der Remote-Sitzungen wird nach dem Update auch auf Live angezeigt.
+
 ## Oktober 2026
 - **v1.6.2:** Die Portal-Benutzerliste zeigt wieder Benutzer und ihre Partner-Zugehörigkeit. Einheitliche Bezeichnungen: Portal-Admin, Partner-Admin und Kunden-Admin; Zugriffsrechte bleiben unverändert.
 - **v1.6.1:** Die Roadmap ist nur noch im Testsystem sichtbar und hat den Status „Wartet auf Nutzer“. Benutzer, die einziger Partner-Admin waren, lassen sich wieder löschen.
