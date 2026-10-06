@@ -43,7 +43,7 @@ const SuperAdminUsers = () => {
   const queryClient = useQueryClient();
   const { t } = useSATranslation();
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["super-admin-users"],
     queryFn: async () => {
       const { data: profiles, error: pErr } = await supabase
@@ -55,7 +55,7 @@ const SuperAdminUsers = () => {
       if (rErr) throw rErr;
       const { data: memberships, error: mErr } = await supabase
         .from("partner_members")
-        .select("user_id, role, partners(name)");
+        .select("user_id, partner_role, partners(name)");
       if (mErr) throw mErr;
       return (profiles || []).map((p: any): PlatformUser => {
         // A user can have several role rows – show the highest one
@@ -63,7 +63,7 @@ const SuperAdminUsers = () => {
         const role: PlatformUser["role"] = own.includes("super_admin") ? "super_admin" : own.includes("admin") ? "admin" : "user";
         const partnerships = (memberships || [])
           .filter((m: any) => m.user_id === p.user_id)
-          .map((m: any) => ({ partnerName: m.partners?.name ?? "?", role: m.role as string }));
+          .map((m: any) => ({ partnerName: m.partners?.name ?? "?", role: m.partner_role as string }));
         return { id: p.id, user_id: p.user_id, email: p.email, contact_person: p.contact_person, is_blocked: p.is_blocked, created_at: p.created_at, role, partnerships };
       });
     },
@@ -98,7 +98,7 @@ const SuperAdminUsers = () => {
   const deleteUser = useMutation({
     mutationFn: async (target: PlatformUser) => {
       if (target.user_id === user?.id) throw new Error("Sie können Ihr eigenes Konto nicht löschen.");
-      if (target.role === "super_admin" && superAdminCount <= 1) throw new Error("Der letzte Super-Admin kann nicht gelöscht werden.");
+      if (target.role === "super_admin" && superAdminCount <= 1) throw new Error("Der letzte Portal-Admin kann nicht gelöscht werden.");
       const { data, error } = await supabase.functions.invoke("delete-user", { body: { userId: target.user_id } });
       if (error) {
         let msg = error.message;
@@ -164,6 +164,11 @@ const SuperAdminUsers = () => {
                 <TableBody>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
+                  ) : isError ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-destructive">
+                      <p>{t("error.generic")}</p>
+                      <Button variant="outline" className="mt-2" onClick={() => refetch()}>{t("common.retry")}</Button>
+                    </TableCell></TableRow>
                   ) : sorted.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("users.not_found")}</TableCell></TableRow>
                   ) : (
@@ -223,7 +228,7 @@ const SuperAdminUsers = () => {
                               const blocked = isSelf || isLast;
                               return (
                                 <Button variant="ghost" size="icon" aria-label="Benutzer löschen"
-                                  title={isSelf ? "Eigenes Konto kann nicht gelöscht werden" : isLast ? "Letzter Super-Admin kann nicht gelöscht werden" : "Benutzer löschen"}
+                                  title={isSelf ? "Eigenes Konto kann nicht gelöscht werden" : isLast ? "Letzter Portal-Admin kann nicht gelöscht werden" : "Benutzer löschen"}
                                   disabled={blocked || deleteUser.isPending}
                                   onClick={() => setDeleteTarget(u)}
                                 >
