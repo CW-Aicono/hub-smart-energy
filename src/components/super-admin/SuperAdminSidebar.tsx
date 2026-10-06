@@ -24,6 +24,7 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useState, useEffect, useCallback, Fragment } from "react";
+import { isStagingEnvironment } from "@/lib/environment";
 
 const SA_SIDEBAR_KEY = "sa-sidebar-collapsed";
 
