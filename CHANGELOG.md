@@ -7,7 +7,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 - Shelly-Abholung meldet Zähler ohne passenden Sensor als Integrationsfehler (`sensor_missing`).
 - Neue Edge Function `portal-set-tenant-module`: Portal-Admins setzen Kunden-Module direkt, Partner-Portfolio wird ergänzt, Audit-Log.
 - Migration 0021: `audit_logs.entity_label`/`support_session_id` idempotent nachgeliefert (Änderungsprotokoll auf Live).
-- `docs/LIVE_DIAGNOSE_BOLAN_WIDGET.sql` für die Live-Prüfung.
+- Live-Prüfung per Terminal-Befehl im Chat (Diagnose-Datei wieder entfernt; Terminal-Befehle künftig immer direkt im Chat).
 
 ## Unreleased
 - Live-Fix: Portal-Zugang fällt auf eigene Rollen zurück, falls `portal_roles` in der DB fehlt; Migration 0020 setzt Heimat-Mandant von h.verst auf ESB GmbH.
