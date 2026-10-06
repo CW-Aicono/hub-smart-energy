@@ -92,14 +92,16 @@ const SuperAdminBilling = () => {
     },
   });
 
+  const [docFilter, setDocFilter] = useState<"all" | "invoice" | "subscription_notice">("all");
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("asc"); }
   };
 
   const sorted = useMemo(() => {
+    const byType = invoices.filter((r: any) => docFilter === "all" || (r.document_type ?? "invoice") === docFilter);
     const filtered = search.trim()
-      ? invoices.filter((r: any) => {
+      ? byType.filter((r: any) => {
           const q = search.toLowerCase();
           return (
             (r.tenants?.name ?? "").toLowerCase().includes(q) ||
@@ -108,7 +110,7 @@ const SuperAdminBilling = () => {
             (r.lexware_invoice_number ?? "").toLowerCase().includes(q)
           );
         })
-      : invoices;
+      : byType;
     const arr = [...filtered];
     const dir = sortDir === "asc" ? 1 : -1;
     arr.sort((a: any, b: any) => {
@@ -129,7 +131,7 @@ const SuperAdminBilling = () => {
       }
     });
     return arr;
-  }, [invoices, sortKey, sortDir, search]);
+  }, [invoices, sortKey, sortDir, search, docFilter]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -186,7 +188,7 @@ const SuperAdminBilling = () => {
     const sepaInvoices = invoices.filter((inv: any) =>
       (inv.tenants?.payment_method === "sepa") &&
       (inv.status === "draft" || inv.status === "sent") &&
-      Number(inv.amount) > 0 &&
+      Number(inv.amount) > 0 && inv.document_type !== "subscription_notice" &&
       inv.tenants?.sepa_iban &&
       inv.tenants?.sepa_mandate_ref
     );
@@ -255,7 +257,7 @@ const SuperAdminBilling = () => {
               Status aktualisieren
             </Button>
             <Button variant="outline" disabled={lexwareMutation.isPending} onClick={() => {
-              const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
+              const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && inv.document_type !== "subscription_notice" && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
               if (openIds.length === 0) { toast.info(t("billing.lexware_no_open")); return; }
               lexwareMutation.mutate(openIds);
             }}>
@@ -400,7 +402,12 @@ const SuperAdminBilling = () => {
                   ) : (
                     sorted.map((inv: any) => (
                       <TableRow key={inv.id}>
-                        <TableCell className="font-medium">{inv.tenants?.name ?? "–"}</TableCell>
+                        <TableCell className="font-medium">
+                          {inv.tenants?.name ?? "–"}
+                          {inv.document_type === "subscription_notice" && (
+                            <Badge variant="secondary" className="ml-2 text-xs" title="Kein Zahlbetrag – keine Rechnung">Abo-Beleg</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{inv.period_start ? new Date(inv.period_start + "T00:00:00").toLocaleDateString("de-DE") : "–"} – {inv.period_end ? new Date(inv.period_end + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
                         <TableCell>{Number(inv.module_total ?? 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
                         <TableCell>{Number(inv.support_total ?? 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
@@ -425,7 +432,7 @@ const SuperAdminBilling = () => {
                             <Badge variant="default" className="text-xs gap-1">
                               <CheckCircle2 className="h-3 w-3" />{t("billing.lexware_synced")}
                             </Badge>
-                          ) : inv.status === "voided" ? (
+                          ) : inv.status === "voided" || inv.document_type === "subscription_notice" ? (
                             <Badge variant="outline" className="text-xs text-muted-foreground">—</Badge>
                           ) : (
                             <Button size="sm" variant="ghost" disabled={sendingIds.has(inv.id) || lexwareMutation.isPending} onClick={() => lexwareMutation.mutate([inv.id])}>
