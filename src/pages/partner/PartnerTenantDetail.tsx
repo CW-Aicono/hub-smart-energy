@@ -237,6 +237,11 @@ export default function PartnerTenantDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Module ({modules.length} aktiv)</CardTitle>
               <CardDescription>Sie können nur Module freigeben, die für Ihr Partner-Konto lizenziert sind.</CardDescription>
+              {(modulesError || partnerModulesError) && (
+                <p className="text-sm text-destructive">
+                  Module konnten nicht geladen werden: {((modulesError || partnerModulesError) as Error).message}
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               <div className="divide-y">
