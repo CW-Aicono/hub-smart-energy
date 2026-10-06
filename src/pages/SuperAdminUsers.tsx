@@ -173,6 +173,15 @@ const SuperAdminUsers = () => {
                           <div>
                             <p className="font-medium">{u.contact_person || "–"}</p>
                             <p className="text-xs text-muted-foreground">{u.email}</p>
+                            {u.partnerships.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {u.partnerships.map((pm, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {pm.role === "partner_admin" ? "Partner-Admin" : "Partner-Mitglied"}: {pm.partnerName}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
