@@ -93,39 +93,29 @@ export function useModulePrices() {
     },
   });
 
-  const getPrice = (moduleCode: string): number => {
-    const p = prices.find((pr) => pr.module_code === moduleCode);
-    return p ? Number(p.price_monthly) : 0;
-  };
+  // Einheitspreis: Mitglieds- und Industriepreise sind abgeschafft – alle Varianten liefern den Standardpreis.
+  const getPrice = (moduleCode: string): number => getStandardPrice(moduleCode);
 
   const getStandardPrice = (moduleCode: string): number => {
     const p = prices.find((pr) => pr.module_code === moduleCode);
     return p ? Number(p.standard_price) : 0;
   };
 
-  const getIndustryPrice = (moduleCode: string): number => {
-    const p = prices.find((pr) => pr.module_code === moduleCode);
-    return p ? Number(p.industry_price_monthly) : 0;
-  };
-
-  const getIndustryStandardPrice = (moduleCode: string): number => {
-    const p = prices.find((pr) => pr.module_code === moduleCode);
-    return p ? Number(p.industry_standard_price) : 0;
-  };
+  const getIndustryPrice = (moduleCode: string): number => getStandardPrice(moduleCode);
+  const getIndustryStandardPrice = (moduleCode: string): number => getStandardPrice(moduleCode);
 
   const getPartnerPrice = (moduleCode: string): number => {
     const p = prices.find((pr) => pr.module_code === moduleCode);
     return p ? Number(p.partner_price_monthly ?? 0) : 0;
   };
 
-  const getPartnerIndustryPrice = (moduleCode: string): number => {
-    const p = prices.find((pr) => pr.module_code === moduleCode);
-    return p ? Number(p.partner_industry_price_monthly ?? 0) : 0;
-  };
+  const getPartnerIndustryPrice = (moduleCode: string): number => getPartnerPrice(moduleCode);
 
   const getChargePointPrice = (moduleCode: string, field: CpField): number => {
     const p = prices.find((pr) => pr.module_code === moduleCode) as any;
-    return p ? Number(p[field] ?? 0) : 0;
+    if (!p) return 0;
+    const unified = field.startsWith("partner_") ? "partner_charge_point_price_monthly" : "standard_charge_point_price_monthly";
+    return Number(p[unified] ?? 0);
   };
 
   return {
