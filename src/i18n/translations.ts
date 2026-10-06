@@ -890,10 +890,10 @@ export const translations = {
     nl: "Rol",
   },
   "users.admin": {
-    de: "Administrator",
-    en: "Administrator",
-    es: "Administrador",
-    nl: "Beheerder",
+    de: "Kunden-Admin",
+    en: "Customer Admin",
+    es: "Administrador del cliente",
+    nl: "Klantbeheerder",
   },
   "users.userRole": {
     de: "Benutzer",
@@ -1386,10 +1386,10 @@ export const translations = {
     nl: "Overzicht van beschikbare rollen en hun rechten",
   },
   "roles.admin": {
-    de: "Administrator",
-    en: "Administrator",
-    es: "Administrador",
-    nl: "Beheerder",
+    de: "Kunden-Admin",
+    en: "Customer Admin",
+    es: "Administrador del cliente",
+    nl: "Klantbeheerder",
   },
   "roles.adminDescription": {
     de: "Vollzugriff auf alle Funktionen",
@@ -5881,6 +5881,8 @@ export const translations = {
   "help.accountAccessTitle": { de: "Konto, Rollen & Support", en: "Account, roles & support", es: "Cuenta, roles y soporte", nl: "Account, rollen & support" },
   "help.accountAccessDesc": { de: "Bereichswechsel, Remote-Support, Kontosperre, Version", en: "Area switching, remote support, account lock, version", es: "Cambio de área, soporte remoto, bloqueo, versión", nl: "Gebiedswissel, remote support, accountblokkade, versie" },
   "manual.acc.intro": { de: "Eine Person kann mit einer E-Mail-Adresse mehrere Rollen haben, z. B. Tenant-Benutzer, Partner-Admin und Portal-Admin.", en: "One person can hold several roles with one e-mail address, e.g. tenant user, partner admin and portal admin.", es: "Una persona puede tener varios roles con un solo correo, p. ej. usuario, partner-admin y portal-admin.", nl: "Eén persoon kan met één e-mailadres meerdere rollen hebben, bijv. tenantgebruiker, partner-admin en portal-admin." },
+  "manual.acc.adminLevels": { de: "Portal-Admins verwalten das AICONO Portal, Partner-Admins ihre Partnerorganisation und Kunden-Admins ihren Mandanten. Die Rechte bleiben getrennt. In der Portal-Benutzerliste stehen Partner-Mitgliedschaften mit Firmenname und Rolle unter dem Nutzernamen; der Löschdialog weist auf bestehende Mitgliedschaften hin.", en: "Portal Admins manage the AICONO Portal, Partner Admins their partner organisation and Customer Admins their tenant. Permissions remain separate. The portal user list shows partner memberships with company name and role below the user name; the deletion dialog warns about existing memberships.", es: "Los administradores del portal gestionan AICONO Portal, los administradores de socios su organización y los administradores del cliente su cliente. Los permisos siguen separados. La lista del portal muestra las membresías de socios con empresa y rol; el diálogo de eliminación advierte de las membresías existentes.", nl: "Portalbeheerders beheren AICONO Portal, partnerbeheerders hun partnerorganisatie en klantbeheerders hun tenant. Rechten blijven gescheiden. De gebruikerslijst toont partnerlidmaatschappen met bedrijfsnaam en rol; het verwijdervenster waarschuwt voor bestaande lidmaatschappen." },
+  "help.changelog162Fix1": { de: "Benutzerliste im Portal wieder sichtbar, einschließlich Partner-Zugehörigkeit. Klare Rollenbezeichnungen: Portal-Admin, Partner-Admin und Kunden-Admin; Rechte unverändert.", en: "Portal user list restored, including partner membership. Clear role names: Portal Admin, Partner Admin and Customer Admin; permissions unchanged.", es: "Lista de usuarios del portal restaurada, con membresías de socios. Roles claros: administrador del portal, de socio y del cliente; permisos sin cambios.", nl: "Gebruikerslijst in het portal hersteld, inclusief partnerlidmaatschap. Duidelijke rollen: portalbeheerder, partnerbeheerder en klantbeheerder; rechten ongewijzigd." },
   "manual.acc.areaTitle": { de: "Bereichswechsel", en: "Switching areas", es: "Cambio de área", nl: "Gebied wisselen" },
   "manual.acc.areaItem1": { de: "Der Umschalter oben rechts zeigt nur die Bereiche, für die Sie berechtigt sind: EMS (Tenant), Partnerportal, Portal-Admin.", en: "The switcher at the top right only shows areas you are authorised for: EMS (tenant), partner portal, portal admin.", es: "El selector arriba a la derecha solo muestra las áreas autorizadas.", nl: "De schakelaar rechtsboven toont alleen gebieden waarvoor u bevoegd bent." },
   "manual.acc.areaItem2": { de: "Ihr zuletzt gewählter Bereich wird beim nächsten Login geöffnet.", en: "Your last chosen area opens at your next login.", es: "El último área elegida se abre en el siguiente inicio de sesión.", nl: "Het laatst gekozen gebied opent bij de volgende login." },

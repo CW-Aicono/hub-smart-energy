@@ -1,5 +1,5 @@
-// Portal-Admin pflegt das Modul-Portfolio eines Partners (partner_modules).
-// Prüft die Portal-Admin-Rolle serverseitig und schreibt mit Service-Rolle.
+// Super-Admin pflegt das Modul-Portfolio eines Partners (partner_modules).
+// Prüft die Super-Admin-Rolle serverseitig und schreibt mit Service-Rolle.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 

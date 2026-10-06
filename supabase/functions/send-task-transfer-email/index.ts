@@ -137,7 +137,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // --- Tenant-Zugehörigkeit validieren (inkl. Portal-Admin-Bypass) ---
+    // --- Tenant-Zugehörigkeit validieren (inkl. Super-Admin-Bypass) ---
     const serviceClient = createClient(supabaseUrl, serviceKey);
     const { data: profile } = await serviceClient
       .from("profiles")
@@ -159,7 +159,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Missing required fields: contactEmail and taskTitle");
     }
 
-    // --- Tenant-Zugehörigkeit validieren (inkl. Portal-Admin-Bypass) ---
+    // --- Tenant-Zugehörigkeit validieren (inkl. Super-Admin-Bypass) ---
     if (!isSuperAdmin && profile?.tenant_id !== body.tenantId) {
       return new Response(
         JSON.stringify({ success: false, error: "Forbidden" }),

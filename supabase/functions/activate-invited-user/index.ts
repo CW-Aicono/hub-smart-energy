@@ -151,7 +151,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       // Update profile with tenant + name.
-      // Super-admin invites: tenant_id MUST be NULL (Portal-Admin/Tenant separation).
+      // Super-admin invites: tenant_id MUST be NULL (Super-Admin/Tenant separation).
       const profileTenantId = isSuperAdminInvite ? null : (effectiveTenantId || null);
       // custom_role_id only applies to non-super-admin tenant invites.
       const profileCustomRoleId = isSuperAdminInvite

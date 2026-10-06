@@ -896,6 +896,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               {T("help.accountAccessTitle")}
             </h3>
             <p className="text-muted-foreground mb-4">{T("manual.acc.intro")}</p>
+            <p className="text-sm text-muted-foreground">{T("manual.acc.adminLevels")}</p>
           </section>
           <Separator />
           <section>

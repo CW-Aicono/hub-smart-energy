@@ -106,7 +106,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (!adminEmail.includes("@")) throw new Error("E-Mail ungültig.");
 
-    // 2) Systemweite E-Mail-Sperre: keine Doppel-Accounts (Tenant/Partner/Portal-Admin)
+    // 2) Systemweite E-Mail-Sperre: keine Doppel-Accounts (Tenant/Partner/Super-Admin)
     const conflict = await checkInviteConflict({
       supabase,
       email: adminEmail,

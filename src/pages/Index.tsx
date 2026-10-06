@@ -55,11 +55,11 @@ const Index = () => {
   if (isSalesHost()) return <Navigate to="/sales" replace />;
 
   // Stufe 2: Partner-Subdomain (partner.aicono.org) zeigt ausschließlich das Partner-Portal.
-  // Auch wenn der eingeloggte User Portal-Admin oder Kunden-Admin ist, soll auf dieser
+  // Auch wenn der eingeloggte User Super-Admin oder Tenant-Admin ist, soll auf dieser
   // Subdomain das Partner-Portal greifen.
   if (isPartnerHost()) return <Navigate to="/partner" replace />;
 
-  // Mehrere Bereiche (Portal-Admin / Partner / eigener Mandant):
+  // Mehrere Bereiche (Super-Admin / Partner / eigener Mandant):
   // gespeicherte Präferenz bzw. einmalige Auswahl. Die Präferenz ist nur
   // Navigationshilfe – jeder Bereich hat seinen eigenen Rechte-Guard.
   if ((isPartnerMember || isSuperAdmin) && !isImpersonating()) {

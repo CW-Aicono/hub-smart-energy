@@ -1,7 +1,7 @@
 /**
  * Support-View Helper (Impersonation-basiert)
  * ===========================================
- * Wenn ein Portal-Admin "Remote-Support" startet, tauscht das Frontend die
+ * Wenn ein Super-Admin "Remote-Support" startet, tauscht das Frontend die
  * eigene Supabase-Session gegen die Session eines technischen Support-Users
  * des Ziel-Tenants. Die Original-Session wird hier zwischengespeichert,
  * damit beim Beenden zurückgewechselt werden kann.
@@ -9,7 +9,7 @@
  * Es gibt KEINE Override-Logik mehr auf tenant_id-Ebene – auth.uid() ist
  * während der Sitzung tatsächlich der Tenant-Support-User. Damit verhalten
  * sich alle RLS-Policies, RPCs, Widgets, Preferences usw. identisch zur
- * Sicht eines echten Kunden-Admins.
+ * Sicht eines echten Tenant-Admins.
  */
 
 const KEY_ORIGINAL = "support_original_session";
@@ -57,7 +57,7 @@ export function beginImpersonation(opts: {
     sessionStorage.setItem(KEY_ORIGINAL, JSON.stringify(opts.originalSession));
     sessionStorage.setItem(KEY_SESSION_ID, opts.sessionId);
     sessionStorage.setItem(KEY_TENANT_ID, opts.tenantId);
-    // Herkunft merken (Portal-Admin oder Partner-Portal), um dorthin zurückzukehren.
+    // Herkunft merken (Super-Admin oder Partner-Portal), um dorthin zurückzukehren.
     const p = window.location.pathname;
     if (p.startsWith("/partner") || p.startsWith("/super-admin")) {
       localStorage.setItem(KEY_ORIGIN, p + window.location.search);
@@ -78,9 +78,9 @@ export function clearImpersonation() {
 /**
  * Beendet eine laufende Support-Sitzung sauber:
  * 1) markiert die Session serverseitig als beendet,
- * 2) stellt die Original-Session des Portal-Admins wieder her (oder loggt aus),
+ * 2) stellt die Original-Session des Super-Admins wieder her (oder loggt aus),
  * 3) räumt Impersonations-Flags auf,
- * 4) macht einen HARTEN Redirect ins Portal-Admin, damit Tenant-Context,
+ * 4) macht einen HARTEN Redirect ins Super-Admin, damit Tenant-Context,
  *    React-Query-Caches und Realtime-Kanäle komplett neu aufgebaut werden.
  */
 export async function endImpersonationAndReturn(

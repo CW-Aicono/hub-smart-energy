@@ -2,6 +2,11 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## 2026-10-06 – v1.6.2
+- Benutzerliste: falsches `partner_members.role` durch `partner_role` ersetzt; Abfragefehler werden nicht mehr als leere Liste angezeigt.
+- Sichtbare Rollenbezeichnungen Portal-Admin, Partner-Admin und Kunden-Admin vereinheitlicht; Rollenwerte, Adressen und Sicherheitsprüfungen bleiben unverändert.
+- Handbuch (DE/EN/ES/NL), Versionsverlauf und Staging-Roadmap aktualisiert.
+
 ## 2026-10-07
 ### Neu
 - Benutzerverwaltung (Portal): Partner-Mitgliedschaften werden jetzt unter dem Nutzernamen angezeigt („Partner-Admin: <Name>" / „Partner-Mitglied: <Name>"); Löschdialog warnt, wenn der Nutzer Partner-Mitglied/Admin ist.

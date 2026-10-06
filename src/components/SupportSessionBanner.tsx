@@ -17,15 +17,15 @@ export default function SupportSessionBanner() {
   const [ending, setEnding] = useState(false);
 
   if (!isActive) return null;
-  // Portal-Admins haben eine eigene Impersonation-Leiste mit Beenden-Button
+  // Super-Admins haben eine eigene Impersonation-Leiste mit Beenden-Button
   if (isSuperAdmin) return null;
 
   const endSession = async () => {
     if (!session) return;
     setEnding(true);
     try {
-      // Wenn eine Portal-Admin-Impersonation aktiv ist, sauber zurück in den
-      // Portal-Admin (Original-Session wiederherstellen + Hard-Reload).
+      // Wenn eine Super-Admin-Impersonation aktiv ist, sauber zurück in den
+      // Super-Admin (Original-Session wiederherstellen + Hard-Reload).
       if (isImpersonating()) {
         toast.success("Remote-Support beendet");
         await endImpersonationAndReturn(supabase, {

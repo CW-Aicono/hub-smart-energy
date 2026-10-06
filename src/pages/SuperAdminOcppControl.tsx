@@ -25,7 +25,7 @@ const SuperAdminOcppControl = () => {
   const { user, loading } = useAuth();
   const { t } = useSATranslation();
   const { tenants } = useTenants();
-  // Portal-Admin hat keinen eigenen Mandanten — Ladepunkte deshalb global laden.
+  // Super-Admin hat keinen eigenen Mandanten — Ladepunkte deshalb global laden.
   const { data: chargePoints = [] } = useQuery({
     queryKey: ["sa-ocpp-charge-points"],
     queryFn: async () => {

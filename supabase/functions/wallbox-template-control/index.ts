@@ -1,6 +1,6 @@
 // Wallbox Modbus Template & Instance control
-// - Templates: Portal-Admin only (write), all authenticated (read)
-// - Instances: Kunden-Admin with gateway.manage permission
+// - Templates: Super-Admin only (write), all authenticated (read)
+// - Instances: Tenant-Admin with gateway.manage permission
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {

@@ -16,7 +16,7 @@ export default function PartnerSalesRules() {
   const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
 
-  // Portal-Admin ohne eigene Partner-Mitgliedschaft: Partner-Auswahl ermöglichen
+  // Super-Admin ohne eigene Partner-Mitgliedschaft: Partner-Auswahl ermöglichen
   useEffect(() => {
     if (loading || saLoading) return;
     if (isPartnerMember || !isSuperAdmin) return;
@@ -43,7 +43,7 @@ export default function PartnerSalesRules() {
     );
   }
 
-  // Portal-Admin-Vorschau ohne Partner-Mitgliedschaft
+  // Super-Admin-Vorschau ohne Partner-Mitgliedschaft
   if (isSuperAdmin) {
     return (
       <div className="p-6 max-w-7xl mx-auto space-y-4">
@@ -80,7 +80,7 @@ export default function PartnerSalesRules() {
     );
   }
 
-  // Weder Partner-Member noch Portal-Admin (PartnerLayout schließt das eigentlich aus)
+  // Weder Partner-Member noch Super-Admin (PartnerLayout schließt das eigentlich aus)
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <SalesRulesManager scope="partner" partnerId={null} canManage={false} />

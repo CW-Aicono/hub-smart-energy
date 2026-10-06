@@ -1,5 +1,5 @@
 /**
- * worker-key-info — Zeigt Portal-Admins den aktuellen GATEWAY_API_KEY (Bridge-Worker-Key)
+ * worker-key-info — Zeigt Super-Admins den aktuellen GATEWAY_API_KEY (Bridge-Worker-Key)
  * der Cloud-Instanz im Klartext. Die self-hosted Supabase-Instanz auf Hetzner ist eine
  * separate Deployment-Umgebung mit eigener Env — dieser Endpoint spiegelt NUR den Wert
  * der Cloud-Umgebung, in der die Function läuft.

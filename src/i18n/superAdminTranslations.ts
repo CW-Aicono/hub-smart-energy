@@ -3,6 +3,7 @@ export type SALanguage = "de" | "en" | "es" | "nl";
 type SATranslations = Record<string, Record<SALanguage, string>>;
 
 export const saTranslations: SATranslations = {
+  "common.retry": { de: "Erneut versuchen", en: "Try again", es: "Reintentar", nl: "Opnieuw proberen" },
   "common.loading": { de: "Laden...", en: "Loading...", es: "Cargando...", nl: "Laden..." },
   "common.search": { de: "Suchen...", en: "Search...", es: "Buscar...", nl: "Zoeken..." },
   "common.actions": { de: "Aktionen", en: "Actions", es: "Acciones", nl: "Acties" },
@@ -109,7 +110,7 @@ export const saTranslations: SATranslations = {
   "users.username": { de: "Nutzername", en: "Username", es: "Nutzername", nl: "Nutzername" },
   "users.role": { de: "Rolle", en: "Role", es: "Rolle", nl: "Rolle" },
   "users.user": { de: "Benutzer", en: "User", es: "Benutzer", nl: "Benutzer" },
-  "users.admin": { de: "Admin", en: "Admin", es: "Admin", nl: "Admin" },
+  "users.admin": { de: "Kunden-Admin", en: "Customer Admin", es: "Administrador del cliente", nl: "Klantbeheerder" },
   "users.super_admin": { de: "Portal-Admin", en: "Portal Admin", es: "Portal-Admin", nl: "Portal-Admin" },
   "users.not_found": { de: "Keine Benutzer gefunden", en: "No users found", es: "Keine Benutzer gefunden", nl: "Keine Benutzer gefunden" },
   "users.status_updated": { de: "Status aktualisiert", en: "Status updated", es: "Status aktualisiert", nl: "Status aktualisiert" },

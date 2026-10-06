@@ -209,7 +209,7 @@ const SuperAdminInviteDialog = () => {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="user"><div className="flex items-center gap-2"><User className="h-4 w-4" /> Benutzer</div></SelectItem>
-                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" /> Administrator</div></SelectItem>
+                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" /> Kunden-Admin</div></SelectItem>
                   <SelectItem value="super_admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4 text-destructive" /> Portal-Admin</div></SelectItem>
                 </SelectContent>
               </Select>

@@ -1,5 +1,5 @@
 /**
- * Gateway Worker Status — read-only metrics endpoint for the Portal-Admin UI.
+ * Gateway Worker Status — read-only metrics endpoint for the Super-Admin UI.
  *
  * Beobachtet ausschließlich den Loxone-WebSocket-Worker (Hetzner).
  * AICONO-Gateways laufen unabhängig und werden über gateway_devices überwacht.
