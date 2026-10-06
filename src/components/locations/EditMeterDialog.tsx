@@ -264,12 +264,14 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       setSensors([]);
       return;
     }
+    // Während die Gateways noch laden, nichts tun – sonst würde die gespeicherte
+    // Auswahl fälschlich verworfen und beim Speichern gelöscht.
+    if (integrationsLoading) return;
     const li = enabledIntegrations.find((i) => i.id === selectedIntegration);
     if (!li) {
-      // Verknüpfte Integration existiert nicht mehr (z. B. gelöscht) → neu wählen lassen.
+      // Gateway nicht (mehr) vorhanden: Auswahl NICHT stillschweigend leeren,
+      // sondern Hinweis anzeigen und Neuwahl durch den Nutzer abwarten.
       setSensors([]);
-      setSelectedIntegration("");
-      setSelectedSensor("");
       return;
     }
 
@@ -312,7 +314,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       }
     };
     fetchSensors();
-  }, [selectedIntegration, captureType]);
+  }, [selectedIntegration, captureType, integrationsLoading, enabledIntegrations.length]);
 
   const [photoFullscreen, setPhotoFullscreen] = useState(false);
 
@@ -551,6 +553,11 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                       ))}
                     </SelectContent>
                   </Select>
+                )}
+                {!integrationsLoading && selectedIntegration && !enabledIntegrations.some((li) => li.id === selectedIntegration) && (
+                  <p className="text-sm text-destructive mt-1">
+                    Das bisher verknüpfte Gateway ist nicht mehr vorhanden – bitte neu wählen. Solange werden keine Messwerte gespeichert.
+                  </p>
                 )}
               </div>
               {selectedIntegration && (

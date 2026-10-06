@@ -802,7 +802,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             )}
             {metersLoading ? (
               <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-            ) : displayedMeters.length === 0 ? (
+            ) : displayedMeters.length === 0 && (showArchived ? archivedAssignedMeterDevices : assignedMeterDevices).length > 0 ? null : displayedMeters.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">
                 {showArchived ? t("mm.noArchivedMeters" as any) : t("mm.noMeters" as any)}
               </p>
