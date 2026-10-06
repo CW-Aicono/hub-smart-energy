@@ -6,7 +6,7 @@
 **Wahrscheinliche Ursache (noch zu bestätigen):** Die Abfrage baut Zeitstempel wie `…+00:00` in den Filter ein. Das `+` wird bei der Übertragung zu einem Leerzeichen, die Abfrage scheitert, und es kommt der falsche Hinweis.
 
 **Lösung:**
-- Zuerst die echte Fehlermeldung im Browser prüfen, um die Ursache zu bestätigen.
+- Zuerst bestätige ich die Ursache selbst, du musst nichts tun: Ich melde mich in der Vorschau automatisch an, öffne „Hilfe & Support → Remote“, klappe eine Sitzung auf und lese die Antwort der Datenbank auf diese Abfrage mit. Zusätzlich schicke ich dieselbe Abfrage einmal mit und einmal ohne `+` im Zeitstempel ab. Klappt sie nur ohne `+`, ist die Ursache bestätigt.
 - Zeitstempel sicher übergeben (einheitliches UTC-Format ohne `+`) bzw. zwei getrennte Abfragen statt eines verschachtelten Filters.
 - Der Hinweis „nicht eingerichtet“ erscheint nur noch, wenn die Tabelle wirklich fehlt. Andere Fehler zeigen „Änderungen konnten nicht geladen werden“.
 - Prüfen, dass Aktionen des Supports während einer Sitzung tatsächlich mit der Sitzung verknüpft protokolliert werden. Sonst bleibt die Liste trotz Korrektur leer.
