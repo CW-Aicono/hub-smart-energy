@@ -30,6 +30,7 @@ interface PlatformUser {
   is_blocked: boolean;
   created_at: string;
   role: "admin" | "user" | "super_admin";
+  partnerships: { partnerName: string; role: string }[];
 }
 
 type SortKey = "username" | "role" | "status" | "created_at";
@@ -52,11 +53,18 @@ const SuperAdminUsers = () => {
       if (pErr) throw pErr;
       const { data: roles, error: rErr } = await supabase.from("user_roles").select("*");
       if (rErr) throw rErr;
+      const { data: memberships, error: mErr } = await supabase
+        .from("partner_members")
+        .select("user_id, role, partners(name)");
+      if (mErr) throw mErr;
       return (profiles || []).map((p: any): PlatformUser => {
         // A user can have several role rows – show the highest one
         const own = (roles || []).filter((r: any) => r.user_id === p.user_id).map((r: any) => r.role);
         const role: PlatformUser["role"] = own.includes("super_admin") ? "super_admin" : own.includes("admin") ? "admin" : "user";
-        return { id: p.id, user_id: p.user_id, email: p.email, contact_person: p.contact_person, is_blocked: p.is_blocked, created_at: p.created_at, role };
+        const partnerships = (memberships || [])
+          .filter((m: any) => m.user_id === p.user_id)
+          .map((m: any) => ({ partnerName: m.partners?.name ?? "?", role: m.role as string }));
+        return { id: p.id, user_id: p.user_id, email: p.email, contact_person: p.contact_person, is_blocked: p.is_blocked, created_at: p.created_at, role, partnerships };
       });
     },
   });
