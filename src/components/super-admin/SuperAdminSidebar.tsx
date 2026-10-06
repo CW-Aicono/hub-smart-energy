@@ -86,77 +86,81 @@ export default function SuperAdminSidebar() {
     if (isTablet) setCollapsed(true);
   }, [isTablet]);
 
-  const navItems = [
-    { to: "/super-admin", icon: LayoutDashboard, label: t("nav.dashboard") },
+  type NavChild = { to: string; icon: any; label: string };
+  type NavItem = NavChild & { children?: NavChild[]; section?: string };
+  const groups: { section: string; area: PortalArea; items: NavItem[] }[] = [
     {
-      to: "/super-admin/tenants",
-      icon: Building2,
-      label: "Kunden",
-      children: [
+      section: "Übersicht",
+      area: "overview",
+      items: [
+        { to: "/super-admin", icon: LayoutDashboard, label: t("nav.dashboard") },
         { to: "/super-admin/tenants", icon: Building2, label: "Kunden" },
         { to: "/super-admin/partners", icon: Briefcase, label: "Partner" },
+        { to: "/super-admin/board", icon: BoardIcon, label: "C-Level Dashboard" },
+        { to: "/super-admin/statistics", icon: BarChart3, label: t("nav.statistics") },
+        {
+          to: "/super-admin/sales",
+          icon: Cpu,
+          label: "Sales Scout",
+          children: [
+            { to: "/super-admin/sales/catalog", icon: Cpu, label: "Geräte-Katalog" },
+            { to: "/super-admin/sales/rules", icon: ListChecks, label: "Auswahl-Regeln" },
+          ],
+        },
       ],
     },
-    { to: "/super-admin/statistics", icon: BarChart3, label: t("nav.statistics") },
+    { section: "", area: "roadmap", items: [{ to: "/super-admin/roadmap", icon: ListChecks, label: "Roadmap" }] },
     {
-      to: "/super-admin/billing",
-      icon: Receipt,
-      label: t("nav.accounting"),
-      children: [
+      section: "Kaufmännisch",
+      area: "commercial",
+      items: [
         { to: "/super-admin/billing", icon: Receipt, label: t("nav.billing") },
         { to: "/super-admin/licenses", icon: Euro, label: t("nav.active_licenses") },
         { to: "/super-admin/savings-share", icon: Euro, label: "Gain-Sharing" },
-      ],
-    },
-    {
-      to: "/super-admin/modules",
-      icon: Euro,
-      label: t("nav.bundles_modules"),
-      children: [
         { to: "/super-admin/module-pricing", icon: Euro, label: t("nav.module_pricing") },
         { to: "/super-admin/bundles", icon: Euro, label: t("nav.bundles") },
       ],
     },
     {
-      to: "/super-admin/users",
-      icon: Shield,
-      label: t("nav.user_management"),
-      children: [
-        { to: "/super-admin/users", icon: Users, label: t("nav.users") },
-        { to: "/super-admin/roles", icon: ShieldCheck, label: t("nav.roles_permissions") },
-      ],
-    },
-    { to: "/super-admin/board", icon: BoardIcon, label: "C-Level Dashboard" },
-    { to: "/super-admin/roadmap", icon: ListChecks, label: "Roadmap" },
-    {
-      to: "/super-admin/ocpp",
-      icon: Server,
-      label: t("nav.ocpp_backend"),
-      children: [
-        { to: "/super-admin/ocpp/onboarding", icon: Plug, label: "Ladepunkte" },
-        { to: "/super-admin/ocpp/integrations", icon: PlugZap, label: t("nav.ocpp_integrations") },
-        { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
-        { to: "/super-admin/ocpp/firmware", icon: Upload, label: "Firmware-Katalog" },
-        { to: "/super-admin/ocpp/simulators", icon: Plug, label: "Wallbox-Simulator" },
+      section: "Technisch",
+      area: "technical",
+      items: [
+        { to: "/super-admin/gateways", icon: Cpu, label: "Gateway-Flotte" },
+        { to: "/super-admin/loxone-templates", icon: Puzzle, label: "Loxone-Templates" },
         { to: "/super-admin/wallbox-templates", icon: PlugZap, label: "Wallbox-Templates" },
+        {
+          to: "/super-admin/ocpp",
+          icon: Server,
+          label: t("nav.ocpp_backend"),
+          children: [
+            { to: "/super-admin/ocpp/onboarding", icon: Plug, label: "Ladepunkte" },
+            { to: "/super-admin/ocpp/integrations", icon: PlugZap, label: t("nav.ocpp_integrations") },
+            { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
+            { to: "/super-admin/ocpp/firmware", icon: Upload, label: "Firmware-Katalog" },
+            { to: "/super-admin/ocpp/simulators", icon: Plug, label: "Wallbox-Simulator" },
+          ],
+        },
+        { to: "/super-admin/monitoring", icon: Activity, label: t("nav.monitoring") },
+        { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
       ],
     },
     {
-      to: "/super-admin/sales",
-      icon: Briefcase,
-      label: "Sales Scout",
-      children: [
-        { to: "/super-admin/sales/catalog", icon: Cpu, label: "Geräte-Katalog" },
-        { to: "/super-admin/sales/rules", icon: ListChecks, label: "Auswahl-Regeln" },
+      section: "Verwaltung",
+      area: "admin",
+      items: [
+        { to: "/super-admin/users", icon: Users, label: t("nav.users") },
+        { to: "/super-admin/roles", icon: ShieldCheck, label: "Portal-Rollen" },
+        { to: "/super-admin/settings", icon: Settings, label: t("nav.settings") },
       ],
     },
-    { to: "/super-admin/loxone-templates", icon: Puzzle, label: "Loxone-Templates" },
-    { to: "/super-admin/gateways", icon: Cpu, label: "Gateway-Flotte" },
-    
-    { to: "/super-admin/monitoring", icon: Activity, label: t("nav.monitoring") },
-    { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
-    { to: "/super-admin/settings", icon: Settings, label: t("nav.settings") },
   ];
+  const navItems: NavItem[] = groups
+    .filter((g) => canRead(g.area))
+    .flatMap((g) =>
+      g.section
+        ? [{ to: `section:${g.section}`, icon: null, label: g.section, section: g.section }, ...g.items]
+        : g.items,
+    );
 
   // Auto-open parent if child is active
   useEffect(() => {
