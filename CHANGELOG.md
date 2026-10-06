@@ -3,6 +3,8 @@
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## 2026-10-07
+### Behoben
+- v1.4.1: EditMeterDialog leerte beim Öffnen Gateway/Sensor, solange Integrationen noch luden (Race) → Speichern löschte `location_integration_id`/`sensor_uuid`, keine Messwerte. Effekt wartet jetzt auf Laden und leert nie automatisch; fehlendes Gateway wird nur angezeigt. MeterManagement: „Keine Zähler angelegt“ nur, wenn auch keine Gateway-Zähler existieren.
 ### Neu / Behoben
 - v1.4.0: Widget `charge_point_power` (letzter OCPP `Power.Active.Import` je Ladepunkt, 30 s Polling) + Knopf „Im Dashboard anzeigen“ in ChargingPoints. `loadProfileExport.ts`: Jahreslastgang 15 min (7-Tage-Abschnitte über `get_power_series_auto`) als Excel in EnergyAnalysis. EditMeterDialog: fehlende Integration/Sensor wird erkannt und muss neu gewählt werden. Integration-Unlink löscht verwaiste Integration; Integrationen-Seite bietet Löschen für verwaiste Einträge. Remote-Ende kehrt in Ausgangsbereich (Partner/Super-Admin) zurück. Neue Edge Function `super-admin-set-partner-module` (Super-Admin-Prüfung serverseitig) ersetzt direkte RLS-Schreibzugriffe auf `partner_modules`.
 
