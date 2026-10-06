@@ -4,6 +4,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## 2026-10-07
 ### Behoben
+- „Database error deleting user“ (nrgy-hub@web.de): Konto war einziger Partner-Admin von „AICONO Partner GmbH“; Trigger `prevent_last_partner_admin_removal` blockierte die Lösch-Kaskade. Trigger lässt jetzt Systemkontext (Konto-Löschung) und Portal-Admins durch; normale Partner-Admins bleiben geschützt (Migration 0019).
 - Eigentliche Ursache „Database error loading user“: gesperrte Konten hatten `banned_until = infinity`, das der Auth-Dienst nicht lesen kann → Löschen/Laden gesperrter Konten scheiterte. Sperre setzt jetzt 2999-12-31, Bestand umgestellt (Migration 0018). Zweitkonto h.verst+partner: Super-Admin entzogen, gesperrt, Profil-E-Mail korrigiert (Daten, Staging).
 - Benutzer löschen scheiterte („Database error loading user“): `legal_pages.updated_by` verwies ohne ON DELETE auf auth.users und blockierte das Löschen von Konten, die Rechtstexte bearbeitet hatten. Jetzt ON DELETE SET NULL (Migration 0017); `delete-user` mit aktuellen Schutzregeln neu ausgerollt.
 ### Neu
