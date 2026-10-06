@@ -378,6 +378,11 @@ const SuperAdminBilling = () => {
               className="pl-8"
             />
           </div>
+          <div className="flex gap-2 mb-4">
+            {([["all", "Alle"], ["invoice", "Rechnungen"], ["subscription_notice", "Abo-Belege (0 €)"]] as const).map(([v, l]) => (
+              <Button key={v} size="sm" variant={docFilter === v ? "default" : "outline"} onClick={() => setDocFilter(v)}>{l}</Button>
+            ))}
+          </div>
 
           {/* Table */}
           <Card>
