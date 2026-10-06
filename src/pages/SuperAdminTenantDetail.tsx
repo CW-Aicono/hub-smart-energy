@@ -772,7 +772,6 @@ const SuperAdminTenantDetail = () => {
                           <Input type="email" value={tenantInfoForm.contact_email} onChange={(e) => setTenantInfoForm(f => ({ ...f, contact_email: e.target.value }))} />
                         </div>
                       </div>
-                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
