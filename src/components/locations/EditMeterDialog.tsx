@@ -265,7 +265,13 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       return;
     }
     const li = enabledIntegrations.find((i) => i.id === selectedIntegration);
-    if (!li) return;
+    if (!li) {
+      // Verknüpfte Integration existiert nicht mehr (z. B. gelöscht) → neu wählen lassen.
+      setSensors([]);
+      setSelectedIntegration("");
+      setSelectedSensor("");
+      return;
+    }
 
     const fetchSensors = async () => {
       setSensorsLoading(true);
@@ -552,11 +558,17 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                   <Label>Sensor *</Label>
                   {sensorsLoading ? (
                     <Skeleton className="h-9 w-full mt-1" />
-                  ) : sensors.length === 0 && selectedSensor ? (
-                    <p className="text-sm mt-1">{sensors.find((s) => s.uuid === selectedSensor)?.name || meter.name || selectedSensor}</p>
                   ) : sensors.length === 0 ? (
-                    <p className="text-sm text-muted-foreground mt-1">Keine Sensoren gefunden.</p>
+                    <p className="text-sm text-destructive mt-1">
+                      Keine Sensoren vom Gateway erhalten. Bitte Verbindung der Integration prüfen und den Dialog erneut öffnen.
+                    </p>
                   ) : (
+                    <>
+                    {selectedSensor && !sensors.some((s) => s.uuid === selectedSensor) && (
+                      <p className="text-sm text-destructive mt-1">
+                        Der bisher verknüpfte Sensor ist nicht mehr vorhanden – bitte neu wählen. Solange werden keine Messwerte gespeichert.
+                      </p>
+                    )}
                     <Select value={selectedSensor} onValueChange={setSelectedSensor}>
                       <SelectTrigger className="mt-1"><SelectValue placeholder="Sensor auswählen" /></SelectTrigger>
                       <SelectContent>
@@ -565,6 +577,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                         ))}
                       </SelectContent>
                     </Select>
+                    </>
                   )}
                 </div>
               )}
@@ -856,7 +869,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
             <Button
               onClick={handleSubmit}
-              disabled={!name.trim() || saving || (captureType === "automatic" && (!selectedIntegration || !selectedSensor))}
+              disabled={!name.trim() || saving || (captureType === "automatic" && (!selectedIntegration || !selectedSensor || (sensors.length > 0 && !sensors.some((x) => x.uuid === selectedSensor))))}
             >
               {saving ? "Speichern…" : "Speichern"}
             </Button>
