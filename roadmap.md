@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Benutzerliste reparieren und sichtbare Admin-Bezeichnungen vereinheitlichen (in Arbeit)
+- [x] Benutzerliste repariert; Portal-Admin, Partner-Admin, Kunden-Admin vereinheitlicht (v1.6.2; 16 Tests erfolgreich, angemeldete Browserprüfung mangels Sitzung offen)
 
 - [x] Dashboard: Zeitraum pro Grafik
 - [x] Energieanalyse (Vergleich, Heatmap, Dauerlinie, Kennzahlen, Export, Link teilen)
