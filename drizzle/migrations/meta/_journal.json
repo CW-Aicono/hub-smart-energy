@@ -134,6 +134,13 @@
       "when": 1791314201096,
       "tag": "0018_fix_ban_infinity",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791315646886,
+      "tag": "0019_partner_admin_guard_system_bypass",
+      "breakpoints": true
     }
   ]
 }
