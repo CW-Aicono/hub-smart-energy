@@ -134,11 +134,12 @@ serve(async (req) => {
 
         const now = new Date().toISOString();
         const readingsToInsert: any[] = [];
+        const missingSensors: string[] = [];
 
         for (const meter of linkedMeters) {
-          if (!meter.sensor_uuid) continue;
+          if (!meter.sensor_uuid) { missingSensors.push(meter.id); continue; }
           const sensor = sensorMap.get(meter.sensor_uuid);
-          if (!sensor) continue;
+          if (!sensor) { missingSensors.push(meter.id); continue; }
 
           // Extract power value in W (or kW converted to kW)
           let powerValue: number | null = null;
@@ -224,6 +225,26 @@ serve(async (req) => {
           }
         }
 
+
+        // 3b. Zähler ohne passenden Sensor sichtbar melden statt still zu überspringen.
+        if (missingSensors.length > 0) {
+          console.warn(`Integration ${integrationId}: ${missingSensors.length} Zähler ohne passenden Sensor`, missingSensors);
+          const { data: openErr } = await supabase
+            .from("integration_errors").select("id")
+            .eq("location_integration_id", integrationId).eq("error_type", "sensor_missing").eq("is_resolved", false)
+            .maybeSingle();
+          if (!openErr) {
+            await supabase.from("integration_errors").insert({
+              tenant_id: linkedMeters[0].tenant_id,
+              location_id: locationId,
+              location_integration_id: integrationId,
+              integration_type: "shelly_cloud",
+              error_type: "sensor_missing",
+              error_message: `${missingSensors.length} Zähler: Sensor nicht gefunden – bitte in „Gerät bearbeiten“ neu wählen. Zähler-IDs: ${missingSensors.join(", ")}`,
+              severity: "warning",
+            });
+          }
+        }
 
         // 4. Batch insert into meter_power_readings
         if (readingsToInsert.length > 0) {

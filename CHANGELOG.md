@@ -2,6 +2,16 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.6.3 – 2026-10-06
+- Widgets: Hinweis „keine gespeicherten Werte“ je Zähler statt leerer Grafik.
+- Shelly-Abholung meldet Zähler ohne passenden Sensor als Integrationsfehler (`sensor_missing`).
+- Neue Edge Function `portal-set-tenant-module`: Portal-Admins setzen Kunden-Module direkt, Partner-Portfolio wird ergänzt, Audit-Log.
+- Migration 0021: `audit_logs.entity_label`/`support_session_id` idempotent nachgeliefert (Änderungsprotokoll auf Live).
+- Live-Prüfung per Terminal-Befehl im Chat (Diagnose-Datei wieder entfernt; Terminal-Befehle künftig immer direkt im Chat).
+
+## Unreleased
+- Live-Fix: Portal-Zugang fällt auf eigene Rollen zurück, falls `portal_roles` in der DB fehlt; Migration 0020 setzt Heimat-Mandant von h.verst auf ESB GmbH.
+
 ## 2026-10-06 – v1.6.2
 - Benutzerliste: falsches `partner_members.role` durch `partner_role` ersetzt; Abfragefehler werden nicht mehr als leere Liste angezeigt.
 - Sichtbare Rollenbezeichnungen Portal-Admin, Partner-Admin und Kunden-Admin vereinheitlicht; Rollenwerte, Adressen und Sicherheitsprüfungen bleiben unverändert.

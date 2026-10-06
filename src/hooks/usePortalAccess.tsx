@@ -36,11 +36,18 @@ export function usePortalAccess() {
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("portal_roles", { _uid: user!.id });
-      if (error) {
-        console.error("portal_roles failed", error);
-        return [] as PortalRole[];
-      }
-      return (data ?? []) as PortalRole[];
+      if (!error) return (data ?? []) as PortalRole[];
+      // Fallback, falls die Datenbank (z. B. Live vor Migration) portal_roles noch nicht kennt:
+      // eigene Rollen direkt lesen. Nur Navigation – RLS schützt die Daten weiterhin.
+      console.error("portal_roles failed, fallback to user_roles", error);
+      const { data: rows } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user!.id);
+      const allowed: PortalRole[] = ["super_admin", "portal_commercial", "portal_technical"];
+      return (rows ?? [])
+        .map((r: any) => r.role as PortalRole)
+        .filter((r) => allowed.includes(r));
     },
   });
   const roles = data ?? [];
