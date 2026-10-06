@@ -16,6 +16,12 @@ Die Live-Datenbank kann ich nicht direkt einsehen. Deshalb gibt es zuerst einen 
 - Beim Löschen einer Integration werden zugehörige Zähler künftig auf eine Ersatz-Integration umgehängt, oder es kommt eine deutliche Warnung.
 - Widget: Hinweis „Zähler liefert seit … keine Daten“ statt einer stillen 0.
 
+**Ergänzung nach deinem Hinweis (sehr wahrscheinlich die eigentliche Ursache):** Der Zähler „Strom Hausanschluss“ merkt sich die Kennung des Sensors aus der **alten** Integration. Die neue Integration liefert denselben Messwert unter einer anderen Kennung („a4f00fcc7950 Leistung“). Die Abholung findet deshalb keinen passenden Sensor und speichert nichts. Gleiche Namen verdecken das in der Oberfläche.
+- Im Dialog „Gerät bearbeiten“ wird der Sensor wieder auswählbar (Liste der aktuellen Sensoren der gewählten Integration). Eine ungültige Kennung wird rot markiert: „Sensor nicht mehr vorhanden – bitte neu wählen“.
+- Gateway-Geräte bekommen im Menü „…“ die Aktionen „Archivieren“ und „Löschen“. Messwerte bleiben beim Archivieren erhalten.
+- Löschen einer Integration im Standort entfernt künftig auch deren Reste (verwaiste Integration, Geräteliste). Zähler, die daran hängen, werden vorher angezeigt und können auf die neue Integration umgehängt werden. Dabei wird die Sensor-Kennung über den Messwert-Typ (z. B. `total_act_power`) automatisch zugeordnet.
+- Sofortlösung für Bolan auf Live: ein fertiger Befehl, der den Zähler auf die neue Integration und den Sensor „a4f00fcc7950 Leistung“ umstellt. Danach kommen innerhalb weniger Minuten Werte. Für die Vergangenheit gibt es keine Werte.
+
 ### 2. Module beim Partner speichern: Fehler „row-level security“
 **Bestätigt im Code:** Die Regel erlaubt Speichern nur Super-Admins. Auf Live wird dein Konto dabei offenbar nicht als Super-Admin erkannt, oder die Regel ist dort anders angelegt.
 
