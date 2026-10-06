@@ -473,13 +473,17 @@ const SuperAdminTenantDetail = () => {
 
   const handleDeleteUser = async (userId: string, email: string | null) => {
     try {
-      const { data, error } = await supabase.functions.invoke("delete-user", { body: { userId } });
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke("remove-user-from-tenant", { body: { userId, tenantId: id } });
+      if (error) {
+        let msg = error.message;
+        try { msg = (await (error as any)?.context?.json())?.error ?? msg; } catch { /* noop */ }
+        throw new Error(msg);
+      }
       if (data?.success === false) throw new Error(data.error);
-      toast.success(`Benutzer ${email ?? ""} gelöscht`);
+      toast.success(`${email ?? "Person"} aus dem Mandanten entfernt (Konto bleibt bestehen)`);
       refreshUsers();
     } catch (err: any) {
-      toast.error("Löschen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
+      toast.error("Entfernen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
     }
   };
 

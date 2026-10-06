@@ -1,6 +1,7 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **v1.4.2 – Rollen sauber getrennt:** In einem Mandanten werden Personen jetzt „entfernt“ statt gelöscht; Konto und weitere Rollen bleiben erhalten. „EMS öffnen“ öffnet den eigenen Mandanten direkt. Modul-Schalter für Partner reagieren sofort und melden Fehler.
 - **v1.4.1 – Zähler-Verknüpfung:** Datengateway und Sensor eines Geräts bleiben nach dem Speichern zuverlässig erhalten, sodass wieder Messwerte ankommen. Der irreführende Hinweis „Keine Zähler angelegt“ erscheint nicht mehr, wenn Gateway-Zähler vorhanden sind.
 - **v1.4.0 – Ladeleistung & Lastgang:** Neues Dashboard-Feld zeigt die aktuelle Ladeleistung jedes Ladepunkts (einblenden über „Im Dashboard anzeigen“ unter Ladeinfrastruktur). In der Energieanalyse lässt sich der Jahreslastgang in 15-Minuten-Werten als Excel exportieren. Bei Geräten kann der Sensor neu gewählt werden, alte Integrationen lassen sich löschen, nach einer Remote-Sitzung kehren Sie in Ihren Ausgangsbereich zurück, und Partner-Module lassen sich wieder speichern.
 - **v1.3.2 – Korrekturen:** Im Remote-Verlauf werden die Änderungen der Support-Sitzung wieder angezeigt. Die Ladepunkt-Übersicht zeigt nicht mehr „Belegt“, wenn die Wallbox „frei“ meldet. Hängengebliebene Ladevorgänge ohne Energie werden automatisch abgeschlossen.
