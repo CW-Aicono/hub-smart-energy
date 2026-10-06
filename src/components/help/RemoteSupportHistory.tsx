@@ -60,7 +60,7 @@ function SessionChanges({ session }: { session: SessionRow }) {
     return (
       <p className="text-sm text-muted-foreground">
         {missing
-          ? "Das Änderungsprotokoll ist auf diesem System noch nicht eingerichtet. Es erscheint nach dem nächsten Update."
+          ? `Das Änderungsprotokoll ist auf diesem System noch nicht eingerichtet (Datenbank meldet: ${(error as Error).message}). Es erscheint, sobald das Datenbank-Update eingespielt ist.`
           : "Änderungen konnten nicht geladen werden. Bitte später erneut versuchen."}
       </p>
     );
