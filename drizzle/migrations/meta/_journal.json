@@ -155,6 +155,13 @@
       "when": 1791320388880,
       "tag": "0021_ensure_audit_logs_support_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791322525416,
+      "tag": "0022_ensure_module_read_policies",
+      "breakpoints": true
     }
   ]
 }
