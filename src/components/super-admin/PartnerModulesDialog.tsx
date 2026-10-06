@@ -30,11 +30,15 @@ export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChang
   const toggle = async (code: string, on: boolean) => {
     if (!partnerId) return;
     setBusy(code);
-    const { error } = on
-      ? await supabase.from("partner_modules").insert({ partner_id: partnerId, module_code: code })
-      : await supabase.from("partner_modules").delete().eq("partner_id", partnerId).eq("module_code", code);
+    const { data, error } = await supabase.functions.invoke("super-admin-set-partner-module", {
+      body: { partner_id: partnerId, module_code: code, enabled: on },
+    });
     setBusy(null);
-    if (error) return toast.error("Speichern fehlgeschlagen: " + error.message);
+    if (error || data?.error) {
+      let msg = data?.error ?? error?.message;
+      try { msg = (await (error as any)?.context?.json())?.error ?? msg; } catch { /* noop */ }
+      return toast.error("Speichern fehlgeschlagen: " + msg);
+    }
     qc.invalidateQueries({ queryKey: ["partner-modules-admin", partnerId] });
   };
 

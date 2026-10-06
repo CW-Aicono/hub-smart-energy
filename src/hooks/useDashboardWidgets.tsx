@@ -46,6 +46,7 @@ const DEFAULT_WIDGETS = [
   { widget_type: "arbitrage_ai", position: 15, is_visible: true },
   { widget_type: "integration_errors", position: 16, is_visible: true },
   { widget_type: "savings_share", position: 17, is_visible: true },
+  { widget_type: "charge_point_power", position: 18, is_visible: false },
 ];
 
 export function useDashboardWidgets() {
