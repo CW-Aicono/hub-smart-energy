@@ -18,7 +18,7 @@ interface AreaSwitcherProps {
 }
 
 const META: Record<AppArea, { label: string; Icon: typeof Cpu }> = {
-  super_admin: { label: "Super-Admin", Icon: ShieldCheck },
+  super_admin: { label: "AICONO Portal", Icon: ShieldCheck },
   partner: { label: "Kaufmännisch", Icon: Briefcase },
   ems: { label: "Technisch", Icon: Cpu },
 };

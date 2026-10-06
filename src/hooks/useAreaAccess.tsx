@@ -1,6 +1,6 @@
 import { usePartnerAccess } from "./usePartnerAccess";
 import { useTenantOptional } from "./useTenant";
-import { useSuperAdmin } from "./useSuperAdmin";
+import { usePortalMember as useSuperAdmin } from "./usePortalAccess";
 import { isImpersonating } from "@/lib/supportView";
 import type { AppArea } from "@/lib/areaPreference";
 
