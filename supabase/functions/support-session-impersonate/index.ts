@@ -86,10 +86,15 @@ Deno.serve(async (req) => {
     // Tenant existiert?
     const { data: tenant, error: tenantErr } = await admin
       .from("tenants")
-      .select("id, name")
+      .select("id, name, remote_support_enabled")
       .eq("id", targetTenantId)
       .maybeSingle();
     if (tenantErr || !tenant) return json({ error: "Tenant not found" }, 404);
+
+    // Kundenzustimmung ist Pflicht – gilt auch für Super-Admins.
+    if (!(tenant as { remote_support_enabled?: boolean }).remote_support_enabled) {
+      return json({ error: "Kunde hat Remote-Zugriff nicht freigegeben." }, 403);
+    }
 
     // 3) Support-User lazy anlegen (oder vorhandenen verwenden)
     let supportUserId: string | null = null;
