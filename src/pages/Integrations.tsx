@@ -23,7 +23,7 @@ const Integrations = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { t } = useTranslation();
-  const { integrations, categories, loading, updateIntegration, refetch } = useIntegrations();
+  const { integrations, categories, loading, updateIntegration, deleteIntegration, refetch } = useIntegrations();
   const [testingId, setTestingId] = useState<string | null>(null);
   const [locationsByIntegration, setLocationsByIntegration] = useState<Record<string, string[]>>({});
   const { toast } = useToast();
@@ -248,6 +248,22 @@ const Integrations = () => {
                                   <span className="italic">—</span>
                                 )}
                               </div>
+                              {!locationsByIntegration[integration.id]?.length && isAdmin && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="w-full mb-2"
+                                  onClick={async () => {
+                                    if (!window.confirm(`„${integration.name}" ist keiner Liegenschaft mehr zugeordnet. Endgültig löschen?`)) return;
+                                    const { error } = await deleteIntegration(integration.id);
+                                    toast(error
+                                      ? { title: "Löschen fehlgeschlagen", description: error.message, variant: "destructive" }
+                                      : { title: "Integration gelöscht" });
+                                  }}
+                                >
+                                  Verwaiste Integration löschen
+                                </Button>
+                              )}
                               <Button variant="outline" size="sm" className="w-full" onClick={() => handleTestConnection(integration)} disabled={testingId === integration.id}>
                                 {testingId === integration.id ? (
                                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("integrations.testingConnection" as any)}</>
