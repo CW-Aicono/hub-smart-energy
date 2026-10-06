@@ -5,16 +5,16 @@ Die Live-Datenbank kann ich nicht direkt einsehen. Deshalb gibt es zuerst einen 
 ## A. Fehler
 
 ### 1. Widget zeigt keine Werte
-**Module sind sehr wahrscheinlich nicht die Ursache.** Widgets prüfen keine Module.
+**Module sind nicht die Ursache (im Code geprüft).** Module sperren nur Menüseiten. Weder das Abholen der Shelly-Werte noch die Dashboard-Widgets prüfen ein Modul.
 
-**Starker Hinweis aus deinem Screenshot:** Unter Prozessionsweg steht „Keine Zähler angelegt“ und „2 neue Geräte vom Gateway – noch keinem Standort zugeordnet“. Der Shelly liefert zwar 19.206 W, aber dieser Wert wird keinem angelegten Zähler zugeordnet. Ohne Zähler wird nichts gespeichert, deshalb zeigt das Widget „–“ bzw. „0 W“.
+**Wahrscheinlichste Ursache:** Die Shelly-Abholung speichert nur Werte für Zähler, die mit **genau der aktuellen** Integration verknüpft sind. In der Verwaltung gibt es je Standort zwei Shelly-Integrationen, eine alte und eine neue. Hängt der Zähler noch an der alten, gelöschten Integration, wird nichts gespeichert. Die Live-Anzeige von 20.226 W kommt direkt vom Gerät und wird nicht gespeichert, deshalb zeigt das Widget nichts.
 
-**Prüfung:** Live-Abfrage, ob das Widget auf einen existierenden Zähler zeigt und ob dieser Zähler in den letzten 24 h Messwerte hat.
+**Prüfung (fertiger Befehl für Live):** An welcher Integration hängt der Zähler „Strom Hausanschluss“, gibt es diese Integration noch, und wann kam der letzte gespeicherte Wert?
 
 **Lösung:**
-- Fehlt der Zähler: Gerät über „Jetzt zuordnen“ als Zähler übernehmen. Das kann ich nicht für dich tun, du machst es in der App.
-- Widget-Designer: Hinweis „Zähler liefert keine Daten“ statt einer stillen 0.
-- Gelöschte Zähler werden im Widget erkannt und angezeigt.
+- Zähler mit der aktuellen Integration neu verknüpfen. Auf Live als einmaliger Befehl, in der App über „Gerät bearbeiten → Speichern“.
+- Beim Löschen einer Integration werden zugehörige Zähler künftig auf eine Ersatz-Integration umgehängt, oder es kommt eine deutliche Warnung.
+- Widget: Hinweis „Zähler liefert seit … keine Daten“ statt einer stillen 0.
 
 ### 2. Module beim Partner speichern: Fehler „row-level security“
 **Bestätigt im Code:** Die Regel erlaubt Speichern nur Super-Admins. Auf Live wird dein Konto dabei offenbar nicht als Super-Admin erkannt, oder die Regel ist dort anders angelegt.
