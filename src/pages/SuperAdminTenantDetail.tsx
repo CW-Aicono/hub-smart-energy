@@ -1,7 +1,7 @@
 import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndReturn } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import { useTenantModules, ALL_MODULES } from "@/hooks/useTenantModules";
 import { ChargePointSubLine, ModuleDiscountCell, TenantDiscountsCard, useTenantModuleCost } from "@/components/billing/TenantBillingExtras";
 import { useTenantLicense } from "@/hooks/useTenantLicense";
