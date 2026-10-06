@@ -183,13 +183,9 @@ Deno.serve(async (req) => {
         let globalPrice = 0;
         let globalCpPrice = 0;
         if (priceEntry) {
-          if (isKommune) {
-            globalPrice = isMember ? priceEntry.member : priceEntry.standard;
-            globalCpPrice = isMember ? priceEntry.cp : priceEntry.stdCp;
-          } else {
-            globalPrice = isMember ? priceEntry.industryMember : priceEntry.industryStandard;
-            globalCpPrice = isMember ? priceEntry.industryCp : priceEntry.industryStdCp;
-          }
+          // Einheitspreis für alle Kunden (keine Mitglieds-/Kommune-Unterscheidung mehr)
+          globalPrice = priceEntry.standard;
+          globalCpPrice = priceEntry.stdCp;
         }
         // Pauschale und Ladepunktpreis sind frei kombinierbar (0 = nicht berechnet)
         const flat = tm.price_override != null ? Number(tm.price_override) : globalPrice;
@@ -222,10 +218,7 @@ Deno.serve(async (req) => {
           });
           gross += cpAmount;
         }
-        if (flat <= 0 && !(cpPrice > 0 && activeCp > 0)) {
-          // Modul ohne Kosten trotzdem ausweisen (Transparenz wie bisher)
-          moduleLineItems.push({ type: "module", code: tm.module_code, label: tm.module_code, amount: 0 });
-        }
+        if (gross <= 0) { netByCode[tm.module_code] = 0; continue; } // Module ohne Preis nicht ausweisen
         // Rabatt: im Abrechnungsmonat gültig, günstigster gilt, nie unter 0
         let best: { amount: number; d: any } | null = null;
         for (const d of monthlyModuleDiscounts) {
@@ -340,14 +333,16 @@ Deno.serve(async (req) => {
         const mergedLines = [...moduleLineItems, ...keptPrepaid, ...keptSupportLines, ...supportLineItems];
         const mergedSupportTotal = keptSupportTotal + supportTotal;
 
+        const mergedAmount = moduleTotal + mergedSupportTotal;
         invoicesToUpdate.push({
           id: existing.id,
+          document_type: mergedAmount > 0 ? "invoice" : "subscription_notice",
           period_start: fmt(lastMonthStart),
           period_end: fmt(lastMonthEnd),
           line_items: mergedLines,
           module_total: moduleTotal,
           support_total: mergedSupportTotal,
-          amount: moduleTotal + mergedSupportTotal,
+          amount: mergedAmount,
         });
       } else {
         invoiceCounter++;
@@ -355,7 +350,9 @@ Deno.serve(async (req) => {
 
         invoicesToInsert.push({
           tenant_id: tenant.id,
-          invoice_number: invNum,
+          invoice_number: totalAmount > 0 ? invNum : "ABO-BELEG",
+          // 0 € = keine Rechnung, sondern Abo-Beleg (nicht buchbar, nie an Lexware)
+          document_type: totalAmount > 0 ? "invoice" : "subscription_notice",
           period_start: fmt(lastMonthStart),
           period_end: fmt(lastMonthEnd),
           amount: totalAmount,
