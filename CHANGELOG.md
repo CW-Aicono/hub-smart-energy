@@ -3,6 +3,8 @@
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## 2026-10-07
+### Behoben
+- Benutzer löschen scheiterte („Database error loading user“): `legal_pages.updated_by` verwies ohne ON DELETE auf auth.users und blockierte das Löschen von Konten, die Rechtstexte bearbeitet hatten. Jetzt ON DELETE SET NULL (Migration 0017); `delete-user` mit aktuellen Schutzregeln neu ausgerollt.
 ### Neu
 - v1.6.0: AICONO Portal. Enum `app_role` + `portal_commercial`/`portal_technical`; SQL `portal_roles`, `is_portal_member`, `can_portal_read/write` (Bereiche overview/commercial/technical/roadmap/admin); zusätzliche Policies `portal_read`/`portal_write` auf Kunden-, Abrechnungs- und Technik-Tabellen (Migration 0015). `guard_privileged_roles` schützt auch Portal-Rollen (0016). `SuperAdminWrapper` prüft Bereich je Adresse (Kein Zugriff / Nur Ansicht); Seiten nutzen `usePortalMember`; Seitenleiste gruppiert; `PortalStaffCard` unter Portal-Rollen. super_admin = Portal-Admin, bestehende Policies/Edge Functions unverändert (Edge Functions mit reiner super_admin-Prüfung bleiben Portal-Admins vorbehalten).
 - v1.5.0: Einheitspreise – `useModulePrices` liefert für alle Varianten `standard_price`/`standard_charge_point_price_monthly` bzw. Partnerpreis; Preismaske nur noch Partner-Einkauf + Standardpreis; Mitglied/Kommune-Schalter im Mandanten entfernt; alte Spalten DEPRECATED (Migration 0014). `tenant_invoices.document_type` (`invoice`/`subscription_notice`); generate-monthly-invoices: keine 0-€-Modulzeilen, 0-€-Ergebnis → Abo-Beleg ohne Rechnungsnummer; lexware-api und SEPA überspringen Abo-Belege; Rechnungsliste mit Filter/Kennzeichnung.
