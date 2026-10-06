@@ -25,7 +25,7 @@ export default function AreaChooser({
   const items: Record<AppArea, { Icon: typeof Cpu; title: string; sub: string; text: string }> = {
     super_admin: {
       Icon: ShieldCheck,
-      title: "Super-Admin",
+      title: "AICONO Portal",
       sub: "Plattform",
       text: "Partner, Mandanten, Module, Lizenzen und Systemüberwachung.",
     },

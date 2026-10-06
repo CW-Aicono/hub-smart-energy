@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import { useModuleBundles } from "@/hooks/useModuleBundles";
 import { useModulePrices } from "@/hooks/useModulePrices";
 import { ALL_MODULES } from "@/hooks/useTenantModules";

@@ -1,7 +1,7 @@
 import { Navigate, useNavigate } from "react-router-dom";
 import { useMemo, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { usePlatformStats } from "@/hooks/usePlatformStats";
 import { useSATranslation } from "@/hooks/useSATranslation";

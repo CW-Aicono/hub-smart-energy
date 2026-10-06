@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import CreateSAPermissionRoleDialog from "@/components/super-admin/CreateSAPermissionRoleDialog";
 import EditSARoleDialog from "@/components/super-admin/EditSARoleDialog";
+import PortalStaffCard from "@/components/super-admin/PortalStaffCard";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const SuperAdminRoles = () => {
@@ -223,6 +224,8 @@ const SuperAdminRoles = () => {
               </Table>
             </CardContent>
           </Card>
+
+          <PortalStaffCard />
 
           {sortedRoles.length > 0 && (
             <Card>
