@@ -2,6 +2,9 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## Unreleased
+- Live-Fix: Portal-Zugang fällt auf eigene Rollen zurück, falls `portal_roles` in der DB fehlt; Migration 0020 setzt Heimat-Mandant von h.verst auf ESB GmbH.
+
 ## 2026-10-06 – v1.6.2
 - Benutzerliste: falsches `partner_members.role` durch `partner_role` ersetzt; Abfragefehler werden nicht mehr als leere Liste angezeigt.
 - Sichtbare Rollenbezeichnungen Portal-Admin, Partner-Admin und Kunden-Admin vereinheitlicht; Rollenwerte, Adressen und Sicherheitsprüfungen bleiben unverändert.
