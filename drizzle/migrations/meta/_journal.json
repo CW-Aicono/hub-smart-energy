@@ -148,6 +148,13 @@
       "when": 1791319112738,
       "tag": "0020_fix_hverst_home_tenant_esb",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791320388880,
+      "tag": "0021_ensure_audit_logs_support_columns",
+      "breakpoints": true
     }
   ]
 }

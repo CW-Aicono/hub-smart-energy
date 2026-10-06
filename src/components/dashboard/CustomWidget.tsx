@@ -230,6 +230,33 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   }, [config.meter_ids, config.unit, meterDetails, selectedPeriod]);
 
   // Fetch data: 5-min readings for "day", daily totals otherwise
+  // Letzter gespeicherter Wert je Leistungszähler – für den Hinweis „keine gespeicherten Werte“.
+  const { data: lastStored = {} } = useQuery({
+    queryKey: ["custom-widget-last-stored", powerMeterIds],
+    enabled: powerMeterIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const out: Record<string, string | null> = {};
+      await Promise.all(powerMeterIds.map(async (id) => {
+        const { data } = await supabase.from("meter_power_readings").select("recorded_at")
+          .eq("meter_id", id).order("recorded_at", { ascending: false }).limit(1).maybeSingle();
+        let at = (data as any)?.recorded_at ?? null;
+        if (!at) {
+          const { data: b } = await supabase.from("meter_power_readings_5min").select("bucket")
+            .eq("meter_id", id).order("bucket", { ascending: false }).limit(1).maybeSingle();
+          at = (b as any)?.bucket ?? null;
+        }
+        out[id] = at;
+      }));
+      return out;
+    },
+  });
+  const staleMeters = powerMeterIds.filter((id) => {
+    const at = (lastStored as Record<string, string | null>)[id];
+    if (at === undefined) return false;
+    return !at || Date.now() - new Date(at).getTime() > 60 * 60_000;
+  });
+
   const { data: chartData = [], isLoading } = useQuery({
     queryKey: ["custom-widget-data", definition.id, config.meter_ids, sensorMeterIds, locationId, selectedPeriod, from.toISOString(), to.toISOString()],
     queryFn: async () => {
@@ -593,6 +620,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           </div>
         ) : (
           <>
+            {staleMeters.length > 0 && (
+              <div className="mb-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                {staleMeters.map((id) => {
+                  const at = (lastStored as Record<string, string | null>)[id];
+                  const name = (meterDetails as any)[id]?.name ?? "Zähler";
+                  return (
+                    <div key={id}>
+                      {name}: {at
+                        ? `seit ${new Date(at).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })} keine gespeicherten Werte`
+                        : "noch keine gespeicherten Werte – Live-Anzeige kommt direkt vom Gerät, die Abholung speichert nichts. Integrationsfehler prüfen."}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {(activeChartType === "line" || activeChartType === "bar") && (<>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">

@@ -27,3 +27,6 @@
 - [ ] Live-Deploy v1.6.1 freigeben
 - [ ] AICONO Partner GmbH: neuen Admin einladen oder Partner löschen
 - [x] Roadmap nur im Staging + Board-Pflege
+- [x] v1.6.3: Widget-Hinweis fehlende Werte, Shelly-Sensorfehler sichtbar, Portal-Modulvergabe, Änderungsprotokoll-Migration
+- [ ] Bolan Live-Diagnose ausführen (docs/LIVE_DIAGNOSE_BOLAN_WIDGET.sql) – wartet auf Nutzer
+- [ ] Live-Deploy v1.6.3 freigeben

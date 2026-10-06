@@ -2,6 +2,13 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.6.3 – 2026-10-06
+- Widgets: Hinweis „keine gespeicherten Werte“ je Zähler statt leerer Grafik.
+- Shelly-Abholung meldet Zähler ohne passenden Sensor als Integrationsfehler (`sensor_missing`).
+- Neue Edge Function `portal-set-tenant-module`: Portal-Admins setzen Kunden-Module direkt, Partner-Portfolio wird ergänzt, Audit-Log.
+- Migration 0021: `audit_logs.entity_label`/`support_session_id` idempotent nachgeliefert (Änderungsprotokoll auf Live).
+- `docs/LIVE_DIAGNOSE_BOLAN_WIDGET.sql` für die Live-Prüfung.
+
 ## Unreleased
 - Live-Fix: Portal-Zugang fällt auf eigene Rollen zurück, falls `portal_roles` in der DB fehlt; Migration 0020 setzt Heimat-Mandant von h.verst auf ESB GmbH.
 
