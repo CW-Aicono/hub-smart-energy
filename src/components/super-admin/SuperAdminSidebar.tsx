@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { AreaSwitcher } from "@/components/common/AreaSwitcher";
+import { usePortalAccess, type PortalArea } from "@/hooks/usePortalAccess";
 import { useSAPreferences, SAColorPreset, SAThemeMode } from "@/hooks/useSuperAdminPreferences";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import { saColorPresetNames, SALanguage } from "@/i18n/superAdminTranslations";
@@ -49,6 +50,7 @@ export default function SuperAdminSidebar() {
   const { t, language } = useSATranslation();
   const { colorPreset, themeMode, setColorPreset, setThemeMode, setLanguage } = useSAPreferences();
   const location = useLocation();
+  const { canRead } = usePortalAccess();
   const [isTablet, setIsTablet] = useState(() => {
     const w = window.innerWidth;
     return w >= 768 && w < 1280;
@@ -210,7 +212,7 @@ export default function SuperAdminSidebar() {
       }}>
       {/* Header */}
       <div className={cn("border-b flex items-center", collapsed ? "p-3 justify-center" : "p-4 justify-between")} style={{ borderColor: `hsl(var(--sa-sidebar-border))` }}>
-        {!collapsed && <span className="font-bold text-sm">{t("nav.super_admin")}</span>}
+        {!collapsed && <span className="font-bold text-sm">AICONO Portal</span>}
         <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 opacity-70 hover:opacity-100">
           {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </Button>
@@ -221,6 +223,13 @@ export default function SuperAdminSidebar() {
       {/* Nav */}
       <nav className={cn("flex-1 space-y-1 overflow-y-auto", collapsed ? "p-2" : "p-4")}>
         {navItems.map((item) => {
+          if (item.section) {
+            return collapsed ? (
+              <div key={item.to} className="my-2 border-t" style={{ borderColor: `hsl(var(--sa-sidebar-border))` }} />
+            ) : (
+              <div key={item.to} className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider opacity-50">{item.label}</div>
+            );
+          }
           const hasChildren = item.children && item.children.length > 0;
           const isActive = location.pathname === item.to || (item.to !== "/super-admin" && location.pathname.startsWith(item.to));
           const isChildActive = hasChildren && item.children?.some((child) => location.pathname === child.to);
