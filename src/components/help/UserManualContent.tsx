@@ -284,6 +284,8 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground">{T("manual.energy.exportText")}</p>
             <h4 className="font-semibold mb-2 mt-4">{T("manual.energy.v140Title")}</h4>
             <p className="text-sm text-muted-foreground">{T("manual.energy.v140Text")}</p>
+            <h4 className="font-semibold mb-2 mt-4">{T("manual.roles.v142Title")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.roles.v142Text")}</p>
           </section>
           <section>
             <h4 className="font-semibold mb-2">{T("manual.energy.widgetTitle")}</h4>
