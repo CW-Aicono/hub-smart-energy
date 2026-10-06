@@ -14072,6 +14072,7 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          document_type: string
           id: string
           invoice_number: string
           lexware_invoice_id: string | null
@@ -14088,6 +14089,7 @@ export type Database = {
         Insert: {
           amount?: number
           created_at?: string
+          document_type?: string
           id?: string
           invoice_number: string
           lexware_invoice_id?: string | null
@@ -14104,6 +14106,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          document_type?: string
           id?: string
           invoice_number?: string
           lexware_invoice_id?: string | null

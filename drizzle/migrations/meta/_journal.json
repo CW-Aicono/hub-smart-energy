@@ -99,6 +99,13 @@
       "when": 1791275778060,
       "tag": "0013_remote_consent_and_invite_accept",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791307397214,
+      "tag": "0014_invoice_document_type_and_unified_prices",
+      "breakpoints": true
     }
   ]
 }
