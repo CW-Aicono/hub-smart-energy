@@ -15357,6 +15357,14 @@ export type Database = {
         Args: { _project_id: string }
         Returns: boolean
       }
+      can_portal_read: {
+        Args: { _area: string; _uid: string }
+        Returns: boolean
+      }
+      can_portal_write: {
+        Args: { _area: string; _uid: string }
+        Returns: boolean
+      }
       cleanup_bridge_raw_samples: { Args: never; Returns: undefined }
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_cron_job_history: { Args: never; Returns: number }
@@ -15783,6 +15791,7 @@ export type Database = {
       is_partner_member:
         | { Args: { _user_id: string }; Returns: boolean }
         | { Args: { _partner_id: string; _user_id: string }; Returns: boolean }
+      is_portal_member: { Args: { _uid: string }; Returns: boolean }
       is_support_user: { Args: { _user_id: string }; Returns: boolean }
       is_tenant_member: {
         Args: { _tenant_id: string; _user_id: string }
@@ -15843,6 +15852,7 @@ export type Database = {
         Args: { _partner_id: string }
         Returns: Json
       }
+      portal_roles: { Args: { _uid: string }; Returns: string[] }
       purge_meter_power_readings_retention: { Args: never; Returns: undefined }
       refresh_meter_daily_totals: {
         Args: {
@@ -15934,6 +15944,8 @@ export type Database = {
         | "community_member"
         | "partner_admin"
         | "partner_user"
+        | "portal_commercial"
+        | "portal_technical"
       bridge_connection_kind: "lan" | "cloud_dns" | "remote_connect"
       bridge_event_severity: "debug" | "info" | "warn" | "error"
       bridge_worker_status: "online" | "degraded" | "offline" | "disabled"
@@ -16144,6 +16156,8 @@ export const Constants = {
         "community_member",
         "partner_admin",
         "partner_user",
+        "portal_commercial",
+        "portal_technical",
       ],
       bridge_connection_kind: ["lan", "cloud_dns", "remote_connect"],
       bridge_event_severity: ["debug", "info", "warn", "error"],
