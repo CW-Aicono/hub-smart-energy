@@ -772,29 +772,6 @@ const SuperAdminTenantDetail = () => {
                           <Input type="email" value={tenantInfoForm.contact_email} onChange={(e) => setTenantInfoForm(f => ({ ...f, contact_email: e.target.value }))} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-6 pt-2 flex-wrap">
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            id="aicono-member"
-                            checked={tenantInfoForm.is_aicono_member}
-                            onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_aicono_member: v }))}
-                          />
-                          <Label htmlFor="aicono-member" className="flex items-center gap-2">
-                            <Award className="h-4 w-4" />
-                            Mitglied im AICONO e.&thinsp;V.
-                          </Label>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            id="is-kommune"
-                            checked={tenantInfoForm.is_kommune}
-                            onCheckedChange={(v) => setTenantInfoForm(f => ({ ...f, is_kommune: v }))}
-                          />
-                          <Label htmlFor="is-kommune" className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4" />
-                            Kommune
-                          </Label>
-                        </div>
                       </div>
                     </div>
                   ) : (
@@ -837,20 +814,6 @@ const SuperAdminTenantDetail = () => {
                           <div>
                             <p className="text-sm font-medium text-muted-foreground">Kontakt-E-Mail</p>
                             <p>{tenant?.contact_email ?? "–"}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <Award className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Mitglied im AICONO e.&thinsp;V.</p>
-                            <p>{(tenant as any)?.is_aicono_member ? <Badge variant="default" className="text-xs">Ja</Badge> : "Nein"}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Sektor</p>
-                            <p>{(tenant as any)?.is_kommune !== false ? <Badge variant="outline" className="text-xs">Kommune</Badge> : <Badge variant="outline" className="text-xs">Industrie</Badge>}</p>
                           </div>
                         </div>
                         <div className="flex items-start gap-2">
@@ -911,7 +874,6 @@ const SuperAdminTenantDetail = () => {
                         <SortableHead sortKey="global" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-36">
                           <span className="inline-flex items-center gap-1 justify-end">
                             Standardpreis
-                            {(tenant as any)?.is_aicono_member && <Award className="h-4 w-4 text-primary" />}
                           </span>
                         </SortableHead>
                         <SortableHead sortKey="override" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-44">{t("tenant_detail.individual_price")}</SortableHead>
