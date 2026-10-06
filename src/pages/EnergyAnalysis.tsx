@@ -25,6 +25,7 @@ import {
 } from "@/lib/energyAnalysisState";
 import { useEnergyAnalysisData, EASeries, ConcreteResolution, fetchHeatingDegreeDays, bucketStart } from "@/hooks/useEnergyAnalysisData";
 import { downloadCSV, downloadXlsxMulti } from "@/lib/exportUtils";
+import { exportYearLoadProfile } from "@/lib/loadProfileExport";
 
 const PALETTE = ["#1f9d6b", "#2b8fd6", "#f59e0b", "#3355aa", "#dc2626", "#8b5cf6", "#0d9488", "#db2777", "#65a30d", "#ea580c"];
 
@@ -81,6 +82,7 @@ export default function EnergyAnalysis() {
   const cmpRange = useMemo(() => resolveCompareRange(state, range), [state.cmp, state.cmpFrom, range]); // eslint-disable-line react-hooks/exhaustive-deps
   const res: ConcreteResolution = state.view === "heatmap" ? "hour" : state.res === "auto" ? autoResolution(range) : state.res;
   const meterIds = state.series.map((s) => s.id);
+  const [lpProgress, setLpProgress] = useState<number | null>(null);
 
   const { data, isLoading, isFetching } = useEnergyAnalysisData(meterIds, range, res, state.quantity);
   const { data: cmpData } = useEnergyAnalysisData(meterIds, state.view === "chart" ? cmpRange : null, res, state.quantity);
@@ -200,6 +202,21 @@ export default function EnergyAnalysis() {
             <Button variant="outline" size="sm" disabled={!chartData.length}
               onClick={() => downloadXlsxMulti([{ name: "Werte", data: exportRows() }, { name: "Kennzahlen", data: kpiRows() }], fileBase)}>
               <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Excel
+            </Button>
+            <Button variant="outline" size="sm" disabled={!meterIds.length || lpProgress !== null}
+              title="Jahreslastgang (15-Minuten-Werte in W) der gewählten Messstellen als Excel"
+              onClick={async () => {
+                const y = Number(window.prompt("Jahreslastgang für welches Jahr?", String(new Date().getFullYear())));
+                if (!y || y < 2000 || y > 2100) return;
+                setLpProgress(0);
+                try {
+                  const n = await exportYearLoadProfile(
+                    meterIds.map((id) => ({ id, name: meters.find((m) => m.id === id)?.name ?? id })), y, setLpProgress);
+                  if (!n) window.alert("Für dieses Jahr liegen keine Leistungswerte vor.");
+                } finally { setLpProgress(null); }
+              }}>
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              {lpProgress !== null ? `Lastgang ${lpProgress.toLocaleString("de-DE")} %` : "Jahreslastgang 15 min"}
             </Button>
             <Button size="sm" onClick={copyLink}><Link2 className="h-4 w-4 mr-1.5" /> Link kopieren</Button>
           </div>

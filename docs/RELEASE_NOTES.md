@@ -1,6 +1,9 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **v1.4.0 – Ladeleistung & Lastgang:** Neues Dashboard-Feld zeigt die aktuelle Ladeleistung jedes Ladepunkts (einblenden über „Im Dashboard anzeigen“ unter Ladeinfrastruktur). In der Energieanalyse lässt sich der Jahreslastgang in 15-Minuten-Werten als Excel exportieren. Bei Geräten kann der Sensor neu gewählt werden, alte Integrationen lassen sich löschen, nach einer Remote-Sitzung kehren Sie in Ihren Ausgangsbereich zurück, und Partner-Module lassen sich wieder speichern.
+- **v1.3.2 – Korrekturen:** Im Remote-Verlauf werden die Änderungen der Support-Sitzung wieder angezeigt. Die Ladepunkt-Übersicht zeigt nicht mehr „Belegt“, wenn die Wallbox „frei“ meldet. Hängengebliebene Ladevorgänge ohne Energie werden automatisch abgeschlossen.
+- **v1.3.1 – Remote & Einladungen:** Ist „Remote-Zugriff erlauben“ ausgeschaltet, kann sich niemand mehr per Remote einwählen; beim Ausschalten wird eine laufende Sitzung sofort beendet. Angemeldete Nutzer erscheinen nicht mehr zusätzlich als offene Einladung.
 - **v1.3.0 – Ladepunkte & Rabatte überarbeitet:** Der Preis je aktivem Ladepunkt steht jetzt als Unterpunkt unter „Ladeinfrastruktur“. Rabatte vergeben Sie direkt in der Modulzeile des Kunden – auch für Bundles, mit Laufzeit in Monaten oder Jahren, monatlich, per Vorkasse oder als Einmalzahlung.
 - **v1.2.1 – Einladungen repariert:** Bereits registrierte Personen (z. B. ein Mitarbeiter eines Kunden) können wieder zusätzlich als Partner-User oder Admin eingeladen werden.
 - **v1.2.0 – Ladepunkt-Gebühr:** Module können pauschal, pro aktivem Ladepunkt oder beides abgerechnet werden. Eine Vorschau zeigt, wie viele Ladepunkte aktiv sind und was das aktuell kostet.

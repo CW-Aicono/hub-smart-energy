@@ -69,13 +69,13 @@ export default function SuperAdminChargePoints() {
         .sort((a, b) => a.connector_id - b.connector_id)
         .map((c) => ({
           connectorId: c.connector_id,
-          status: !wsOnline ? "offline" : activeIds.has(c.connector_id) ? "charging" : normalizeConnectorStatus(c.status, wsOnline),
+          status: !wsOnline ? "offline" : (() => { const r = normalizeConnectorStatus(c.status, wsOnline); return activeIds.has(c.connector_id) && r !== "available" ? "charging" : r; })(),
         }));
     }
     const count = Math.max(1, cp.connector_count || 1);
     return Array.from({ length: count }, (_, i) => ({
       connectorId: i + 1,
-      status: !wsOnline ? "offline" : activeIds.has(i + 1) ? "charging" : normalizeConnectorStatus(cp.status, wsOnline),
+      status: !wsOnline ? "offline" : (() => { const r = normalizeConnectorStatus(cp.status, wsOnline); return activeIds.has(i + 1) && r !== "available" ? "charging" : r; })(),
     }));
   };
 

@@ -55,6 +55,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           sessionStorage.setItem(RECOVERY_KEY, "1");
           setIsRecovery(true);
         }
+        if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
+          // Offene Einladungen dieser Person als angenommen markieren (nur eigene E-Mail).
+          setTimeout(() => { void supabase.rpc("accept_own_invitations" as any); }, 0);
+        }
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);

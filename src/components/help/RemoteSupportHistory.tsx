@@ -27,7 +27,7 @@ function duration(start: string, end: string | null) {
 
 function SessionChanges({ session }: { session: SessionRow }) {
   const { t } = useTranslation();
-  const { data = [], isLoading, isError } = useQuery({
+  const { data = [], isLoading, isError, error } = useQuery({
     queryKey: ["support-session-changes", session.id],
     retry: false,
     queryFn: async () => {
@@ -38,26 +38,33 @@ function SessionChanges({ session }: { session: SessionRow }) {
         .order("created_at", { ascending: true })
         .limit(200);
       if (session.impersonated_user_id) {
-        const end = session.ended_at ?? new Date().toISOString();
+        // Zeitstempel als UTC "Z" übergeben – ein "+00:00" würde in der URL zu
+        // einem Leerzeichen und die Abfrage scheitern.
+        const start = new Date(session.started_at).toISOString();
+        const end = new Date(session.ended_at ?? Date.now()).toISOString();
         q = q.or(
-          `support_session_id.eq.${session.id},and(actor_user_id.eq.${session.impersonated_user_id},created_at.gte.${session.started_at},created_at.lte.${end})`,
+          `support_session_id.eq.${session.id},and(actor_user_id.eq.${session.impersonated_user_id},created_at.gte.${start},created_at.lte.${end})`,
         );
       } else {
         q = q.eq("support_session_id", session.id);
       }
       const { data, error } = await q;
-      if (error) throw error;
+      if (error) throw Object.assign(new Error(error.message), { code: (error as any).code });
       return data ?? [];
     },
   });
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Änderungen werden geladen …</p>;
-  if (isError)
+  if (isError) {
+    const missing = (error as any)?.code === "42P01" || (error as any)?.code === "42703";
     return (
       <p className="text-sm text-muted-foreground">
-        Das Änderungsprotokoll ist auf diesem System noch nicht eingerichtet. Es erscheint nach dem nächsten Update.
+        {missing
+          ? "Das Änderungsprotokoll ist auf diesem System noch nicht eingerichtet. Es erscheint nach dem nächsten Update."
+          : "Änderungen konnten nicht geladen werden. Bitte später erneut versuchen."}
       </p>
     );
+  }
   if (data.length === 0) return <p className="text-sm text-muted-foreground">{t("help.remoteHistoryNoChanges" as any)}</p>;
   return (
     <ul className="space-y-1">

@@ -15,6 +15,7 @@
 const KEY_ORIGINAL = "support_original_session";
 const KEY_SESSION_ID = "support_active_session_id";
 const KEY_TENANT_ID = "support_active_tenant_id";
+const KEY_ORIGIN = "support_origin_path";
 const EVENT_NAME = "support-impersonation-changed";
 
 interface OriginalSession {
@@ -56,6 +57,11 @@ export function beginImpersonation(opts: {
     sessionStorage.setItem(KEY_ORIGINAL, JSON.stringify(opts.originalSession));
     sessionStorage.setItem(KEY_SESSION_ID, opts.sessionId);
     sessionStorage.setItem(KEY_TENANT_ID, opts.tenantId);
+    // Herkunft merken (Super-Admin oder Partner-Portal), um dorthin zurückzukehren.
+    const p = window.location.pathname;
+    if (p.startsWith("/partner") || p.startsWith("/super-admin")) {
+      localStorage.setItem(KEY_ORIGIN, p + window.location.search);
+    }
     window.dispatchEvent(new CustomEvent(EVENT_NAME));
   } catch { /* noop */ }
 }
@@ -117,7 +123,10 @@ export async function endImpersonationAndReturn(
 
   clearImpersonation();
 
-  const target = tenantId ? `/super-admin/tenants/${tenantId}` : "/super-admin/tenants";
+  let origin: string | null = null;
+  try { origin = localStorage.getItem(KEY_ORIGIN); localStorage.removeItem(KEY_ORIGIN); } catch { /* noop */ }
+  const target = origin
+    ?? (tenantId ? `/super-admin/tenants/${tenantId}` : "/super-admin/tenants");
   window.location.replace(target);
 }
 
