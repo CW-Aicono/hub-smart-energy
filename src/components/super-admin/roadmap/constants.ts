@@ -1,12 +1,13 @@
 export const STATUS_LABELS: Record<string, string> = {
-  backlog: "Backlog",
+  backlog: "Ideen / Backlog",
   next: "Als Nächstes",
   in_progress: "In Arbeit",
+  waiting: "Wartet auf Nutzer",
   review: "Prüfung",
   done: "Erledigt",
 };
 
-export const STATUS_ORDER = ["backlog", "next", "in_progress", "review", "done"] as const;
+export const STATUS_ORDER = ["backlog", "next", "in_progress", "waiting", "review", "done"] as const;
 
 export const CATEGORY_LABELS: Record<string, string> = {
   stability: "Stabilität",

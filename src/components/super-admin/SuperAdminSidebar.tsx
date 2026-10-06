@@ -111,7 +111,9 @@ export default function SuperAdminSidebar() {
         },
       ],
     },
-    { section: "", area: "roadmap", items: [{ to: "/super-admin/roadmap", icon: ListChecks, label: "Roadmap" }] },
+    ...(isStagingEnvironment()
+      ? [{ section: "", area: "roadmap", items: [{ to: "/super-admin/roadmap", icon: ListChecks, label: "Roadmap" }] }]
+      : []),
     {
       section: "Kaufmännisch",
       area: "commercial",
