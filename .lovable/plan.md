@@ -1,37 +1,42 @@
-# Bolan: keine Werte im Widget + Modulvergabe
+# Bolan: beide Widgets ohne Werte, Änderungsprotokoll auf Live, Modulvergabe
 
-## Was ich bisher gesehen habe
-- **Auffällig auf deinen Screenshots:** Im Widget „Strom Hausanschluss Keplerweg“ ist nur der Zähler **Keplerweg** angehakt. Der Zähler, der gerade 1.600 W zeigt, ist aber **Prozessionsweg**. Prozessionsweg ist im Widget nicht ausgewählt.
-- Die 1.600 W in der Zählerliste kommen direkt vom Gerät. Sie werden dort nur angezeigt. Das Widget liest dagegen nur **gespeicherte** Werte. Die Abholung läuft alle 5 Minuten und speichert nur Zähler mit gültiger Sensor-Zuordnung.
-- Bolan gibt es nur auf Live, nicht im Testsystem. Ob dort Werte gespeichert werden, kann ich deshalb nicht selbst nachsehen.
+## 1. Beide Widgets (Prozessionsweg und Keplerweg) bleiben leer
+**Was feststeht:** Beide Zähler sind richtig zugeordnet, das Gateway ist online, und der Live-Wert (z. B. 1.600 W) kommt an. Dieser Live-Wert kommt direkt vom Gerät und wird nur angezeigt. Die Widgets lesen dagegen nur **gespeicherte** Werte. Die werden von einer Abholung alle 5 Minuten geschrieben. Bleiben beide Grafiken den ganzen Tag leer, speichert diese Abholung auf Live für Bolan nichts.
 
-## Schritt 1: Prüfen statt raten (vor dem Deploy, 2 Minuten)
-Ich gebe dir einen fertigen Prüfbefehl für Live. Er zeigt für beide Bolan-Zähler:
-- Gateway und Sensor, die eingetragen sind
-- ob die Abholung auf Live zeitgesteuert läuft und wann sie zuletzt lief
-- wann der letzte gespeicherte Wert kam
+**Mögliche Ursachen, noch nicht bestätigt:** Bolan gibt es nur auf Live, deshalb kann ich dort nicht selbst nachsehen.
+- Die zeitgesteuerte Abholung läuft auf Live nicht oder ist pausiert.
+- Die Abholung läuft, findet aber den Sensor nicht. Dann überspringt sie den Zähler, ohne einen Fehler zu melden.
+- Der Sensor liefert eine Einheit, die die Abholung nicht als Leistung erkennt.
 
-Mögliche Ergebnisse:
-- **Prozessionsweg hat Werte, Keplerweg nicht:** Es fehlt nur der Haken im Widget, oder der Zähler Keplerweg ist noch nicht richtig verknüpft (dort dieselbe Prüfung wie bei Prozessionsweg).
-- **Keine gespeicherten Werte:** Die Abholung läuft auf Live nicht, oder der Sensor passt nicht. Das behebe ich gezielt.
+**Schritt 1, prüfen (2 Minuten, vor dem Deploy):** Ich gebe dir einen fertigen Prüfbefehl für den Live-Server. Er zeigt:
+- ob die Abholung eingeplant ist und wann sie zuletzt lief, mit Ergebnis
+- ob sie pausiert ist
+- für beide Bolan-Zähler den eingetragenen Sensor und den letzten gespeicherten Wert
 
-## Schritt 2: Sichtbar machen, damit das nicht wieder passiert
-- Im Dialog „Gerät bearbeiten“ erscheint ein Feld **„Letzter gespeicherter Wert: … (vor X Min.)“**. Gibt es keinen, steht dort eine rote Warnung mit Ursache, z. B. „Sensor liefert keinen Leistungswert“.
-- Das Widget zeigt bei Zählern ohne gespeicherte Daten **„Zähler X: seit … keine gespeicherten Werte“** statt einer leeren Grafik.
-- In der Zählerliste wird der Live-Wert grau, wenn er nur vom Gerät kommt und nicht gespeichert wird.
+Dann behebe ich genau die Ursache, die sich dort zeigt.
 
-## Schritt 3: Modulvergabe ohne Umweg
-Problem: Module für Bolan kann nur ESB vergeben. Du kommst auf Live noch nicht in ESB, deshalb hat Bolan keine Module.
-- Der Zugang zu ESB auf Live ist mit dem letzten Fix (Heimat-Mandant) erledigt, sobald er deployt ist.
-- **Neu:** Portal-Admins können im AICONO Portal unter Kunden → Mandant die Module eines Kunden **direkt** setzen, auch wenn der Kunde zu einem Partner gehört. Das Partner-Portfolio wird dabei automatisch ergänzt, damit die Freigabe gültig bleibt. Jede Änderung wird mit Benutzer und Zeit protokolliert.
-- Partner-Admins bleiben wie bisher auf ihr Portfolio beschränkt. An ihren Rechten ändert sich nichts.
-- Hinweis: Module sperren nur Menüseiten. Das Speichern der Messwerte hängt nicht an Modulen. Am Widget-Problem ändern sie also nichts.
+**Schritt 2, damit es nicht wieder still passiert:**
+- Die Abholung meldet künftig einen sichtbaren Integrationsfehler „Sensor nicht gefunden / keine Leistung“, statt den Zähler stumm zu überspringen.
+- „Gerät bearbeiten“ zeigt **„Letzter gespeicherter Wert: … (vor X Min.)“**. Fehlt er, erscheint eine rote Warnung.
+- Hat ein Widget-Zähler keine gespeicherten Daten, zeigt das Widget **„seit … keine gespeicherten Werte“** statt einer leeren Grafik.
+
+## 2. Änderungsprotokoll auf Live fehlt
+**Was feststeht:** Die Meldung „noch nicht eingerichtet“ erscheint nur, wenn die Datenbank die nötigen Felder für das Protokoll nicht kennt. Diese Felder kommen mit einer Datenbank-Änderung von heute Morgen. Auf Live ist sie offenbar nicht angekommen.
+- Der Prüfbefehl aus Schritt 1 zeigt zusätzlich, ob diese Felder und die Änderung auf Live vorhanden sind.
+- Fehlen sie, wird die Änderung so nachgeliefert, dass sie mehrfach ausgeführt werden kann. Außerdem prüfe ich, warum der Deploy sie übersprungen hat, und behebe das.
+- Die Anzeige nennt dann künftig das konkret fehlende Feld statt eines allgemeinen Hinweises.
+
+## 3. Modulvergabe ohne Umweg
+Problem: Module für Bolan kann nur ESB vergeben. Auf Live kommst du noch nicht in ESB.
+- Der Zugang zu ESB wird mit dem bereits vorbereiteten Fix (Heimat-Mandant) behoben, sobald der Deploy läuft.
+- **Neu:** Portal-Admins setzen die Module eines Kunden im AICONO Portal direkt, auch wenn der Kunde zu einem Partner gehört. Das Partner-Portfolio wird dabei automatisch ergänzt. Jede Änderung wird protokolliert. Die Rechte der Partner-Admins bleiben unverändert.
+- Module sperren nur Menüseiten. Auf die Messwerte haben sie keinen Einfluss.
 
 ## Danach
-Version v1.6.3, Changelog, Release Notes, Handbuch (4 Sprachen) und Roadmap werden gepflegt. Danach Build und Tests prüfen und den Live-Deploy freigeben.
+Version v1.6.3, Changelog, Release Notes, Handbuch (4 Sprachen), Roadmap-Board und roadmap.md mit den neuen Punkten. Danach Build und Tests prüfen, anschließend Live-Deploy.
 
 ## Technische Details
-- Live-SQL: `meters` (name ilike '%Hausanschluss%', tenant Bolan) → `location_integration_id`, `sensor_uuid`, `capture_type`, `is_archived`; `max(recorded_at)` aus `meter_power_readings`, `max(bucket)` aus `meter_power_readings_5min`; `cron.job` + `cron.job_run_details` für `ems-gateway-periodic-sync`; `worker_controls` für `gateway_periodic_sync`/`shelly_periodic_sync`.
-- `shelly-periodic-sync` schreibt nur bei `sensorMap.get(meter.sensor_uuid)` mit Leistungseinheit. Fehlende Treffer werden künftig als `integration_errors` (`error_type='sensor_missing'`) protokolliert statt still übersprungen.
-- EditMeterDialog: Abfrage des letzten Werts (`meter_power_readings` limit 1, Fallback 5min). CustomWidget: Hinweis je `powerMeterId` ohne Zeilen.
-- Modulvergabe: Edge Function `portal-set-tenant-module` (prüft `can_portal_write('commercial')`, ergänzt `partner_modules` idempotent, schreibt `tenant_modules` + `audit_logs`). `TenantModulesDialog` darauf umstellen. Die Regel in AGENTS.md („nur über partner-set-tenant-module“) wird um den Portal-Admin-Weg ergänzt.
+- Live-Prüf-SQL: `cron.job`/`cron.job_run_details` für `ems-gateway-periodic-sync`; `worker_controls` (`gateway_periodic_sync`, `shelly_periodic_sync`); Bolan-`meters` → `location_integration_id`, `sensor_uuid`, `source_unit_power`, `max(recorded_at)` aus `meter_power_readings`; `information_schema.columns` für `audit_logs.support_session_id`/`entity_label`; `drizzle.__drizzle_migrations` für 0002.
+- `shelly-periodic-sync`: kein Sensor-Treffer bzw. keine Leistungseinheit → `integration_errors` (`error_type='sensor_missing'`), idempotent je Zähler. Prüfen, ob `gateway-periodic-sync` für `shelly_cloud` den Aufruf an `shelly-periodic-sync` korrekt weitergibt (interner Auth-Header).
+- RemoteSupportHistory: Fehlercode und Spaltenname im Hinweis anzeigen; idempotente Nachlieferung der Spalten (`ADD COLUMN IF NOT EXISTS`) als neue Migration.
+- Modulvergabe: Edge Function `portal-set-tenant-module` (`can_portal_write('commercial')`, `partner_modules` idempotent ergänzen, `tenant_modules` und `audit_logs`). `TenantModulesDialog` umstellen und die AGENTS.md-Regel ergänzen.
