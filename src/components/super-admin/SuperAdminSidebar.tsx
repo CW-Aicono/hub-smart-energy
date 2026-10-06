@@ -24,6 +24,7 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useState, useEffect, useCallback, Fragment } from "react";
+import { isStagingEnvironment } from "@/lib/environment";
 
 const SA_SIDEBAR_KEY = "sa-sidebar-collapsed";
 
@@ -111,7 +112,9 @@ export default function SuperAdminSidebar() {
         },
       ],
     },
-    { section: "", area: "roadmap", items: [{ to: "/super-admin/roadmap", icon: ListChecks, label: "Roadmap" }] },
+    ...(isStagingEnvironment()
+      ? [{ section: "", area: "roadmap", items: [{ to: "/super-admin/roadmap", icon: ListChecks, label: "Roadmap" }] }]
+      : []),
     {
       section: "Kaufmännisch",
       area: "commercial",

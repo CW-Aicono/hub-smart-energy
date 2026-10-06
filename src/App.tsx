@@ -5,7 +5,8 @@ import { OfflineBanner } from "@/components/common/OfflineBanner";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { isStagingEnvironment } from "@/lib/environment";
 import { AuthProvider } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
 import { AutoLogoutMount } from "@/hooks/useAutoLogout";
@@ -276,7 +277,7 @@ const App = () => (
                       
                       <Route path="/super-admin/ocpp/onboarding" element={<SA><SuperAdminChargePoints /></SA>} />
                       <Route path="/super-admin/ocpp/onboarding/new" element={<SA><SuperAdminChargePointOnboarding /></SA>} />
-                      <Route path="/super-admin/roadmap" element={<SA><SuperAdminRoadmap /></SA>} />
+                      <Route path="/super-admin/roadmap" element={isStagingEnvironment() ? <SA><SuperAdminRoadmap /></SA> : <Navigate to="/super-admin" replace />} />
                       <Route path="/super-admin/map" element={<SA><SuperAdminMap /></SA>} />
                       <Route path="/super-admin/sales/catalog" element={<SA><SuperAdminSalesCatalog /></SA>} />
                       <Route path="/super-admin/sales/rules" element={<SA><SuperAdminSalesRules /></SA>} />
