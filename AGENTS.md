@@ -6,3 +6,4 @@
 - Every user-visible change also updates the in-app user manual (`UserManualContent.tsx` + translations, all 4 languages) — the manual must never describe outdated behaviour.
 - The visible app version is the SemVer `version` in `package.json` (MAJOR breaking/large, MINOR features, PATCH fixes), bumped per release together with the Help version history; the commit hash is only technical metadata for update detection and support.
 - Cron-only edge functions must call `rejectIfNotInternal` from `_shared/internalAuth.ts` first — pg_cron sends the service-role key, everyone else must be refused.
+- Monthly billing uses one unified price per module (standard/partner columns only); discounts are the only reduction, and a 0 € result becomes a `subscription_notice` document that is never sent to accounting — 0 € invoices cannot be booked.

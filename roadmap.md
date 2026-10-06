@@ -11,4 +11,4 @@
 
 ## Offen (neu 06.10.)
 - [ ] Super-Admin zu „AICONO Portal“ umbauen: kaufmännisch (Buchhaltung/Abrechnung) und technisch (Gateways, Templates, Monitoring, Support), eigene Admins/Benutzer, aufgeräumte Struktur – Plan mit Nutzer abstimmen
-- [ ] Modulpreise: Spalte „AICONO e.V.“ entfernen, keine Trennung Kommunen/Industrie
+- [x] Modulpreise: Spalte „AICONO e.V.“ entfernen, keine Trennung Kommunen/Industrie

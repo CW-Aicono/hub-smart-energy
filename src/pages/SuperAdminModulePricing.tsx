@@ -9,8 +9,7 @@ import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Building2, Factory, CornerDownRight } from "lucide-react";
+import { CornerDownRight } from "lucide-react";
 import { useActiveChargePoints } from "@/hooks/useActiveChargePoints";
 
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
@@ -48,10 +47,9 @@ const PriceInput = ({ currentPrice, unit, onSave }: PriceInputProps) => {
 const SuperAdminModulePricing = () => {
   const { user, loading: authLoading } = useAuth();
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
-  const { prices, isLoading, updatePrice, getPrice, getStandardPrice, getIndustryPrice, getIndustryStandardPrice, getPartnerPrice, getPartnerIndustryPrice, getChargePointPrice } = useModulePrices();
+  const { prices, isLoading, updatePrice, getStandardPrice, getPartnerPrice, getChargePointPrice } = useModulePrices();
   const { total: activeCpTotal } = useActiveChargePoints();
   const { t } = useSATranslation();
-  const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
 
   if (authLoading || roleLoading || isLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
@@ -72,22 +70,6 @@ const SuperAdminModulePricing = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>{t("module_pricing.monthly_defaults")}</CardTitle>
-                <ToggleGroup
-                  type="single"
-                  value={sector}
-                  onValueChange={(v) => { if (v) setSector(v as "kommune" | "industrie"); }}
-                  variant="outline"
-                  size="sm"
-                >
-                  <ToggleGroupItem value="kommune" className="gap-1.5">
-                    <Building2 className="h-4 w-4" />
-                    Kommunen
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="industrie" className="gap-1.5">
-                    <Factory className="h-4 w-4" />
-                    Industrie
-                  </ToggleGroupItem>
-                </ToggleGroup>
               </div>
             </CardHeader>
             <CardContent>
@@ -95,20 +77,16 @@ const SuperAdminModulePricing = () => {
                 <Label className="text-base flex-1 font-semibold">Modul</Label>
                 <div className="flex gap-4">
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">Partner-Einkauf</span>
-                  <span className="text-sm font-semibold text-muted-foreground w-36 text-center">AICONO e.&thinsp;V.</span>
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">Standardpreis</span>
                 </div>
               </div>
               <div className="space-y-4">
                 {editableModules.map((mod) => {
                   const unit = mod.code === "support_billing" ? "€/15Min" : "€/Mo";
-                  const partnerPrice = sector === "kommune" ? getPartnerPrice(mod.code) : getPartnerIndustryPrice(mod.code);
-                  const memberPrice = sector === "kommune" ? getPrice(mod.code) : getIndustryPrice(mod.code);
-                  const stdPrice = sector === "kommune" ? getStandardPrice(mod.code) : getIndustryStandardPrice(mod.code);
-                  const ind = sector === "industrie";
-                  const cpPartner = getChargePointPrice(mod.code, ind ? "partner_industry_charge_point_price_monthly" : "partner_charge_point_price_monthly");
-                  const cpMember = getChargePointPrice(mod.code, ind ? "industry_charge_point_price_monthly" : "charge_point_price_monthly");
-                  const cpStd = getChargePointPrice(mod.code, ind ? "industry_standard_charge_point_price_monthly" : "standard_charge_point_price_monthly");
+                  const partnerPrice = getPartnerPrice(mod.code);
+                  const stdPrice = getStandardPrice(mod.code);
+                  const cpPartner = getChargePointPrice(mod.code, "partner_charge_point_price_monthly");
+                  const cpStd = getChargePointPrice(mod.code, "standard_charge_point_price_monthly");
                   const saveCp = (field: any, val: number) => updatePrice.mutate({ moduleCode: mod.code, cpFields: { [field]: val } });
                   return (
                     <Fragment key={mod.code}>
@@ -119,33 +97,14 @@ const SuperAdminModulePricing = () => {
                           currentPrice={partnerPrice}
                           unit={unit}
                           onSave={(val) =>
-                            updatePrice.mutate(
-                              sector === "kommune"
-                                ? { moduleCode: mod.code, partnerPriceMonthly: val }
-                                : { moduleCode: mod.code, partnerIndustryPriceMonthly: val }
-                            )
-                          }
-                        />
-                        <PriceInput
-                          currentPrice={memberPrice}
-                          unit={unit}
-                          onSave={(val) =>
-                            updatePrice.mutate(
-                              sector === "kommune"
-                                ? { moduleCode: mod.code, priceMonthly: val }
-                                : { moduleCode: mod.code, industryPriceMonthly: val }
-                            )
+                            updatePrice.mutate({ moduleCode: mod.code, partnerPriceMonthly: val })
                           }
                         />
                         <PriceInput
                           currentPrice={stdPrice}
                           unit={unit}
                           onSave={(val) =>
-                            updatePrice.mutate(
-                              sector === "kommune"
-                                ? { moduleCode: mod.code, standardPrice: val }
-                                : { moduleCode: mod.code, industryStandardPrice: val }
-                            )
+                            updatePrice.mutate({ moduleCode: mod.code, standardPrice: val })
                           }
                         />
                       </div>
@@ -159,9 +118,8 @@ const SuperAdminModulePricing = () => {
                           </span>
                         </div>
                         <div className="flex gap-4">
-                          <PriceInput currentPrice={cpPartner} unit="€/LP" onSave={(v) => saveCp(ind ? "partner_industry_charge_point_price_monthly" : "partner_charge_point_price_monthly", v)} />
-                          <PriceInput currentPrice={cpMember} unit="€/LP" onSave={(v) => saveCp(ind ? "industry_charge_point_price_monthly" : "charge_point_price_monthly", v)} />
-                          <PriceInput currentPrice={cpStd} unit="€/LP" onSave={(v) => saveCp(ind ? "industry_standard_charge_point_price_monthly" : "standard_charge_point_price_monthly", v)} />
+                          <PriceInput currentPrice={cpPartner} unit="€/LP" onSave={(v) => saveCp("partner_charge_point_price_monthly", v)} />
+                          <PriceInput currentPrice={cpStd} unit="€/LP" onSave={(v) => saveCp("standard_charge_point_price_monthly", v)} />
                         </div>
                       </div>
                     )}
@@ -171,8 +129,7 @@ const SuperAdminModulePricing = () => {
               </div>
               <p className="text-xs text-muted-foreground mt-6">
                 <strong>Partner-Einkauf</strong>: Einstandspreis für Vertriebspartner im Wiederverkaufs-Modell.{" "}
-                <strong>AICONO e.&thinsp;V.</strong>: Vergünstigter Mitgliederpreis.{" "}
-                <strong>Standardpreis</strong>: empfohlener Endkundenpreis (auch Default-Verkaufspreis für Partner).{" "}
+                <strong>Standardpreis</strong>: Preis für alle Kunden (Einheitspreis, auch Default-Verkaufspreis für Partner). Nachlässe nur über Rabatte/Promotionen – bei 0 € entsteht statt einer Rechnung ein Abo-Beleg.{" "}
                 <strong>Je aktivem Ladepunkt</strong> (Unterpunkt von Ladeinfrastruktur): zusätzlich zur Pauschale; 0 € = nicht berechnet. Aktiv = in den letzten 30 Tagen verbunden.
               </p>
               <p className="text-xs text-muted-foreground mt-2">

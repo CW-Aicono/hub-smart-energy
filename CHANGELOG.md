@@ -3,6 +3,8 @@
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## 2026-10-07
+### Neu
+- v1.5.0: Einheitspreise – `useModulePrices` liefert für alle Varianten `standard_price`/`standard_charge_point_price_monthly` bzw. Partnerpreis; Preismaske nur noch Partner-Einkauf + Standardpreis; Mitglied/Kommune-Schalter im Mandanten entfernt; alte Spalten DEPRECATED (Migration 0014). `tenant_invoices.document_type` (`invoice`/`subscription_notice`); generate-monthly-invoices: keine 0-€-Modulzeilen, 0-€-Ergebnis → Abo-Beleg ohne Rechnungsnummer; lexware-api und SEPA überspringen Abo-Belege; Rechnungsliste mit Filter/Kennzeichnung.
 ### Behoben
 - v1.4.2: Neue Edge Function `remove-user-from-tenant` (Tenant-Admin/Partner-Admin/Super-Admin, Selbst- und Letzter-Admin-Schutz, Audit) ersetzt `delete-user` in Tenant-Benutzerliste und Super-Admin-Mandantendetail; Konto + super_admin/partner_members bleiben. PartnerTenants: eigener Tenant öffnet direkt (keine Impersonation), 403 verständlich. PartnerModulesDialog: optimistisch, 15-s-Timeout, Rollback, Refetch.
 - v1.4.1: EditMeterDialog leerte beim Öffnen Gateway/Sensor, solange Integrationen noch luden (Race) → Speichern löschte `location_integration_id`/`sensor_uuid`, keine Messwerte. Effekt wartet jetzt auf Laden und leert nie automatisch; fehlendes Gateway wird nur angezeigt. MeterManagement: „Keine Zähler angelegt“ nur, wenn auch keine Gateway-Zähler existieren.
