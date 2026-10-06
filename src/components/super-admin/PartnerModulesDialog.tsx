@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
@@ -13,11 +13,14 @@ interface Props {
   onOpenChange: (o: boolean) => void;
 }
 
+const TIMEOUT_MS = 15000;
+
 /** Super-Admin pflegt das Modul-Portfolio eines Partners (Modul-Kaskade). */
 export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChange }: Props) {
   const qc = useQueryClient();
-  const [busy, setBusy] = useState<string | null>(null);
-  const { data: codes = [], error: loadError } = useQuery({
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+  const [local, setLocal] = useState<string[]>([]);
+  const { data: codes, error: loadError, refetch } = useQuery({
     queryKey: ["partner-modules-admin", partnerId],
     enabled: open && !!partnerId,
     queryFn: async () => {
@@ -27,19 +30,34 @@ export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChang
     },
   });
 
+  useEffect(() => { if (codes) setLocal(codes); }, [codes]);
+
   const toggle = async (code: string, on: boolean) => {
     if (!partnerId) return;
-    setBusy(code);
-    const { data, error } = await supabase.functions.invoke("super-admin-set-partner-module", {
-      body: { partner_id: partnerId, module_code: code, enabled: on },
-    });
-    setBusy(null);
-    if (error || data?.error) {
-      let msg = data?.error ?? error?.message;
-      try { msg = (await (error as any)?.context?.json())?.error ?? msg; } catch { /* noop */ }
-      return toast.error("Speichern fehlgeschlagen: " + msg);
+    // Sofort umschalten, bei Fehler zurück.
+    setLocal((prev) => (on ? [...new Set([...prev, code])] : prev.filter((c) => c !== code)));
+    setBusy((b) => new Set(b).add(code));
+    try {
+      const call = supabase.functions.invoke("super-admin-set-partner-module", {
+        body: { partner_id: partnerId, module_code: code, enabled: on },
+      });
+      const timeout = new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error("Keine Antwort vom Server (Zeitüberschreitung). Ist die Funktion auf diesem System installiert?")), TIMEOUT_MS),
+      );
+      const { data, error } = await Promise.race([call, timeout]);
+      if (error || data?.error || data?.success !== true) {
+        let msg = data?.error ?? error?.message ?? "Unerwartete Antwort vom Server";
+        try { msg = (await (error as any)?.context?.json())?.error ?? msg; } catch { /* noop */ }
+        throw new Error(msg);
+      }
+    } catch (e) {
+      setLocal((prev) => (on ? prev.filter((c) => c !== code) : [...new Set([...prev, code])]));
+      toast.error("Speichern fehlgeschlagen: " + (e as Error).message);
+    } finally {
+      setBusy((b) => { const n = new Set(b); n.delete(code); return n; });
+      qc.invalidateQueries({ queryKey: ["partner-modules-admin", partnerId] });
+      refetch();
     }
-    qc.invalidateQueries({ queryKey: ["partner-modules-admin", partnerId] });
   };
 
   return (
@@ -60,7 +78,7 @@ export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChang
           {ALL_MODULES.filter((m) => !(m as any).alwaysOn).map((m) => (
             <div key={m.code} className="flex items-center justify-between gap-4 py-2">
               <span className="text-sm">{m.label}</span>
-              <Switch checked={codes.includes(m.code)} disabled={busy === m.code} onCheckedChange={(v) => toggle(m.code, v)} />
+              <Switch checked={local.includes(m.code)} disabled={busy.has(m.code)} onCheckedChange={(v) => toggle(m.code, v)} />
             </div>
           ))}
         </div>

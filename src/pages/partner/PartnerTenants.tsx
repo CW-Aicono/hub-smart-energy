@@ -40,6 +40,7 @@ export default function PartnerTenants() {
   const canCreate = permissions.createTenant;
   const { toast } = useToast();
   const navigate = useNavigate();
+  const ownTenantId = useTenantOptional()?.tenant?.id ?? null;
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
