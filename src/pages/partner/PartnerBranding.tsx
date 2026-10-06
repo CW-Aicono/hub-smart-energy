@@ -205,7 +205,7 @@ export default function PartnerBranding() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5" /> Domain & White-Label</CardTitle>
-          <CardDescription>Diese Einstellungen pflegt der AICONO Super-Admin.</CardDescription>
+          <CardDescription>Diese Einstellungen pflegt der AICONO Portal-Admin.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -224,7 +224,7 @@ export default function PartnerBranding() {
               {partner.white_label_enabled ? "White-Label aktiv" : "White-Label inaktiv"}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              Zum Aktivieren oder Ändern bitte den Super-Admin kontaktieren.
+              Zum Aktivieren oder Ändern bitte den Portal-Admin kontaktieren.
             </span>
           </div>
         </CardContent>

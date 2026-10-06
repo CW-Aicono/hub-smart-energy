@@ -2,7 +2,7 @@
 // Discovery-Scan läuft ausschließlich über das Puzzle-Icon auf der
 // Miniserver-Integrationskachel (IntegrationCard). Snippet-Downloads gibt es
 // nicht mehr — Bausteine werden zentral via Loxone Multiplikator-Projekt
-// ausgerollt (siehe Super-Admin → Loxone-Templates → Master-Projekt).
+// ausgerollt (siehe Portal-Admin → Loxone-Templates → Master-Projekt).
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

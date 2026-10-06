@@ -65,7 +65,7 @@ export default function WorkerKeyPanel() {
             Aktueller GATEWAY_API_KEY (Lovable Cloud)
           </CardTitle>
           <CardDescription>
-            Wert der Cloud-Instanz — nur für Super-Admins sichtbar.
+            Wert der Cloud-Instanz — nur für Portal-Admins sichtbar.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

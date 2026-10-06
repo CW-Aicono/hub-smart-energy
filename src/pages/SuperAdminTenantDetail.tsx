@@ -87,7 +87,7 @@ const InviteTenantAdminDialog = ({ tenantId, tenantName, onSuccess }: InviteTena
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Mandanten-Admin einladen</DialogTitle>
+          <DialogTitle>Kunden-Admin einladen</DialogTitle>
           <DialogDescription>Neuen Benutzer für <strong>{tenantName}</strong> einladen.</DialogDescription>
         </DialogHeader>
         {!inviteLink ? (
@@ -265,7 +265,7 @@ const SuperAdminTenantDetail = () => {
     if (!id || !user) return;
     setStartingSupport(true);
     try {
-      // 1) Original-Session des Super-Admins sichern
+      // 1) Original-Session des Portal-Admins sichern
       const { data: cur } = await supabase.auth.getSession();
       if (!cur.session) throw new Error("Keine aktive Session");
       const original = {

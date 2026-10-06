@@ -14,7 +14,7 @@ import { format } from "date-fns";
 interface OcppLogViewerProps {
   chargePointId?: string;
   /**
-   * Optionale OCPP-ID des Ladepunkts. Im Super-Admin gibt es keinen Mandanten,
+   * Optionale OCPP-ID des Ladepunkts. Im Portal-Admin gibt es keinen Mandanten,
    * daher liefert `useChargePoints` dort nichts — die zweite ID muss dann von
    * außen mitgegeben werden.
    */

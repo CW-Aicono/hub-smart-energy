@@ -2,7 +2,7 @@ import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 // Edge Function: support-session-end
 // Beendet eine Remote-Support-Sitzung: markiert support_sessions.ended_at und
 // widerruft alle Refresh-Tokens des impersonierten Support-Users (globaler Sign-Out).
-// Das Frontend stellt im Anschluss die Original-Session des Super-Admins wieder her.
+// Das Frontend stellt im Anschluss die Original-Session des Portal-Admins wieder her.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 

@@ -1,7 +1,7 @@
 /**
  * gateway-update-control
  * ======================
- * Phase 4: Super-Admin steuert Remote-/Auto-Updates der Gateway-Flotte.
+ * Phase 4: Portal-Admin steuert Remote-/Auto-Updates der Gateway-Flotte.
  *
  * Actions (POST mit body.action):
  *   - "fleet_list"            → Übersicht aller Gateways inkl. Update-Status

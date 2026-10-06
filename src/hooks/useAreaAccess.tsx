@@ -5,7 +5,7 @@ import { isImpersonating } from "@/lib/supportView";
 import type { AppArea } from "@/lib/areaPreference";
 
 /**
- * Ermittelt, welche Bereiche ein Nutzer nutzen darf (Super-Admin, Partner, EMS).
+ * Ermittelt, welche Bereiche ein Nutzer nutzen darf (Portal-Admin, Partner, EMS).
  * Reine Navigationshilfe – die Rechte prüfen Datenbank und Guards.
  */
 export function useAreaAccess() {

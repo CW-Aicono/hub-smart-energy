@@ -15,7 +15,7 @@ interface Props {
 
 const TIMEOUT_MS = 15000;
 
-/** Super-Admin pflegt das Modul-Portfolio eines Partners (Modul-Kaskade). */
+/** Portal-Admin pflegt das Modul-Portfolio eines Partners (Modul-Kaskade). */
 export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChange }: Props) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState<Set<string>>(new Set());

@@ -1,5 +1,5 @@
 // meters-merge-duplicates
-// Super-Admin only. Merges one or more duplicate meters into a master meter.
+// Portal-Admin only. Merges one or more duplicate meters into a master meter.
 // Delegates the transactional work to public.merge_duplicate_meter(master, dup, actor).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 

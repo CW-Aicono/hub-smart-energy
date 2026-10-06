@@ -1,5 +1,5 @@
 // Edge Function: support-session-impersonate
-// Tauscht die Session des Super-Admins gegen die Session eines technischen
+// Tauscht die Session des Portal-Admins gegen die Session eines technischen
 // Support-Users des Ziel-Tenants. Erzeugt den Support-User lazy, wenn noch
 // nicht vorhanden.
 
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    // 1) Super-Admin verifizieren
+    // 1) Portal-Admin verifizieren
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (tenantErr || !tenant) return json({ error: "Tenant not found" }, 404);
 
-    // Kundenzustimmung ist Pflicht – gilt auch für Super-Admins.
+    // Kundenzustimmung ist Pflicht – gilt auch für Portal-Admins.
     if (!(tenant as { remote_support_enabled?: boolean }).remote_support_enabled) {
       return json({ error: "Kunde hat Remote-Zugriff nicht freigegeben." }, 403);
     }

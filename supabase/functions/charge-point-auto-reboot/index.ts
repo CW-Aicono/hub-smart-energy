@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
   // --- Auth ---------------------------------------------------------------
   // Erlaubt sind:
   //   a) Cron / interner Server-Aufruf mit Bearer <SERVICE_ROLE_KEY>
-  //   b) Eingeloggter Super-Admin (Bearer <user JWT>)
+  //   b) Eingeloggter Portal-Admin (Bearer <user JWT>)
   const authHeader = req.headers.get("Authorization") || "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!bearer) {

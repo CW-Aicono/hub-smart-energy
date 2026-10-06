@@ -1,6 +1,6 @@
 // Entfernt eine Person aus einem Mandanten, OHNE das Konto zu löschen.
-// Super-Admin- und Partner-Rollen bleiben erhalten (Mehrrollen-Modell).
-// Erlaubt: Admin desselben Mandanten, Partner-Admin des Mandanten-Partners, Super-Admin.
+// Portal-Admin- und Partner-Rollen bleiben erhalten (Mehrrollen-Modell).
+// Erlaubt: Admin desselben Mandanten, Partner-Admin des Mandanten-Partners, Portal-Admin.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 

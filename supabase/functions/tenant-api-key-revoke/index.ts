@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* empty */ }
   if (!body.key_id) return json({ error: "key_id required" }, 400);
 
-  // Scope-Check: nur eigener Tenant (Super-Admin kann alles)
+  // Scope-Check: nur eigener Tenant (Portal-Admin kann alles)
   let q = svc.from("tenant_api_keys").update({ revoked_at: new Date().toISOString() })
     .eq("id", body.key_id).is("revoked_at", null);
   if (!roleSet.has("super_admin")) {

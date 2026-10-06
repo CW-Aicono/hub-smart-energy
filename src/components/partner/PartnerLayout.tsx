@@ -14,7 +14,7 @@ interface PartnerLayoutProps {
 
 /**
  * Stufe 2 (Partner-Portal): Layout-Wrapper für alle /partner/*-Routen.
- * Zugriff: Partner-Mitglieder ODER Super-Admin (für Vorschau / Support).
+ * Zugriff: Partner-Mitglieder ODER Portal-Admin (für Vorschau / Support).
  */
 export function PartnerLayout({ children }: PartnerLayoutProps) {
   const { user, loading: authLoading } = useAuth();

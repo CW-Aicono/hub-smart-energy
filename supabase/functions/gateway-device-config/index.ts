@@ -11,7 +11,7 @@
  *                                                    verbundene Gerät)
  *
  * Auth-Pfade:
- *   1. User-JWT (Tenant-Admin / Super-Admin) – RLS auf gateway_device_config greift.
+ *   1. User-JWT (Kunden-Admin / Portal-Admin) – RLS auf gateway_device_config greift.
  *   2. Service-Role (GATEWAY_API_KEY oder SERVICE_ROLE_KEY) – das Gateway selbst zieht
  *      seine Boot-Config darüber, wenn der WebSocket noch nicht steht.
  */

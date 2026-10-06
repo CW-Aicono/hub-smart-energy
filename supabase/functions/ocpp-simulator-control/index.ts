@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
   }
   const userId = claims.claims.sub as string;
 
-  // Super-Admin-Check via service-role (umgeht RLS auf user_roles)
+  // Portal-Admin-Check via service-role (umgeht RLS auf user_roles)
   const supabaseAdmin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,

@@ -174,7 +174,7 @@ export default function TenantPartnerTransferCard({
               <Select value={target} onValueChange={setTarget}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={PLATFORM}>Direkt AICONO (Super-Admin)</SelectItem>
+                  <SelectItem value={PLATFORM}>Direkt AICONO (Portal-Admin)</SelectItem>
                   {activePartners.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}

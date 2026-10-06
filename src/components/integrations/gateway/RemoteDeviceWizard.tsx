@@ -243,7 +243,7 @@ export function RemoteDeviceWizard({ deviceId, deviceName, open, onOpenChange }:
               <AlertDescription className="text-xs">
                 Bindet eine Wallbox per <strong>Modbus TCP</strong> über dieses Gateway an.
                 Das Gateway baut für jede Wallbox eine eigene OCPP-1.6J-Bridge zum Backend
-                auf. Hersteller/Modell stammen aus den vom Super-Admin gepflegten
+                auf. Hersteller/Modell stammen aus den vom Portal-Admin gepflegten
                 Wallbox-Templates.
               </AlertDescription>
             </Alert>

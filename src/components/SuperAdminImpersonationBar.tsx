@@ -14,9 +14,9 @@ import { HeadsetIcon, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 /**
- * Persistente Top-Leiste, die nur erscheint, wenn ein Super-Admin
+ * Persistente Top-Leiste, die nur erscheint, wenn ein Portal-Admin
  * über „Remote-Support" einen Tenant live beobachtet.
- * Wird nicht innerhalb des Super-Admin-Bereichs angezeigt.
+ * Wird nicht innerhalb des Portal-Admin-Bereichs angezeigt.
  */
 export default function SuperAdminImpersonationBar() {
   const { isSuperAdmin } = useSuperAdmin();
@@ -32,7 +32,7 @@ export default function SuperAdminImpersonationBar() {
 
   if (!isSuperAdmin) return null;
   if (!tenantId) return null;
-  // Nicht im Super-Admin-Bereich anzeigen (dort gibt es eigene Steuerung)
+  // Nicht im Portal-Admin-Bereich anzeigen (dort gibt es eigene Steuerung)
   if (location.pathname.startsWith("/super-admin")) return null;
   if (location.pathname.startsWith("/auth")) return null;
 
@@ -63,7 +63,7 @@ export default function SuperAdminImpersonationBar() {
     >
       <HeadsetIcon className="h-4 w-4 shrink-0" />
       <span className="text-sm font-semibold">
-        Super-Admin-Sicht: {tenant?.name ?? "Mandant"}
+        Portal-Admin-Sicht: {tenant?.name ?? "Mandant"}
       </span>
       <Button
         size="sm"

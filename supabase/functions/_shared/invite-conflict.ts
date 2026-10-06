@@ -86,13 +86,13 @@ export async function checkInviteConflict(args: InviteConflictArgs): Promise<Inv
     if (targetTenantId) {
       return {
         ok: false, status: 409,
-        error: "Diese E-Mail ist bereits Tenant-Nutzer und kann nicht als Plattform-Administrator (Super-Admin) eingeladen werden. Bitte eine andere Adresse verwenden.",
+        error: "Diese E-Mail ist bereits Tenant-Nutzer und kann nicht als Plattform-Administrator (Portal-Admin) eingeladen werden. Bitte eine andere Adresse verwenden.",
       };
     }
     if (isPartnerMember) {
       return {
         ok: false, status: 409,
-        error: "Diese E-Mail ist bereits im Partner-Portal registriert und kann nicht zusätzlich als Super-Admin eingeladen werden. Bitte eine andere Adresse verwenden.",
+        error: "Diese E-Mail ist bereits im Partner-Portal registriert und kann nicht zusätzlich als Portal-Admin eingeladen werden. Bitte eine andere Adresse verwenden.",
       };
     }
     return { ok: true, existingUserId: existingUser.id };
@@ -102,7 +102,7 @@ export async function checkInviteConflict(args: InviteConflictArgs): Promise<Inv
     if (isSuperAdmin) {
       return {
         ok: false, status: 409,
-        error: "Diese E-Mail gehört zu einem Plattform-Konto (Super-Admin) und kann nicht als Partner-Mitglied eingeladen werden.",
+        error: "Diese E-Mail gehört zu einem Plattform-Konto (Portal-Admin) und kann nicht als Partner-Mitglied eingeladen werden.",
       };
     }
     // Multi-Rollen: Tenant-Nutzer dürfen zusätzlich Partner-Mitglied sein
@@ -120,7 +120,7 @@ export async function checkInviteConflict(args: InviteConflictArgs): Promise<Inv
   if (isSuperAdmin) {
     return {
       ok: false, status: 409,
-      error: "Diese E-Mail gehört zu einem Plattform-Konto (Super-Admin) und kann nicht als Tenant-Nutzer eingeladen werden.",
+      error: "Diese E-Mail gehört zu einem Plattform-Konto (Portal-Admin) und kann nicht als Tenant-Nutzer eingeladen werden.",
     };
   }
   // Partner-Mitglieder dürfen zusätzlich Nutzer eines (noch nicht zugeordneten) Tenants werden.

@@ -16,7 +16,7 @@ export default function PartnerSalesRules() {
   const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
 
-  // Super-Admin ohne eigene Partner-Mitgliedschaft: Partner-Auswahl ermöglichen
+  // Portal-Admin ohne eigene Partner-Mitgliedschaft: Partner-Auswahl ermöglichen
   useEffect(() => {
     if (loading || saLoading) return;
     if (isPartnerMember || !isSuperAdmin) return;
@@ -43,7 +43,7 @@ export default function PartnerSalesRules() {
     );
   }
 
-  // Super-Admin-Vorschau ohne Partner-Mitgliedschaft
+  // Portal-Admin-Vorschau ohne Partner-Mitgliedschaft
   if (isSuperAdmin) {
     return (
       <div className="p-6 max-w-7xl mx-auto space-y-4">
@@ -51,7 +51,7 @@ export default function PartnerSalesRules() {
           <CardContent className="py-4 flex items-center gap-3">
             <ShieldCheck className="h-5 w-5 text-amber-600" />
             <div className="flex-1">
-              <div className="text-sm font-medium">Super-Admin-Vorschau</div>
+              <div className="text-sm font-medium">Portal-Admin-Vorschau</div>
               <p className="text-xs text-muted-foreground">
                 Du bist kein Mitglied einer Partner-Organisation. Wähle einen Partner aus, um seine Regeln und den KI-Analyse-Modus zu verwalten.
               </p>
@@ -80,7 +80,7 @@ export default function PartnerSalesRules() {
     );
   }
 
-  // Weder Partner-Member noch Super-Admin (PartnerLayout schließt das eigentlich aus)
+  // Weder Partner-Member noch Portal-Admin (PartnerLayout schließt das eigentlich aus)
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <SalesRulesManager scope="partner" partnerId={null} canManage={false} />

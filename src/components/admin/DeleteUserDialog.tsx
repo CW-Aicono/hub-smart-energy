@@ -61,7 +61,7 @@ const DeleteUserDialog = ({
     setLoading(true);
 
     try {
-      // Nur aus dem Mandanten entfernen – das Konto (inkl. Partner-/Super-Admin-Rollen) bleibt bestehen.
+      // Nur aus dem Mandanten entfernen – das Konto (inkl. Partner-/Portal-Admin-Rollen) bleibt bestehen.
       const { data, error } = await supabase.functions.invoke("remove-user-from-tenant", {
         body: { userId, tenantId: tenant?.id },
       });
@@ -130,7 +130,7 @@ const DeleteUserDialog = ({
         <AlertDialogHeader>
           <AlertDialogTitle>„{userName}“ aus dem Mandanten entfernen?</AlertDialogTitle>
           <AlertDialogDescription>
-            Die Person verliert den Zugang zu diesem Mandanten. Ihr Konto sowie eventuelle Partner- oder Super-Admin-Rollen bleiben erhalten.
+            Die Person verliert den Zugang zu diesem Mandanten. Ihr Konto sowie eventuelle Partner- oder Portal-Admin-Rollen bleiben erhalten.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -102,7 +102,7 @@ export async function downloadEvGroupAPackage() {
   return downloadGroupPackage("A");
 }
 
-/** Alle Gruppen gebündelt (Super-Admin Rollout). */
+/** Alle Gruppen gebündelt (Portal-Admin Rollout). */
 export async function downloadAllSnippetsPackage() {
   const zip = new JSZip();
   for (const group of SNIPPET_GROUPS) {

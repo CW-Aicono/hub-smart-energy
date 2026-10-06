@@ -6,8 +6,8 @@ import type { ChargePointConnector } from "@/hooks/useChargePointConnectors";
 import type { ChargingSession } from "@/hooks/useChargingSessions";
 
 /**
- * Mandantenübergreifende Ladepunkt-Daten für den Super-Admin.
- * Bewusst OHNE tenant_id-Filter — nur in Super-Admin-Ansichten verwenden.
+ * Mandantenübergreifende Ladepunkt-Daten für den Portal-Admin.
+ * Bewusst OHNE tenant_id-Filter — nur in Portal-Admin-Ansichten verwenden.
  */
 export function useAllChargePoints() {
   const queryClient = useQueryClient();

@@ -109,7 +109,7 @@ const handler = async (req: Request): Promise<Response> => {
       // Only super_admins may invite super_admins
       if (isSuperAdminInvite && !callerIsSuper) {
         return new Response(
-          JSON.stringify({ success: false, error: "Nur Super-Admins dürfen Plattform-Administratoren einladen." }),
+          JSON.stringify({ success: false, error: "Nur Portal-Admins dürfen Plattform-Administratoren einladen." }),
           { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
         );
       }
@@ -151,7 +151,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       // Update profile with tenant + name.
-      // Super-admin invites: tenant_id MUST be NULL (Super-Admin/Tenant separation).
+      // Super-admin invites: tenant_id MUST be NULL (Portal-Admin/Tenant separation).
       const profileTenantId = isSuperAdminInvite ? null : (effectiveTenantId || null);
       // custom_role_id only applies to non-super-admin tenant invites.
       const profileCustomRoleId = isSuperAdminInvite

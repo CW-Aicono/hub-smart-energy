@@ -1,5 +1,5 @@
-// Super-Admin pflegt das Modul-Portfolio eines Partners (partner_modules).
-// Prüft die Super-Admin-Rolle serverseitig und schreibt mit Service-Rolle.
+// Portal-Admin pflegt das Modul-Portfolio eines Partners (partner_modules).
+// Prüft die Portal-Admin-Rolle serverseitig und schreibt mit Service-Rolle.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: "Nicht angemeldet." }, 401);
 
     const { data: isSuper } = await admin.rpc("has_role", { _user_id: user.id, _role: "super_admin" });
-    if (!isSuper) return json({ error: "Nur Super-Admins dürfen Partner-Module ändern." }, 403);
+    if (!isSuper) return json({ error: "Nur Portal-Admins dürfen Partner-Module ändern." }, 403);
 
     const body = await req.json().catch(() => ({}));
     const partnerId = typeof body.partner_id === "string" ? body.partner_id : "";

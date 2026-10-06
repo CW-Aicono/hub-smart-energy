@@ -140,7 +140,7 @@ Deno.serve(async (req: Request) => {
       success: true,
       created: false,
       email,
-      message: "Super-Admin-Rolle bestätigt (Passwort wurde nicht geändert)",
+      message: "Portal-Admin-Rolle bestätigt (Passwort wurde nicht geändert)",
     });
   }
 

@@ -40,7 +40,7 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
     staleTime: 10_000,
   });
 
-  // Stale-Schwelle (Sekunden) ist im Super-Admin konfigurierbar.
+  // Stale-Schwelle (Sekunden) ist im Portal-Admin konfigurierbar.
   // Bevorzuge unpräfixierten Key (wird auch von der Edge Function gelesen);
   // präfixierter Key als Fallback für ältere Deployments.
   const staleUnprefixed = useSystemSettingNumber("loxone_ws_stale_threshold_seconds", 0);

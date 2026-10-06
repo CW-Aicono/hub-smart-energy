@@ -288,7 +288,7 @@ export function buildManualSkeleton(templateKey: string): Omit<ManualDoc, "updat
     "4. Namen der virtuellen Ein-/Ausgänge NICHT ändern — sonst schlägt Discovery + Push aus der Cloud fehl.",
     "5. Änderungen in den Miniserver speichern (F5).",
     "",
-    "(Diese Anleitung ist ein Skelett. Bitte im Super-Admin die konkrete Verdrahtung ergänzen.)",
+    "(Diese Anleitung ist ein Skelett. Bitte im Portal-Admin die konkrete Verdrahtung ergänzen.)",
   ].join("\n");
   const test = [
     "1. In AICONO EMS eine Automation mit diesem Template anlegen und speichern.",
@@ -296,7 +296,7 @@ export function buildManualSkeleton(templateKey: string): Omit<ManualDoc, "updat
     "3. In Loxone Config im Live-Modus prüfen, ob die gesendeten Werte an den Eingängen ankommen.",
     "4. Ausgangs-Werte (falls vorhanden) sollten in AICONO wieder sichtbar werden.",
     "",
-    "(Diese Anleitung ist ein Skelett. Bitte im Super-Admin die konkreten Test-Schritte ergänzen.)",
+    "(Diese Anleitung ist ein Skelett. Bitte im Portal-Admin die konkreten Test-Schritte ergänzen.)",
   ].join("\n");
   return {
     template_key: templateKey,

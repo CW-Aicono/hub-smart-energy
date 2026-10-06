@@ -115,7 +115,7 @@ const emptyForm: FormData = {
 };
 
 export interface SalesCatalogManagerProps {
-  /** 'global' = Super-Admin, 'partner' = Partner-Portal */
+  /** 'global' = Portal-Admin, 'partner' = Partner-Portal */
   scope: "global" | "partner";
   /** Pflicht im Partner-Modus: eigene Partner-ID. */
   partnerId?: string | null;
@@ -179,7 +179,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
     );
   }
 
-  // Filter: im Partner-Modus splitten in own vs. global; Super-Admin sieht alles
+  // Filter: im Partner-Modus splitten in own vs. global; Portal-Admin sieht alles
   const ownItems = items.filter((i) => i.owner_scope === "partner" && i.partner_id === partnerId);
   const globalItems = items.filter((i) => i.owner_scope === "global");
   const baseList = scope === "partner" ? (tab === "own" ? ownItems : globalItems) : items;

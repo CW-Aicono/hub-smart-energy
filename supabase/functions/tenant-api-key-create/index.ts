@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
   let body: { label?: string; tenant_id?: string } = {};
   try { body = await req.json(); } catch { /* empty */ }
 
-  // Super-Admin darf tenant_id im Body überschreiben; sonst zwingend eigener Tenant
+  // Portal-Admin darf tenant_id im Body überschreiben; sonst zwingend eigener Tenant
   const isSuper = roleSet.has("super_admin");
   const tenantId = isSuper && body.tenant_id ? body.tenant_id : profile?.tenant_id;
   if (!tenantId) return json({ error: "No tenant context" }, 400);

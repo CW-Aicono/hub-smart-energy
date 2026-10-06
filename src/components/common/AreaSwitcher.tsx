@@ -48,7 +48,7 @@ function useMainSlot(enabled: boolean) {
 }
 
 /**
- * Umschalter zwischen Super-Admin, Partner-Portal und EMS.
+ * Umschalter zwischen Portal-Admin, Partner-Portal und EMS.
  * Erscheint nur bei mindestens zwei berechtigten Bereichen.
  */
 export function AreaSwitcher({ current, className, floating = false }: AreaSwitcherProps) {
