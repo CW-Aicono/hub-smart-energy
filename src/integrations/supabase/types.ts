@@ -15298,6 +15298,7 @@ export type Database = {
       }
     }
     Functions: {
+      accept_own_invitations: { Args: never; Returns: number }
       admin_top_disk_readers: {
         Args: { limit_n?: number }
         Returns: {

@@ -80,6 +80,14 @@ const UserManagement = () => {
       console.error("Error fetching invitations:", invitationsError);
     }
 
+    // Einladungen ausblenden, deren Person bereits aktiv registriert ist.
+    const registeredEmails = new Set(
+      (profiles || []).map((p: any) => String(p.email || "").toLowerCase())
+    );
+    const openInvitations = (invitations || []).filter(
+      (i: any) => !registeredEmails.has(String(i.email || "").toLowerCase())
+    );
+
     // Combine registered users
     // Technische Support-User (Remote-Support-Impersonation) ausblenden.
     // Diese haben immer eine @aicono.internal E-Mail und sollen für Tenants
@@ -105,7 +113,7 @@ const UserManagement = () => {
     });
 
     // Add pending invitations
-    const pendingInvitations: UserWithRole[] = (invitations || []).map((inv: any) => ({
+    const pendingInvitations: UserWithRole[] = openInvitations.map((inv: any) => ({
       id: inv.id,
       user_id: inv.id,
       email: inv.email,
