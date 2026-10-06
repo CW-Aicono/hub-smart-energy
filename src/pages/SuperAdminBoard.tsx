@@ -186,7 +186,7 @@ export default function SuperAdminBoard() {
             <CardTitle className="text-base">System-Themes</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
               Diese Themes stehen allen Tenants im C-Level Dashboard zur Verfügung.
-              Tenant-Admins können eigene Themes auf Basis dieser Vorlagen erstellen.
+              Kunden-Admins können eigene Themes auf Basis dieser Vorlagen erstellen.
             </p>
             <div className="flex flex-wrap gap-2 pt-3">
               <Button size="sm" onClick={() => createTheme()} className="gap-2">

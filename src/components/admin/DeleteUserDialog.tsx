@@ -130,7 +130,7 @@ const DeleteUserDialog = ({
         <AlertDialogHeader>
           <AlertDialogTitle>„{userName}“ aus dem Mandanten entfernen?</AlertDialogTitle>
           <AlertDialogDescription>
-            Die Person verliert den Zugang zu diesem Mandanten. Ihr Konto sowie eventuelle Partner- oder Super-Admin-Rollen bleiben erhalten.
+            Die Person verliert den Zugang zu diesem Mandanten. Ihr Konto sowie eventuelle Partner- oder Portal-Admin-Rollen bleiben erhalten.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

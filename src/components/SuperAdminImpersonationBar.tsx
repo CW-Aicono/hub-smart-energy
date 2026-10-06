@@ -63,7 +63,7 @@ export default function SuperAdminImpersonationBar() {
     >
       <HeadsetIcon className="h-4 w-4 shrink-0" />
       <span className="text-sm font-semibold">
-        Super-Admin-Sicht: {tenant?.name ?? "Mandant"}
+        Portal-Admin-Sicht: {tenant?.name ?? "Mandant"}
       </span>
       <Button
         size="sm"

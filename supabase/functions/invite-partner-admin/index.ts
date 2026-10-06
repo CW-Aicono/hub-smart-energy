@@ -30,7 +30,7 @@ const handler = async (req: Request): Promise<Response> => {
       .eq("user_id", callingUser.id);
     const roles = (callerRoles ?? []).map((r: { role: string }) => r.role);
     if (!roles.includes("super_admin")) {
-      throw new Error("Nur Super-Admin darf Partner anlegen.");
+      throw new Error("Nur Portal-Admin darf Partner anlegen.");
     }
 
     const body = await req.json();

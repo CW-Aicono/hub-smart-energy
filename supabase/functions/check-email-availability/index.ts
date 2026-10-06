@@ -117,7 +117,7 @@ const handler = async (req: Request): Promise<Response> => {
           {
             status: "exists_same_tenant",
             currentRole: "super_admin",
-            message: "Diese E-Mail ist bereits als Plattform-Administrator (Super-Admin) registriert.",
+            message: "Diese E-Mail ist bereits als Plattform-Administrator (Portal-Admin) registriert.",
           },
           200,
           corsHeaders,
@@ -162,7 +162,7 @@ const handler = async (req: Request): Promise<Response> => {
       return json(
         {
           status: "blocked_super_admin",
-          message: "Diese E-Mail gehört zu einem Plattform-Konto (Super-Admin) und kann nicht als Tenant-Nutzer eingeladen werden.",
+          message: "Diese E-Mail gehört zu einem Plattform-Konto (Portal-Admin) und kann nicht als Tenant-Nutzer eingeladen werden.",
         },
         200,
         corsHeaders,
@@ -224,7 +224,7 @@ function json(body: unknown, status: number, corsHeaders: Record<string, string>
 function roleLabel(role: string): string {
   switch (role) {
     case "admin": return "Administrator";
-    case "super_admin": return "Super-Admin";
+    case "super_admin": return "Portal-Admin";
     case "sales_partner": return "Vertriebspartner";
     case "user": return "Benutzer";
     default: return role;

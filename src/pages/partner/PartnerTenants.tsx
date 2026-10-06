@@ -218,14 +218,14 @@ export default function PartnerTenants() {
                 </div>
                 <div className="border-t my-2" />
                 <p className="text-xs text-muted-foreground">
-                  Optional: Tenant-Administrator direkt einladen. Lassen Sie die Felder leer, wenn die Einladung später erfolgen soll.
+                  Optional: Kunden-Admin direkt einladen. Lassen Sie die Felder leer, wenn die Einladung später erfolgen soll.
                 </p>
                 <div className="space-y-2">
-                  <Label>E-Mail Tenant-Admin</Label>
+                  <Label>E-Mail Kunden-Admin</Label>
                   <Input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@firma.de" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Name Tenant-Admin</Label>
+                  <Label>Name Kunden-Admin</Label>
                   <Input value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Max Mustermann" />
                 </div>
               </div>

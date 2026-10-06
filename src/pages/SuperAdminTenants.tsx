@@ -201,7 +201,7 @@ const SuperAdminTenants = () => {
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__platform__">Direkt AICONO (Super-Admin)</SelectItem>
+                        <SelectItem value="__platform__">Direkt AICONO (Portal-Admin)</SelectItem>
                         {partnerOptions.map((p: any) => (
                           <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                         ))}

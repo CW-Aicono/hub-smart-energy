@@ -51,7 +51,7 @@ export default function PartnerSalesRules() {
           <CardContent className="py-4 flex items-center gap-3">
             <ShieldCheck className="h-5 w-5 text-amber-600" />
             <div className="flex-1">
-              <div className="text-sm font-medium">Super-Admin-Vorschau</div>
+              <div className="text-sm font-medium">Portal-Admin-Vorschau</div>
               <p className="text-xs text-muted-foreground">
                 Du bist kein Mitglied einer Partner-Organisation. Wähle einen Partner aus, um seine Regeln und den KI-Analyse-Modus zu verwalten.
               </p>

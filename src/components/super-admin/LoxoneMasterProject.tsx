@@ -126,7 +126,7 @@ export default function LoxoneMasterProject() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Neue Version hochladen</CardTitle>
             <CardDescription>
-              Nur Super-Admins. Datei muss die Endung <code>.Loxone</code> haben (Export aus Loxone Config).
+              Nur Portal-Admins. Datei muss die Endung <code>.Loxone</code> haben (Export aus Loxone Config).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
