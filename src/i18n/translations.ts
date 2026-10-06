@@ -3828,6 +3828,7 @@ export const translations = {
   "widget.arbitrageAi": { de: "KI-Handelsempfehlung", en: "AI Trading Recommendation", es: "Recomendación de trading con IA", nl: "AI-handelsaanbeveling" },
   "widget.integrationErrors": { de: "Integrations-Fehlermeldungen", en: "Integration Errors", es: "Errores de integración", nl: "Integratiefouten" },
   "widget.savingsShare": { de: "Gain-Sharing KPIs", en: "Gain-Sharing KPIs", es: "KPIs de Gain-Sharing", nl: "Gain-Sharing KPI's" },
+  "widget.chargePointPower": { de: "Ladeleistung je Ladepunkt", en: "Charging power per charge point", es: "Potencia de carga por punto", nl: "Laadvermogen per laadpunt" },
 
   // Widget requirement / availability messages
   "widgetReq.noData": { de: "Keine Daten", en: "No data", es: "Sin datos", nl: "Geen data" },

@@ -66,6 +66,7 @@ const SpotPriceWidget = lazy(() => import("@/components/dashboard/SpotPriceWidge
 const PvForecastWidget = lazy(() => import("@/components/dashboard/PvForecastWidget"));
 const ArbitrageAiWidget = lazy(() => import("@/components/dashboard/ArbitrageAiWidget"));
 const IntegrationErrorsWidget = lazy(() => import("@/components/dashboard/IntegrationErrorsWidget"));
+const ChargePointPowerWidget = lazy(() => import("@/components/dashboard/ChargePointPowerWidget"));
 const PPAFleetWidget = lazy(() => import("@/components/dashboard/PPAFleetWidget"));
 const SavingsShareWidget = lazy(() => import("@/components/dashboard/SavingsShareWidget"));
 
@@ -94,6 +95,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   pv_forecast: PvForecastWidget,
   arbitrage_ai: ArbitrageAiWidget,
   integration_errors: IntegrationErrorsWidget,
+  charge_point_power: ChargePointPowerWidget,
   ppa_fleet: PPAFleetWidget,
   savings_share: SavingsShareWidget,
 };
@@ -123,6 +125,7 @@ const WIDGET_MODULE_MAP: Record<string, string> = {
   pv_forecast: "energy_monitoring",
   ppa_fleet: "ppa_onsite",
   savings_share: "gain_sharing",
+  charge_point_power: "ev_charging",
 };
 
 const getLocationWidget = (_locationId: string | null): string => {
