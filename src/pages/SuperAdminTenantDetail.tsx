@@ -106,7 +106,7 @@ const InviteTenantAdminDialog = ({ tenantId, tenantName, onSuccess }: InviteTena
               <Select value={role} onValueChange={(v: any) => setRole(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" />Administrator</div></SelectItem>
+                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" />Kunden-Admin</div></SelectItem>
                   <SelectItem value="user"><div className="flex items-center gap-2"><User className="h-4 w-4" />Benutzer</div></SelectItem>
                 </SelectContent>
               </Select>
