@@ -30,7 +30,8 @@ export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChang
     },
   });
 
-  useEffect(() => { if (codes) setLocal(codes); }, [codes]);
+  // Nur aus erfolgreich geladenen Daten übernehmen; Fehler überschreiben die Schalter nicht.
+  useEffect(() => { if (codes && !loadError) setLocal(codes); }, [codes, loadError]);
 
   const toggle = async (code: string, on: boolean) => {
     if (!partnerId) return;
