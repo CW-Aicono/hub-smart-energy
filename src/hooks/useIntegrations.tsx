@@ -283,10 +283,26 @@ export function useLocationIntegrations(locationId: string | undefined): UseLoca
   };
 
   const removeIntegration = async (id: string) => {
+    const { data: link } = await supabase
+      .from("location_integrations")
+      .select("integration_id")
+      .eq("id", id)
+      .maybeSingle();
     const { error: deleteError } = await supabase
       .from("location_integrations")
       .delete()
       .eq("id", id);
+
+    // Reste entfernen: Integration ohne weitere Standort-Verknüpfung mitlöschen.
+    if (!deleteError && link?.integration_id) {
+      const { count } = await supabase
+        .from("location_integrations")
+        .select("id", { count: "exact", head: true })
+        .eq("integration_id", link.integration_id);
+      if ((count ?? 0) === 0) {
+        await supabase.from("integrations").delete().eq("id", link.integration_id);
+      }
+    }
 
     if (!deleteError) {
       await fetchLocationIntegrations();
