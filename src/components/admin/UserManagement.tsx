@@ -113,7 +113,7 @@ const UserManagement = () => {
     });
 
     // Add pending invitations
-    const pendingInvitations: UserWithRole[] = (invitations || []).map((inv: any) => ({
+    const pendingInvitations: UserWithRole[] = openInvitations.map((inv: any) => ({
       id: inv.id,
       user_id: inv.id,
       email: inv.email,
