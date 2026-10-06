@@ -201,7 +201,47 @@ Deno.serve(async (req) => {
     console.error("[auto-reboot] stale status check failed", e);
   }
 
+  // --- Hängende Ladevorgänge abschließen -----------------------------------
+  // Offener Ladevorgang >2h ohne Energie, Wallbox online und Stecker meldet
+  // selbst "Available" → Vorgang ohne Energie abschließen (Abrechnung 0 kWh).
+  let staleSessionsClosed = 0;
+  try {
+    const cutoff = new Date(nowUtc.getTime() - 2 * 3600_000).toISOString();
+    const { data: open } = await supabase
+      .from("charging_sessions")
+      .select("id, charge_point_id, connector_id, meter_start, charge_points!inner(ws_connected)")
+      .eq("status", "active")
+      .lte("energy_kwh", 0)
+      .lt("start_time", cutoff)
+      .eq("charge_points.ws_connected", true)
+      .limit(200);
+    for (const s of (open ?? []) as any[]) {
+      const { data: conn } = await supabase
+        .from("charge_point_connectors")
+        .select("status")
+        .eq("charge_point_id", s.charge_point_id)
+        .eq("connector_id", s.connector_id || 1)
+        .maybeSingle();
+      if (String(conn?.status ?? "").toLowerCase() !== "available") continue;
+      const { error: uErr } = await supabase
+        .from("charging_sessions")
+        .update({
+          status: "completed",
+          stop_time: nowUtc.toISOString(),
+          meter_stop: s.meter_start,
+          energy_kwh: 0,
+          stop_reason: "stale_auto_close",
+        })
+        .eq("id", s.id)
+        .eq("status", "active");
+      if (!uErr) staleSessionsClosed++;
+    }
+  } catch (e) {
+    console.error("[auto-reboot] stale session close failed", e);
+  }
+
   const summary = {
+    staleSessionsClosed,
     staleTriggered,
     ok: true,
     dispatched,

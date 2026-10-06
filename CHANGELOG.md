@@ -2,6 +2,10 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## 2026-10-06
+### Behoben
+- v1.3.2: RemoteSupportHistory übergab `started_at` mit `+00:00` im PostgREST-`or`-Filter (→ Leerzeichen, 22007, falscher Hinweis „nicht eingerichtet“); jetzt ISO-`Z`. Hinweis nur noch bei fehlender Tabelle/Spalte. Ladepunkt-Übersicht (Tenant + Super-Admin): offene Session zählt nur noch als belegt, wenn der Stecker nicht „Available“ meldet. charge-point-auto-reboot schließt offene Sessions >2 h ohne Energie, wenn Stecker „Available“ meldet (`stop_reason=stale_auto_close`, 0 kWh).
+
 ## 2026-10-05
 ### Behoben
 - v1.3.1: support-session-impersonate verlangt `tenants.remote_support_enabled` (auch für Super-Admins, sonst 403). Trigger beendet offene Support-Sitzungen und widerruft Support-Sessions, wenn der Kunde Remote ausschaltet. `accept_own_invitations()` markiert Einladungen beim Anmelden als angenommen; Backfill für bereits angemeldete Konten; Benutzerliste blendet Einladungen registrierter Personen aus. Migration 0013.

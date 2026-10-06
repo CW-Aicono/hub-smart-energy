@@ -176,9 +176,12 @@ const ChargingPoints = () => {
             return { connectorId: c.connector_id, status: "offline" };
           }
           const isActive = activeConnectorIds.has(c.connector_id) || (hasUnassignedActive && idx === 0 && activeConnectorIds.size === 0);
+          const reported = normalizeConnectorStatus(c.status, wsOnline);
+          // Meldung der Wallbox ist maßgeblich: meldet sie "frei", zählt ein
+          // offener (hängender) Ladevorgang nicht als belegt.
           return {
             connectorId: c.connector_id,
-            status: isActive ? "charging" : normalizeConnectorStatus(c.status, wsOnline),
+            status: isActive && reported !== "available" ? "charging" : reported,
           };
         });
     }
@@ -192,7 +195,7 @@ const ChargingPoints = () => {
       const isActive = activeConnectorIds.has(connectorId) || (hasUnassignedActive && i === 0 && activeConnectorIds.size === 0);
       return {
         connectorId,
-        status: isActive ? "charging" : normalizeConnectorStatus(cp.status, wsOnline),
+        status: (() => { const r = normalizeConnectorStatus(cp.status, wsOnline); return isActive && r !== "available" ? "charging" : r; })(),
       };
     });
   };
@@ -698,7 +701,7 @@ const ChargingPoints = () => {
                                     {t(cfg.labelKey as any)}
                                   </Badge>
                                 </StatusLiveDataHover>
-                                {activeSession && (
+                                {activeSession && effectiveStatus !== "available" && (
                                   <span className="ml-2 text-xs text-muted-foreground">
                                     {fmtKwh(activeSession.energy_kwh, 1)}
                                   </span>
