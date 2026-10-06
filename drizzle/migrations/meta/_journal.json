@@ -141,6 +141,13 @@
       "when": 1791315646886,
       "tag": "0019_partner_admin_guard_system_bypass",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791319112738,
+      "tag": "0020_fix_hverst_home_tenant_esb",
+      "breakpoints": true
     }
   ]
 }
