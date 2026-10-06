@@ -165,8 +165,6 @@ Deno.serve(async (req) => {
         (m: any) => m.module_code === "remote_support"
       );
       const supportPrice15min = Number(tenant.support_price_per_15min ?? 25);
-      const isMember = !!(tenant as any).is_aicono_member;
-      const isKommune = (tenant as any).is_kommune !== false;
 
       // Module line items (for current month)
       const moduleLineItems: any[] = [];
@@ -381,6 +379,7 @@ Deno.serve(async (req) => {
           module_total: upd.module_total,
           support_total: upd.support_total,
           amount: upd.amount,
+          document_type: upd.document_type,
         })
         .eq("id", upd.id);
       if (updErr) throw updErr;
