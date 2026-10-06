@@ -2,6 +2,10 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.6.4 – 2026-10-06
+- Migration 0022: Leserechte für `tenant_modules` (Partner-Mitglieder eigener Kunden) und `partner_modules` idempotent sichergestellt, GRANTs, Partner-Portfolio aus aktiven Kundenmodulen ergänzt.
+- Partner-Portal zeigt Lesefehler bei Modulen statt „0 aktiv“; Portal-Dialog „Module für Partner“ übernimmt nur erfolgreich geladene Daten.
+
 ## v1.6.3 – 2026-10-06
 - Widgets: Hinweis „keine gespeicherten Werte“ je Zähler statt leerer Grafik.
 - Shelly-Abholung meldet Zähler ohne passenden Sensor als Integrationsfehler (`sensor_missing`).

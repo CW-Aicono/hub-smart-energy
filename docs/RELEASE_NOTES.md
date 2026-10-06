@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.6.4
+- Partner-Portal zeigt die Module der Kunden wieder korrekt; im AICONO Portal freigegebene Partner-Module bleiben nach erneutem Öffnen erhalten.
+
 ## v1.6.3
 - Dashboard-Grafiken zeigen jetzt deutlich an, wenn ein Zähler keine gespeicherten Werte liefert.
 - Portal-Admins können Module eines Kunden direkt freischalten.

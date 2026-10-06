@@ -74,27 +74,29 @@ export default function PartnerTenantDetail() {
     },
   });
 
-  const { data: modules = [] } = useQuery({
+  const { data: modules = [], error: modulesError } = useQuery({
     queryKey: ["partner-tenant-modules", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("tenant_modules")
         .select("id, module_code, is_enabled, enabled_at, price_override, charge_point_price_override")
         .eq("tenant_id", tenantId!)
         .eq("is_enabled", true);
+      if (error) throw error;
       return (data ?? []) as any[];
     },
   });
 
-  const { data: partnerModules = [] } = useQuery({
+  const { data: partnerModules = [], error: partnerModulesError } = useQuery({
     queryKey: ["partner-own-modules", partnerId],
     enabled: !!partnerId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("partner_modules")
         .select("module_code")
         .eq("partner_id", partnerId!);
+      if (error) throw error;
       return (data ?? []).map((r: any) => r.module_code as string);
     },
   });
@@ -235,6 +237,11 @@ export default function PartnerTenantDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Module ({modules.length} aktiv)</CardTitle>
               <CardDescription>Sie können nur Module freigeben, die für Ihr Partner-Konto lizenziert sind.</CardDescription>
+              {(modulesError || partnerModulesError) && (
+                <p className="text-sm text-destructive">
+                  Module konnten nicht geladen werden: {((modulesError || partnerModulesError) as Error).message}
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               <div className="divide-y">
