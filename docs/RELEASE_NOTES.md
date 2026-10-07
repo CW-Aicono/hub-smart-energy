@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.7.0 – 07.10.2026
+- AICONO Portal → Rollen: Spalte „Admin“ in der Portal-Benutzerliste; Admins vergeben/entziehen Admin, Kaufmännisch und Technisch. Selbstentzug und Entzug des letzten Admins gesperrt.
+- Partner-Rabatt-Anfragen: Partner-Admins fragen unter Partner-Portal → Abrechnung Rabatte für ein oder mehrere Module an (ein Kunde oder alle Kunden). AICONO Portal → Abrechnung: Freigabe ganz/teilweise oder Ablehnung mit Notiz; Freigabe legt Kundenrabatte an.
+
 ## v1.6.9
 - Einladungslinks sind robuster: Der Link bleibt gültig, bis das Passwort wirklich gespeichert wurde. Doppelklicks oder Abbrüche machen ihn nicht mehr kaputt. Verständliche Hinweise, wenn ein Link bereits verwendet oder abgelaufen ist.
 - „Einladung erneut senden“ im AICONO Portal unter Benutzer.
