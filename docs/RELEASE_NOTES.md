@@ -2,6 +2,7 @@
 
 ## v1.7.1 – 07.10.2026
 - Portal-Rollen: Übersicht aller Teammitglieder mit Rollen, Status und letztem Login; Rollen per „Rollen bearbeiten“ anpassen. Der letzte Portal-Admin ist jetzt auch serverseitig geschützt.
+- Portal-Rollen: Änderungsprotokoll zeigt, wer wann welche Rolle vergeben oder entzogen hat.
 
 ## v1.7.0 – 07.10.2026
 - AICONO Portal → Rollen: Spalte „Admin“ in der Portal-Benutzerliste; Admins vergeben/entziehen Admin, Kaufmännisch und Technisch. Selbstentzug und Entzug des letzten Admins gesperrt.
