@@ -785,7 +785,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
               <div className="flex items-center justify-center h-48">
                 <div className="text-center">
                   <div className="text-5xl font-bold tabular-nums" style={{ color }}>
-                    {Math.round(kpiValue).toLocaleString("de-DE")}
+                    {formatWidgetValue(kpiValue)}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">{displayUnit}</div>
                 </div>
@@ -796,7 +796,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
               <div className="flex items-center justify-center h-48">
                 <div className="text-center">
                   <div className="text-4xl font-bold tabular-nums" style={{ color }}>
-                    {Math.round(kpiValue).toLocaleString("de-DE")}
+                    {formatWidgetValue(kpiValue)}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">{displayUnit}</div>
                 </div>
