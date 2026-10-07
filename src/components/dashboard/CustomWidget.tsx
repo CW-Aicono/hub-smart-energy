@@ -138,7 +138,7 @@ function DayTooltip({ active, payload, label, unit }: any) {
       <p className="font-medium mb-1">{label}</p>
       {payload.map((entry: any) => (
         <p key={entry.dataKey} style={{ color: entry.color }}>
-          {entry.name}: {entry.value != null ? entry.value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "–"} {unit}
+          {entry.name}: {entry.value != null ? entry.value.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : "–"} {unit}
         </p>
       ))}
     </div>
