@@ -822,7 +822,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                         <td className="py-1.5">{row.name}</td>
                         {config.meter_ids.map((mid) => (
                           <td key={mid} className="text-right py-1.5 tabular-nums">
-                            {(row[mid] as number)?.toLocaleString("de-DE", { maximumFractionDigits: 1 }) ?? "–"} {displayUnit}
+                            {typeof row[mid] === "number" ? formatWidgetValue(row[mid] as number) : "–"} {displayUnit}
                           </td>
                         ))}
                       </tr>
