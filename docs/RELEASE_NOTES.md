@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.6.6
+- Dashboard-Widgets: Die gewählte Einheit (z. B. Watt oder Kilowatt) wird jetzt immer zuverlässig angewendet – auch nach einem Neuladen der Seite. Werte werden korrekt umgerechnet und im deutschen Zahlenformat angezeigt.
+
 ## v1.6.5
 - Shelly-Messwerte bleiben im Tagesverlauf erhalten, auch wenn niemand eingeloggt ist.
 - Weniger Abfragen bei Shelly verhindern wechselnde „Sync-Fehler“-Hinweise.
