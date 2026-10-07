@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.6.8
+- Unter Ladeinfrastruktur → Abrechnung gibt es jetzt einen Button „CSV-Export“ für Ladevorgänge und Rechnungen. Exportiert werden alle Einträge des gewählten Zeitraums und der Suche – direkt in Excel lesbar.
+
 ## v1.6.7
 - Fallen Messwerte von Shelly-Zählern zeitweise aus (z. B. Internet- oder Serverausfall), werden die Lücken jetzt stündlich automatisch aus der Shelly Cloud nachgeladen. Nachgeladene Abschnitte zeigen den Stundenmittelwert.
 
