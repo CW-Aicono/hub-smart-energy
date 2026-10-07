@@ -8,6 +8,14 @@ Vorgehen:
 - Danach behebe ich die Ursache, die sich zeigt (z. B. Abholung fehlt im Zeitplan, schlägt still fehl oder überspringt die Bolan-Integrationen). Ziel: Werte rund um die Uhr, auch wenn kein Browser offen ist.
 - Die Live-Abfrage im Browser speichert danach selbst keine Werte mehr. So hängen die Daten nicht mehr davon ab, ob gerade jemand angemeldet ist.
 
+### Neu: „Der Wert wird nach 15 Minuten wieder gelöscht“
+Ein Aufräumjob fasst Leistungswerte zu 15-Minuten-Blöcken zusammen (`compact_meter_power_readings_15min`). Ob er Bolans Werte dabei verwirft, ist noch nicht bestätigt. Ein Grund könnte sein, dass die Shelly-Werte unter einer Kennung oder mit einer Herkunftsangabe gespeichert werden, die er nicht übernimmt.
+- Ich prüfe das im Prüfbefehl mit: Anzahl der Rohwerte und 5-Minuten-Werte vor und nach dem Aufräumlauf sowie der Zeitpunkt des letzten Laufs.
+- Danach korrigiere ich den Aufräumjob so, dass er nur zusammenfasst und nie ohne Ersatz löscht. Die Korrektur kommt als idempotente Migration für Lovable Cloud und Hetzner.
+
+### Neu: Einheit im Verlauf
+Das Diagramm zeigt etwa 8–9 „W“, live sind es aber etwa 9.488 W. Der Verlauf ist also wahrscheinlich in kW gespeichert und wird als W beschriftet. Ich prüfe das mit demselben Befehl und vereinheitliche die Einheit.
+
 ## 2. „Sync-Fehler: Shelly“ beim Kunden, bei dir „Online“
 Der Hinweis stammt aus einem alten Fehlereintrag (z. B. aus der Zeit, als die Abholung pausiert war oder Shelly kurz nicht erreichbar war). Die Abholung löscht alte Fehler zwar wieder, aber der Kunde sieht noch den alten Stand im Zwischenspeicher.
 - Fehler werden nach einer erfolgreichen Abholung zuverlässig als erledigt markiert und die Anzeige lädt sie neu.
