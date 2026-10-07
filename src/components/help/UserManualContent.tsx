@@ -553,6 +553,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               <li>{T("manual.ev.billingItem1")}</li>
               <li>{T("manual.ev.billingItem2")}</li>
               <li>{T("manual.ev.billingItem3")}</li>
+              <li>{T("manual.ev.billingItem4")}</li>
             </ul>
           </section>
 
