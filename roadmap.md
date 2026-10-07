@@ -40,3 +40,7 @@
 ## Anmeldung & Sicherheit (07.10.)
 - [x] Einladungslink erst nach Passwort-Speichern verbraucht, erneut senden, Profil in allen Bereichen (v1.6.9)
 - [ ] 2FA (Authenticator-App), zunächst Pflicht für Portal-Admins und Partner-Admins
+
+- [x] Portal-Rollen (Admin/Kaufmännisch/Technisch) durch Admins pflegbar (v1.7.0)
+- [x] Partner-Rabatt-Anfragen mit Freigabe/Ablehnung im AICONO Portal (v1.7.0)
+- [ ] Schutz „letzter Portal-Admin“ zusätzlich serverseitig in der Datenbank erzwingen
