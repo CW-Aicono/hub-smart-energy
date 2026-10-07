@@ -22,8 +22,22 @@ async function updateSyncStatus(supabase: any, id: string, status: string) {
  * POST /v2/devices/api/get with select: ["settings"]
  * Returns a map of normalized deviceId → user-assigned name.
  */
-async function fetchDeviceNamesV2(baseUrl: string, authKey: string, deviceIds: string[]): Promise<Map<string, string>> {
+// Namens-Cache pro warmer Instanz: v2-Namensabfragen kosten Shelly-Kontingent
+// (1 Anfrage/s) und lösten zusammen mit dem Status-Abruf HTTP 429 aus.
+const v2NameCache = new Map<string, { name: string | null; at: number }>();
+const V2_NAME_TTL_MS = 6 * 60 * 60 * 1000;
+
+async function fetchDeviceNamesV2(baseUrl: string, authKey: string, allIds: string[]): Promise<Map<string, string>> {
   const nameMap = new Map<string, string>();
+  const nowMs = Date.now();
+  const deviceIds: string[] = [];
+  for (const id of allIds) {
+    const c = v2NameCache.get(normalizeShellyId(id));
+    if (c && nowMs - c.at < V2_NAME_TTL_MS) {
+      if (c.name) nameMap.set(normalizeShellyId(id), c.name);
+    } else deviceIds.push(id);
+  }
+  for (const id of deviceIds) v2NameCache.set(normalizeShellyId(id), { name: null, at: nowMs });
   // v2 API allows max 10 IDs per request
   const chunks: string[][] = [];
   for (let i = 0; i < deviceIds.length; i += 10) {
@@ -49,6 +63,7 @@ async function fetchDeviceNamesV2(baseUrl: string, authKey: string, deviceIds: s
           const name = dev.settings?.name || dev.name;
           if (id && name) {
             nameMap.set(normalizeShellyId(id), String(name));
+            v2NameCache.set(normalizeShellyId(id), { name: String(name), at: Date.now() });
           }
         }
       }
@@ -83,6 +98,7 @@ async function writeSensorSnapshot(
   sensors: any[],
   tenantId: string | null,
   locationId: string | null,
+  persistHistory = true,
 ) {
   try {
     const row: Record<string, unknown> = {
@@ -100,7 +116,9 @@ async function writeSensorSnapshot(
       .from("gateway_sensor_snapshots")
       .upsert(row, { onConflict: "location_integration_id" });
     if (error) console.warn("[shelly snapshot] upsert failed:", error.message);
-    // Sensor-Verlauf: Rohwerte in sensor_readings_raw persistieren
+    // Sensor-Verlauf nur aus der Server-Abholung schreiben, nicht bei
+    // Browser-Abrufen – sonst hängt die Historie davon ab, wer eingeloggt ist.
+    if (!persistHistory) return;
     const { persistSensorHistory } = await import("../_shared/sensorHistory.ts");
     console.log(`[shelly snapshot] persistSensorHistory li=${locationIntegrationId} sensors=${Array.isArray(sensors) ? sensors.length : 0} tenant=${tenantId ?? "-"}`);
     await persistSensorHistory(supabase, {
@@ -226,10 +244,29 @@ serve(async (req) => {
     }
 
     if (action === "getSensors" || action === "refreshSensors") {
+      // Browser-Abrufe bedienen wir aus dem Server-Snapshot, solange dieser
+      // frisch ist. Jeder direkte Shelly-Abruf zählt gegen das Kontingent des
+      // Kontos; mehrere offene Dashboards führten zu HTTP 429.
+      if (!isServiceInvocation && action === "getSensors") {
+        const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+        const ageMs = snap?.fetched_at ? Date.now() - Date.parse(snap.fetched_at) : Infinity;
+        if (snap && snap.status === "fresh" && ageMs < 3 * 60 * 1000 && Array.isArray(snap.sensors) && snap.sensors.length > 0) {
+          return new Response(
+            JSON.stringify({ success: true, sensors: snap.sensors, systemMessages: snap.system_messages ?? [], cached: true, fetchedAt: snap.fetched_at }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+
       await updateSyncStatus(supabase, locationIntegrationId, "syncing");
 
-      // Step 1: Fetch all device statuses
-      const statusRes = await fetch(`${baseUrl}/device/all_status?auth_key=${config.auth_key}`);
+      // Step 1: Fetch all device statuses (einmal erneut versuchen bei HTTP 429)
+      let statusRes = await fetch(`${baseUrl}/device/all_status?auth_key=${config.auth_key}`);
+      if (statusRes.status === 429) {
+        await statusRes.body?.cancel();
+        await new Promise((r) => setTimeout(r, 2500));
+        statusRes = await fetch(`${baseUrl}/device/all_status?auth_key=${config.auth_key}`);
+      }
       if (!statusRes.ok) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
         throw new Error(`Geräte konnten nicht geladen werden: HTTP ${statusRes.status}`);
