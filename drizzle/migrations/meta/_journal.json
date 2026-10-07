@@ -169,6 +169,13 @@
       "when": 1791355296511,
       "tag": "0023_aggregate_raw_power_to_5min",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791370947431,
+      "tag": "0024_schedule_gap_backfill_scheduler",
+      "breakpoints": true
     }
   ]
 }

@@ -131,13 +131,14 @@ function formatLabel(d: Date, period: TimePeriod): string {
 
 /** Custom tooltip for the day view with German number formatting */
 function DayTooltip({ active, payload, label, unit }: any) {
+  const decimals = unit === "W" || unit === "Wh" ? 0 : 2;
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-md border bg-popover p-2 text-popover-foreground shadow-md text-sm">
       <p className="font-medium mb-1">{label}</p>
       {payload.map((entry: any) => (
         <p key={entry.dataKey} style={{ color: entry.color }}>
-          {entry.name}: {entry.value != null ? entry.value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "–"} {unit}
+          {entry.name}: {entry.value != null ? entry.value.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : "–"} {unit}
         </p>
       ))}
     </div>
@@ -224,10 +225,22 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     if (isSensorMeter(primaryMeter)) {
       return (primaryMeter as any).unit || (primaryMeter as any).source_unit_power || config.unit;
     }
-    return selectedPeriod === "day"
-      ? powerUnitForMeter(primaryMeter, config.unit)
-      : energyUnitForMeter(primaryMeter, config.unit);
+    // Die im Widget konfigurierte Einheit hat Vorrang. Leistung wird systemweit
+    // in kW und Energie in kWh gespeichert; die Anzeige rechnet daraus um.
+    const cfg = (config.unit ?? "").toString().trim();
+    if (selectedPeriod === "day") {
+      if (["W", "kW", "MW"].includes(cfg)) return cfg;
+      return powerUnitForMeter(primaryMeter, config.unit);
+    }
+    if (["Wh", "kWh", "MWh"].includes(cfg)) return cfg;
+    return energyUnitForMeter(primaryMeter, config.unit);
   }, [config.meter_ids, config.unit, meterDetails, selectedPeriod]);
+
+  /** Zahlenformat passend zur Einheit: W/Wh ganzzahlig, kW/MW/kWh/MWh mit 2 Dezimalstellen. */
+  const formatWidgetValue = (v: number): string => {
+    const decimals = displayUnit === "W" || displayUnit === "Wh" ? 0 : 2;
+    return v.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  };
 
   // Fetch data: 5-min readings for "day", daily totals otherwise
   // Letzter gespeicherter Wert je Leistungszähler – für den Hinweis „keine gespeicherten Werte“.
@@ -258,7 +271,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   });
 
   const { data: chartData = [], isLoading } = useQuery({
-    queryKey: ["custom-widget-data", definition.id, config.meter_ids, sensorMeterIds, locationId, selectedPeriod, from.toISOString(), to.toISOString()],
+    queryKey: ["custom-widget-data", definition.id, config.meter_ids, sensorMeterIds, locationId, selectedPeriod, displayUnit, from.toISOString(), to.toISOString()],
     queryFn: async () => {
       if (!config.meter_ids.length) return [];
 
@@ -426,12 +439,11 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         }
 
 
-        // Leistungsverläufe werden systemweit in kW gespeichert. Ist der Zähler
-        // in W bzw. MW konfiguriert, für die Anzeige passend umrechnen.
-        const powerScale = (meterId: string): number => {
-          const u = powerUnitForMeter(meterDetails[meterId] as MeterLike | undefined, "kW");
-          if (u === "W") return 1000;
-          if (u === "MW") return 0.001;
+        // Leistungsverläufe werden systemweit in kW gespeichert und hier in
+        // die im Widget konfigurierte Anzeige-Einheit (W/kW/MW) umgerechnet.
+        const powerScale = (): number => {
+          if (displayUnit === "W") return 1000;
+          if (displayUnit === "MW") return 0.001;
           return 1;
         };
         const powerSet = new Set(powerMeterIds);
@@ -440,7 +452,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           if (!valuesByBucket[label]) continue;
           if (!valuesByBucket[label][row.meter_id]) valuesByBucket[label][row.meter_id] = [];
           const v = Number(row.value);
-          valuesByBucket[label][row.meter_id].push(powerSet.has(row.meter_id) ? v * powerScale(row.meter_id) : v);
+          valuesByBucket[label][row.meter_id].push(powerSet.has(row.meter_id) ? v * powerScale() : v);
         }
 
         const rows = timeline.map((label) => {
@@ -507,6 +519,10 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         if (row.einspeisung > 0) hasBidi.add(row.meter_id);
       }
 
+      // Energie-Werte werden systemweit in kWh gespeichert und hier in die im
+      // Widget konfigurierte Anzeige-Einheit (Wh/kWh/MWh) umgerechnet.
+      const energyScale = displayUnit === "Wh" ? 1000 : displayUnit === "MWh" ? 0.001 : 1;
+
       // Group by period label
       const dayMap: Record<string, Record<string, number>> = {};
       for (const row of rows) {
@@ -517,10 +533,10 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         if (hasBidi.has(row.meter_id)) {
           const bezugKey = `${row.meter_id}_bezug`;
           const einspeisungKey = `${row.meter_id}_einspeisung`;
-          dayMap[label][bezugKey] = (dayMap[label][bezugKey] ?? 0) + row.bezug;
-          dayMap[label][einspeisungKey] = (dayMap[label][einspeisungKey] ?? 0) + row.einspeisung;
+          dayMap[label][bezugKey] = (dayMap[label][bezugKey] ?? 0) + row.bezug * energyScale;
+          dayMap[label][einspeisungKey] = (dayMap[label][einspeisungKey] ?? 0) + row.einspeisung * energyScale;
         } else {
-          dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.bezug;
+          dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.bezug * energyScale;
         }
       }
 
@@ -769,7 +785,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
               <div className="flex items-center justify-center h-48">
                 <div className="text-center">
                   <div className="text-5xl font-bold tabular-nums" style={{ color }}>
-                    {Math.round(kpiValue).toLocaleString("de-DE")}
+                    {formatWidgetValue(kpiValue)}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">{displayUnit}</div>
                 </div>
@@ -780,7 +796,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
               <div className="flex items-center justify-center h-48">
                 <div className="text-center">
                   <div className="text-4xl font-bold tabular-nums" style={{ color }}>
-                    {Math.round(kpiValue).toLocaleString("de-DE")}
+                    {formatWidgetValue(kpiValue)}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">{displayUnit}</div>
                 </div>
@@ -806,7 +822,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                         <td className="py-1.5">{row.name}</td>
                         {config.meter_ids.map((mid) => (
                           <td key={mid} className="text-right py-1.5 tabular-nums">
-                            {(row[mid] as number)?.toLocaleString("de-DE", { maximumFractionDigits: 1 }) ?? "–"} {displayUnit}
+                            {typeof row[mid] === "number" ? formatWidgetValue(row[mid] as number) : "–"} {displayUnit}
                           </td>
                         ))}
                       </tr>
