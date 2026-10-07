@@ -4,6 +4,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## v1.7.1 – 07.10.2026
 - Portal-Rollen: Teammitglieder-Tabelle (Rollen-Badges, Status Aktiv/Eingeladen/Deaktiviert, letzter Login) und Dialog „Rollen bearbeiten“. Neue RPCs `portal_staff_overview` und `portal_set_user_roles` (nur super_admin, ändert nur Portal-Rollen), Trigger `guard_last_portal_admin` schützt DB-seitig vor Selbstentzug und Entfernen des letzten Portal-Admins (Migration 0026).
+- Audit: Trigger `audit_portal_role_change` schreibt jede Vergabe/Entzug einer Portal-Rolle mit Bearbeiter und Zeitstempel in `audit_logs` (entity_type `portal_role`, Migration 0027); Anzeige „Änderungsprotokoll“ unter Portal-Rollen.
 
 ## v1.7.0 – 07.10.2026
 - AICONO Portal → Rollen: Spalte „Admin“ in der Portal-Benutzerliste; Admins vergeben/entziehen Admin, Kaufmännisch und Technisch. Selbstentzug und Entzug des letzten Admins gesperrt.

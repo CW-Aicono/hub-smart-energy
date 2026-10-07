@@ -48,6 +48,18 @@ export default function PortalStaffCard() {
     },
   });
 
+  const { data: auditLog = [] } = useQuery({
+    queryKey: ["portal-role-audit"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("audit_logs")
+        .select("id, action, entity_label, actor_email, actor_role, metadata, created_at")
+        .eq("entity_type", "portal_role").order("created_at", { ascending: false }).limit(50);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const roleLabel = (r?: string) => r === "super_admin" ? "Portal-Admin" : ROLES.find((x) => x.role === r)?.label ?? r ?? "–";
+
   const adminCount = staff.filter((s) => s.roles.includes("super_admin")).length;
 
   const save = useMutation({
@@ -62,7 +74,7 @@ export default function PortalStaffCard() {
     onSuccess: (t) => {
       toast({ title: `Die Portal-Rollen von ${t.name || t.email} wurden erfolgreich aktualisiert.` });
       setEdit(null);
-      qc.invalidateQueries({ queryKey: ["portal-staff"] });
+      qc.invalidateQueries({ queryKey: ["portal-staff"] }); qc.invalidateQueries({ queryKey: ["portal-role-audit"] });
     },
     onError: (e: Error) => toast({ title: "Änderung fehlgeschlagen", description: e.message, variant: "destructive" }),
   });
@@ -81,7 +93,7 @@ export default function PortalStaffCard() {
     onSuccess: () => {
       setEmail("");
       toast({ title: "Portal-Benutzer hinzugefügt", description: "Rolle „Technisch“ vergeben – bei Bedarf anpassen." });
-      qc.invalidateQueries({ queryKey: ["portal-staff"] });
+      qc.invalidateQueries({ queryKey: ["portal-staff"] }); qc.invalidateQueries({ queryKey: ["portal-role-audit"] });
     },
     onError: (e: Error) => toast({ title: "Hinzufügen fehlgeschlagen", description: e.message, variant: "destructive" }),
   });
@@ -157,6 +169,37 @@ export default function PortalStaffCard() {
             )}
           </TableBody>
         </Table>
+
+        <div className="space-y-2 pt-2">
+          <h3 className="font-medium">Änderungsprotokoll</h3>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Zeitpunkt</TableHead>
+                <TableHead>Teammitglied</TableHead>
+                <TableHead>Änderung</TableHead>
+                <TableHead>Bearbeiter</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {auditLog.map((a: any) => (
+                <TableRow key={a.id}>
+                  <TableCell className="text-sm text-muted-foreground">{new Date(a.created_at).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "medium" })}</TableCell>
+                  <TableCell>{a.entity_label ?? "–"}</TableCell>
+                  <TableCell>
+                    <Badge variant={a.action === "portal_role_granted" ? "secondary" : "outline"}>
+                      {roleLabel(a.metadata?.role)} {a.action === "portal_role_granted" ? "vergeben" : "entzogen"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{a.actor_email ?? (a.actor_role === "system" ? "System" : "–")}</TableCell>
+                </TableRow>
+              ))}
+              {auditLog.length === 0 && (
+                <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Noch keine protokollierten Änderungen.</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
 
       <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
