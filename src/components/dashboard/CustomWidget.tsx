@@ -602,7 +602,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       case "min": return Math.min(...allValues);
       default: return allValues.reduce((a, b) => a + b, 0);
     }
-  }, [chartData, config, activeChartType]);
+  }, [chartData, config, activeChartType, selectedPeriod]);
 
   return (
     <Card>
