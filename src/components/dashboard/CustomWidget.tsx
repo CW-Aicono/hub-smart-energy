@@ -224,10 +224,22 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
     if (isSensorMeter(primaryMeter)) {
       return (primaryMeter as any).unit || (primaryMeter as any).source_unit_power || config.unit;
     }
-    return selectedPeriod === "day"
-      ? powerUnitForMeter(primaryMeter, config.unit)
-      : energyUnitForMeter(primaryMeter, config.unit);
+    // Die im Widget konfigurierte Einheit hat Vorrang. Leistung wird systemweit
+    // in kW und Energie in kWh gespeichert; die Anzeige rechnet daraus um.
+    const cfg = (config.unit ?? "").toString().trim();
+    if (selectedPeriod === "day") {
+      if (["W", "kW", "MW"].includes(cfg)) return cfg;
+      return powerUnitForMeter(primaryMeter, config.unit);
+    }
+    if (["Wh", "kWh", "MWh"].includes(cfg)) return cfg;
+    return energyUnitForMeter(primaryMeter, config.unit);
   }, [config.meter_ids, config.unit, meterDetails, selectedPeriod]);
+
+  /** Zahlenformat passend zur Einheit: W/Wh ganzzahlig, kW/MW/kWh/MWh mit 2 Dezimalstellen. */
+  const formatWidgetValue = (v: number): string => {
+    const decimals = displayUnit === "W" || displayUnit === "Wh" ? 0 : 2;
+    return v.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  };
 
   // Fetch data: 5-min readings for "day", daily totals otherwise
   // Letzter gespeicherter Wert je Leistungszähler – für den Hinweis „keine gespeicherten Werte“.
