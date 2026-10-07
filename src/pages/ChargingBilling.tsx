@@ -47,6 +47,7 @@ import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateCharging
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { RowActions } from "@/components/ui/row-actions";
+import { downloadCsv, csvNum, csvDate } from "@/lib/chargingCsvExport";
 
 
 
@@ -511,6 +512,36 @@ const ChargingBilling = () => {
   const invoicesPaged = paginate(displayedInvoices, invoicePage);
   const groupsPaged = paginate(groupedSessionRows, groupPage);
 
+  // CSV-Export: exportiert alle gefilterten Zeilen (nicht nur die aktuelle Seite)
+  const exportSuffix = format(periodAnchor, "yyyy-MM-dd") + (period === "all" ? "_alle" : `_${period}`);
+  const statusLabel = (s: string) => s === "active" ? "Aktiv" : s === "completed" ? "Abgeschlossen" : "Fehler";
+  const invStatusLabel = (s: string) => s === "paid" ? "Bezahlt" : s === "issued" ? "Ausgestellt" : "Entwurf";
+  const exportSessionsCsv = () => {
+    if (sessionView === "users") {
+      downloadCsv(`Ladevorgaenge_${exportSuffix}.csv`,
+        ["Ladepunkt", "Start", "Ende", "Dauer (Min.)", "Energie (kWh)", "Status", "RFID-Tag", "Nutzer/Fahrer"],
+        displayedSessions.map((s: any) => [
+          getCpName(s.charge_point_id), csvDate(s.start_time, true), csvDate(s.stop_time, true),
+          s.stop_time ? Math.round((new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 60000) : "",
+          csvNum(s.energy_kwh), statusLabel(s.status), s.id_tag || "", resolveTag(s.id_tag) || "",
+        ]));
+    } else {
+      downloadCsv(`Ladevorgaenge_Gruppen_${exportSuffix}.csv`,
+        ["Abrechnungsgruppe", "Nutzer", "Ladevorgänge", "Energie (kWh)"],
+        groupedSessionRows.map((r: any) => [r.group_name, r.user_count, r.session_count, csvNum(r.energy_kwh)]));
+    }
+  };
+  const exportInvoicesCsv = () => {
+    downloadCsv(`Ladeinfrastruktur_Abrechnungen_${exportSuffix}.csv`,
+      ["Rechnungsnummer", "Rechnungsdatum", "Kunde", "E-Mail", "Abrechnungsgruppe", "Zeitraum von", "Zeitraum bis", "Energie (kWh)", "Netto (€)", "MwSt. (€)", "Brutto (€)", "Status", "Versendet am", "Anzahl Versand"],
+      displayedInvoices.map((inv: any) => [
+        inv.invoice_number || "", csvDate(inv.invoice_date || inv.created_at), inv.user_name || "", inv.user_email || "",
+        inv.billing_group_name || "", csvDate(inv.period_start), csvDate(inv.period_end),
+        csvNum(inv.total_energy_kwh), csvNum(inv.net_amount), csvNum(inv.tax_amount), csvNum(inv.total_amount),
+        invStatusLabel(inv.status), csvDate(inv.email_sent_at, true), inv.email_send_count ?? "",
+      ]));
+  };
+
 
   const currencySymbol = (c?: string) => ({ EUR: "€", CHF: "CHF", GBP: "£", USD: "$" } as Record<string, string>)[c ?? "EUR"] ?? c ?? "€";
   const curSym = currencySymbol(tariffForm.currency);
@@ -637,6 +668,10 @@ const ChargingBilling = () => {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between gap-4">
                   <CardTitle>{t("charging.sessions" as any)}</CardTitle>
+                  <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={exportSessionsCsv} disabled={sessionView === "users" ? displayedSessions.length === 0 : groupedSessionRows.length === 0}>
+                    <Download className="h-4 w-4 mr-2" />CSV-Export
+                  </Button>
                   <div className="flex gap-1 bg-muted rounded-lg p-1">
                     <Button
                       variant={sessionView === "users" ? "default" : "ghost"}
@@ -654,6 +689,7 @@ const ChargingBilling = () => {
                     >
                       Nach Abrechnungsgruppen
                     </Button>
+                  </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -855,6 +891,10 @@ const ChargingBilling = () => {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>{t("charging.invoices" as any)}</CardTitle>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={exportInvoicesCsv} disabled={displayedInvoices.length === 0}>
+                      <Download className="h-4 w-4 mr-2" />CSV-Export
+                    </Button>
                   {isAdmin && (
                     <div className="flex gap-2">
 
@@ -944,6 +984,7 @@ const ChargingBilling = () => {
                       </Button>
                     </div>
                   )}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Input
