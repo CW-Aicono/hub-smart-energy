@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.6.5
+- Shelly-Messwerte bleiben im Tagesverlauf erhalten, auch wenn niemand eingeloggt ist.
+- Weniger Abfragen bei Shelly verhindern wechselnde „Sync-Fehler“-Hinweise.
+- Tacho und Kennzahl zeigen bei Leistung den aktuellen Wert; Verläufe in Watt werden korrekt dargestellt.
+
 ## v1.6.4
 - Partner-Portal zeigt die Module der Kunden wieder korrekt; im AICONO Portal freigegebene Partner-Module bleiben nach erneutem Öffnen erhalten.
 

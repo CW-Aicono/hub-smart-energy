@@ -15319,6 +15319,10 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: number
       }
+      aggregate_raw_power_to_5min: {
+        Args: { p_lookback_minutes?: number; p_meter_ids?: string[] }
+        Returns: number
+      }
       aggregate_sensor_readings_5min: {
         Args: { _max_rows?: number; _since?: string; _until?: string }
         Returns: Json

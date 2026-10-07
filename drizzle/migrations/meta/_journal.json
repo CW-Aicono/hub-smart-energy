@@ -162,6 +162,13 @@
       "when": 1791322525416,
       "tag": "0022_ensure_module_read_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791355296511,
+      "tag": "0023_aggregate_raw_power_to_5min",
+      "breakpoints": true
     }
   ]
 }
