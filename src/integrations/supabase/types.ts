@@ -9707,6 +9707,78 @@ export type Database = {
           },
         ]
       }
+      partner_discount_requests: {
+        Row: {
+          approved_module_codes: string[] | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          discount_type: string
+          duration_months: number | null
+          id: string
+          module_codes: string[]
+          partner_id: string
+          reason: string | null
+          requested_by: string
+          status: string
+          tenant_id: string | null
+          valid_from: string
+          value: number
+        }
+        Insert: {
+          approved_module_codes?: string[] | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          discount_type: string
+          duration_months?: number | null
+          id?: string
+          module_codes: string[]
+          partner_id: string
+          reason?: string | null
+          requested_by: string
+          status?: string
+          tenant_id?: string | null
+          valid_from: string
+          value: number
+        }
+        Update: {
+          approved_module_codes?: string[] | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          discount_type?: string
+          duration_months?: number | null
+          id?: string
+          module_codes?: string[]
+          partner_id?: string
+          reason?: string | null
+          requested_by?: string
+          status?: string
+          tenant_id?: string | null
+          valid_from?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_discount_requests_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_discount_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_members: {
         Row: {
           can_create_tenant: boolean

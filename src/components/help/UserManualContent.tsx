@@ -901,6 +901,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-muted-foreground mb-4">{T("manual.acc.intro")}</p>
             <p className="text-sm text-muted-foreground">{T("manual.acc.adminLevels")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.acc.inviteLink")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.acc.portalRolesDiscounts")}</p>
           </section>
           <Separator />
           <section>

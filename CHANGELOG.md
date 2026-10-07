@@ -2,6 +2,10 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.7.0 – 07.10.2026
+- AICONO Portal → Rollen: Spalte „Admin“ in der Portal-Benutzerliste; Admins vergeben/entziehen Admin, Kaufmännisch und Technisch. Selbstentzug und Entzug des letzten Admins gesperrt.
+- Partner-Rabatt-Anfragen: Partner-Admins fragen unter Partner-Portal → Abrechnung Rabatte für ein oder mehrere Module an (ein Kunde oder alle Kunden). AICONO Portal → Abrechnung: Freigabe ganz/teilweise oder Ablehnung mit Notiz; Freigabe legt Kundenrabatte an.
+
 ## v1.6.9 – 2026-10-07
 - Einladungslink: `activate-invited-user` verbraucht den Token nicht mehr beim Klick, sondern erzeugt bei jedem Klick einen frischen Recovery-Link; neuer Modus `consumeInvite` (nach `updateUser` in SetPassword, E-Mail-Abgleich). Fehlercodes `used|expired|not_found` mit klaren Texten und „Passwort vergessen“-Knopf (`/auth?forgot=1`).
 - Link-Domain: `resolveOrigin` lässt nur `*.aicono.org` und die veröffentlichte App zu, Vorschau-Hosts werden verworfen (Fallback `APP_URL`).

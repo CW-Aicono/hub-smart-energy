@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck, RefreshCw, Receipt, Search } from "lucide-react";
 import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
 import EditInvoiceContent from "@/components/super-admin/EditInvoiceContent";
+import { PortalDiscountRequestsCard } from "@/components/billing/DiscountRequests";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -303,6 +304,7 @@ const SuperAdminBilling = () => {
         </header>
 
         <div className="p-6 space-y-6">
+          <PortalDiscountRequestsCard />
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
