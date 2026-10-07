@@ -131,6 +131,7 @@ function formatLabel(d: Date, period: TimePeriod): string {
 
 /** Custom tooltip for the day view with German number formatting */
 function DayTooltip({ active, payload, label, unit }: any) {
+  const decimals = unit === "W" || unit === "Wh" ? 0 : 2;
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-md border bg-popover p-2 text-popover-foreground shadow-md text-sm">
