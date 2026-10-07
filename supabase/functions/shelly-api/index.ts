@@ -211,6 +211,75 @@ serve(async (req) => {
 
     const baseUrl = `https://${config.server_uri.replace(/^https?:\/\//, "")}`;
 
+    // ── Lückenfüllung aus der Shelly-Cloud-Statistik ─────────────────────────
+    // Shelly Cloud liefert Verlauf nur stündlich (Wh je Phase, Zeitzone Berlin).
+    // Daraus wird die mittlere Leistung je Stunde berechnet und in fehlende
+    // 5-Min-Buckets geschrieben. Vorhandene Live-Werte bleiben unberührt.
+    if (action === "backfillRange") {
+      if (!isServiceInvocation) {
+        return new Response(JSON.stringify({ success: false, error: "Nur intern erlaubt" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const { from, to, meterIds } = body;
+      const fromD = new Date(from), toD = new Date(to);
+      if (isNaN(fromD.getTime()) || isNaN(toD.getTime()) || toD <= fromD) throw new Error("Ungültiger Zeitraum");
+
+      let mq = supabase.from("meters").select("id, sensor_uuid, energy_type, tenant_id")
+        .eq("location_integration_id", locationIntegrationId).eq("is_archived", false).not("sensor_uuid", "is", null);
+      if (Array.isArray(meterIds) && meterIds.length) mq = mq.in("id", meterIds);
+      const { data: meters } = await mq;
+
+      const berlin = (d: Date) => {
+        const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(d).map((x) => [x.type, x.value]));
+        return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+      };
+      const berlinToUtc = (s: string) => {
+        const guess = new Date(s.replace(" ", "T") + "Z");
+        const off = new Date(berlin(guess).replace(" ", "T") + "Z").getTime() - guess.getTime();
+        return new Date(guess.getTime() - off);
+      };
+
+      const STEP = 5 * 60 * 1000;
+      let backfilled = 0;
+      const errors: string[] = [];
+      for (const m of (meters || []) as any[]) {
+        const match = /^([0-9a-f]+)_(?:em)?(\d+)?_?power$/i.exec(m.sensor_uuid) || /^([0-9a-f]+)_(?:em|emeter|em1)?(\d+)_power$/i.exec(m.sensor_uuid);
+        if (!match) continue;
+        const deviceId = match[1];
+        const channel = match[2] ?? "0";
+        let json: any = null;
+        for (const kind of ["em-3p", "em-1p"]) {
+          const qs = new URLSearchParams({ id: deviceId, channel, date_range: "custom", date_from: berlin(new Date(fromD.getTime() - 3600000)), date_to: berlin(toD), auth_key: config.auth_key });
+          let r = await fetch(`${baseUrl}/v2/statistics/power-consumption/${kind}?${qs}`);
+          if (r.status === 429) { await new Promise((ok) => setTimeout(ok, 2000)); r = await fetch(`${baseUrl}/v2/statistics/power-consumption/${kind}?${qs}`); }
+          const j = await r.json().catch(() => null);
+          if (r.ok && Array.isArray(j?.history)) { json = j; break; }
+        }
+        if (!json) { errors.push(`${m.sensor_uuid}: keine Statistik verfügbar`); continue; }
+
+        // Netto-Wh je Stunde (Summe der Phasen, Bezug minus Einspeisung)
+        const hourly = new Map<number, number>();
+        for (const phase of json.history as any[]) {
+          for (const e of (Array.isArray(phase) ? phase : [])) {
+            const t = berlinToUtc(e.datetime).getTime();
+            hourly.set(t, (hourly.get(t) ?? 0) + Number(e.consumption ?? 0) - Number(e.reversed ?? 0));
+          }
+        }
+        const rows: any[] = [];
+        for (let t = Math.floor(fromD.getTime() / STEP) * STEP; t < toD.getTime(); t += STEP) {
+          const hour = Math.floor(t / 3600000) * 3600000;
+          const wh = hourly.get(hour);
+          if (wh === undefined) continue;
+          const kw = wh / 1000; // Wh in 1 h = mittlere Leistung in W → kW
+          rows.push({ meter_id: m.id, tenant_id: m.tenant_id, energy_type: m.energy_type, bucket: new Date(t).toISOString(), power_avg: kw, power_max: kw, sample_count: 1, resolution_minutes: 5, source: "shelly_cloud_backfill" });
+        }
+        if (!rows.length) continue;
+        const { error: insErr, count } = await supabase.from("meter_power_readings_5min")
+          .upsert(rows, { onConflict: "meter_id,bucket,resolution_minutes", ignoreDuplicates: true, count: "exact" });
+        if (insErr) errors.push(`${m.sensor_uuid}: ${insErr.message}`); else backfilled += count ?? 0;
+      }
+      return new Response(JSON.stringify({ success: true, backfilled, errors }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (action === "test") {
       const res = await fetch(`${baseUrl}/device/all_status?auth_key=${config.auth_key}`);
       if (!res.ok) {
