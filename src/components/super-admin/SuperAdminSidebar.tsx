@@ -7,7 +7,7 @@ import { useSATranslation } from "@/hooks/useSATranslation";
 import { saColorPresetNames, SALanguage } from "@/i18n/superAdminTranslations";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
+  LayoutDashboard, LogOut, UserCircle, Building2, BarChart3, Receipt, HeadsetIcon,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, Euro,
   Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap, Settings, Activity,
   Cpu, ListChecks, Briefcase, Plug, Upload, LayoutDashboard as BoardIcon, Puzzle,
@@ -414,6 +414,11 @@ export default function SuperAdminSidebar() {
             </DropdownMenuSub>
 
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <NavLink to="/profile" className="flex items-center cursor-pointer">
+                <UserCircle className="h-4 w-4 mr-2" /> Profil &amp; Passwort
+              </NavLink>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" /> {t("nav.sign_out")}
             </DropdownMenuItem>

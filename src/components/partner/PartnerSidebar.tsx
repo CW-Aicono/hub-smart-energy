@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Building2, LogOut, Briefcase, Users, Receipt, Cpu, ListChecks, Palette, BarChart3, PiggyBank } from "lucide-react";
+import { UserCircle, LayoutDashboard, Building2, LogOut, Briefcase, Users, Receipt, Cpu, ListChecks, Palette, BarChart3, PiggyBank } from "lucide-react";
 import { useAreaAccess } from "@/hooks/useAreaAccess";
 import { setAreaPreference } from "@/lib/areaPreference";
 import { Button } from "@/components/ui/button";
@@ -88,6 +88,9 @@ export default function PartnerSidebar() {
           <p className="text-sm font-medium truncate">{user?.email}</p>
           <p className="text-xs text-muted-foreground">{isPartnerAdmin ? "Partner-Admin" : "Partner-User"}</p>
         </div>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/profile")} aria-label="Profil & Passwort" title="Profil & Passwort">
+          <UserCircle className="h-4 w-4" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"
