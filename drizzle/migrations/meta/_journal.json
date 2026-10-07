@@ -183,6 +183,13 @@
       "when": 1791389361060,
       "tag": "0025_partner_discount_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791390416001,
+      "tag": "0026_portal_staff_role_management",
+      "breakpoints": true
     }
   ]
 }
