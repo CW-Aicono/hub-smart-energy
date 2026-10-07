@@ -36,3 +36,7 @@
 - [x] Shelly HTTP 429 / wechselnder Sync-Fehler: doppelte Abholung entfernt, Browser liest Zwischenspeicher
 - [x] Tacho zeigt aktuellen Leistungswert, W-Einheit im Verlauf korrekt
 - [ ] Live-Deploy v1.6.5 (wartet auf Nutzer)
+
+## Anmeldung & Sicherheit (07.10.)
+- [x] Einladungslink erst nach Passwort-Speichern verbraucht, erneut senden, Profil in allen Bereichen (v1.6.9)
+- [ ] 2FA (Authenticator-App), zunächst Pflicht für Portal-Admins und Partner-Admins

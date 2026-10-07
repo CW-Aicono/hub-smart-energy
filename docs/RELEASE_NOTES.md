@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.6.9
+- Einladungslinks sind robuster: Der Link bleibt gültig, bis das Passwort wirklich gespeichert wurde. Doppelklicks oder Abbrüche machen ihn nicht mehr kaputt. Verständliche Hinweise, wenn ein Link bereits verwendet oder abgelaufen ist.
+- „Einladung erneut senden“ im AICONO Portal unter Benutzer.
+- „Profil & Passwort“ ist jetzt auch im AICONO Portal und im Partner-Portal erreichbar.
+
 ## v1.6.8
 - Unter Ladeinfrastruktur → Abrechnung gibt es jetzt einen Button „CSV-Export“ für Ladevorgänge und Rechnungen. Exportiert werden alle Einträge des gewählten Zeitraums und der Suche – direkt in Excel lesbar.
 

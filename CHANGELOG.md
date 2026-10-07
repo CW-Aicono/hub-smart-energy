@@ -2,6 +2,12 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.6.9 – 2026-10-07
+- Einladungslink: `activate-invited-user` verbraucht den Token nicht mehr beim Klick, sondern erzeugt bei jedem Klick einen frischen Recovery-Link; neuer Modus `consumeInvite` (nach `updateUser` in SetPassword, E-Mail-Abgleich). Fehlercodes `used|expired|not_found` mit klaren Texten und „Passwort vergessen“-Knopf (`/auth?forgot=1`).
+- Link-Domain: `resolveOrigin` lässt nur `*.aicono.org` und die veröffentlichte App zu, Vorschau-Hosts werden verworfen (Fallback `APP_URL`).
+- Neuer Modus `resendInvite`: neuer 7-Tage-Link, alte offene Links werden gesperrt, Rollen bleiben unangetastet (Kunden-Admin nur eigene Organisation). Knopf im AICONO Portal → Benutzer; Kunden-Benutzerverwaltung nutzt denselben Modus.
+- „Profil & Passwort“ im Portal-Benutzermenü und in der Partner-Seitenleiste.
+
 ## v1.6.8 – 2026-10-07
 - Ladeinfrastruktur → Abrechnung: CSV-Export in den Reitern „Ladevorgänge“ (nach Nutzern bzw. Abrechnungsgruppen) und „Rechnungen“. Exportiert alle gefilterten Zeilen (Zeitraum + Suche, nicht nur aktuelle Seite), UTF-8-BOM, Semikolon, deutsches Zahlenformat. Helper `src/lib/chargingCsvExport.ts`.
 
