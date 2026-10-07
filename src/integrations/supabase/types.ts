@@ -15929,6 +15929,22 @@ export type Database = {
         Returns: Json
       }
       portal_roles: { Args: { _uid: string }; Returns: string[] }
+      portal_set_user_roles: {
+        Args: { _roles: string[]; _target: string }
+        Returns: undefined
+      }
+      portal_staff_overview: {
+        Args: never
+        Returns: {
+          email: string
+          invited: boolean
+          is_blocked: boolean
+          last_sign_in_at: string
+          name: string
+          roles: string[]
+          user_id: string
+        }[]
+      }
       purge_meter_power_readings_retention: { Args: never; Returns: undefined }
       refresh_meter_daily_totals: {
         Args: {
