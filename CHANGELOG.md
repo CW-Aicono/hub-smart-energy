@@ -2,6 +2,11 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.6.5 – 2026-10-07
+- Ursache „Werte nach 15 min weg“: Shelly-Rohwerte wurden nie in `meter_power_readings_5min` verdichtet; der Tagesverlauf zeigte nur die letzten 15 min Rohdaten. Neue Funktion `aggregate_raw_power_to_5min` (Migration 0023, inkl. Nachberechnung der letzten 7 Tage), aufgerufen am Ende von `shelly-periodic-sync`. Fremdquellen (Loxone/Bridge) werden nicht überschrieben.
+- HTTP 429: `gateway-periodic-sync` ruft Shelly nicht mehr doppelt ab; `shelly-api` bedient Browser-`getSensors` aus frischem Snapshot (<3 min), wiederholt bei 429 einmal, cached v2-Gerätenamen 6 h; Sensor-Historie nur noch bei Server-Abholung.
+- CustomWidget: Tacho/KPI im Tag-Zeitraum = letzter Messwert statt Summe; Leistungsverlauf wird bei Zählereinheit W/MW aus kW umgerechnet.
+
 ## v1.6.4 – 2026-10-06
 - Migration 0022: Leserechte für `tenant_modules` (Partner-Mitglieder eigener Kunden) und `partner_modules` idempotent sichergestellt, GRANTs, Partner-Portfolio aus aktiven Kundenmodulen ergänzt.
 - Partner-Portal zeigt Lesefehler bei Modulen statt „0 aktiv“; Portal-Dialog „Module für Partner“ übernimmt nur erfolgreich geladene Daten.
