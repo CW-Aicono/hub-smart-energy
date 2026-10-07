@@ -25,6 +25,8 @@ import { isWorkerEnabled } from "../_shared/workerKillswitch.ts";
 /** Integrationstypen mit lokalem Messreihenspeicher → Edge-Function-Name. */
 const BACKFILL_CAPABLE: Record<string, string> = {
   loxone_miniserver: "loxone-api",
+  // Shelly Cloud: stündliche Statistik → mittlere Leistung je Stunde
+  shelly_cloud: "shelly-api",
 };
 
 const BUCKET_MS = 5 * 60 * 1000;
