@@ -270,7 +270,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   });
 
   const { data: chartData = [], isLoading } = useQuery({
-    queryKey: ["custom-widget-data", definition.id, config.meter_ids, sensorMeterIds, locationId, selectedPeriod, from.toISOString(), to.toISOString()],
+    queryKey: ["custom-widget-data", definition.id, config.meter_ids, sensorMeterIds, locationId, selectedPeriod, displayUnit, from.toISOString(), to.toISOString()],
     queryFn: async () => {
       if (!config.meter_ids.length) return [];
 
