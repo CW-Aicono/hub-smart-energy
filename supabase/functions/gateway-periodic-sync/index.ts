@@ -5,7 +5,8 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { isWorkerEnabled } from "../_shared/workerKillswitch.ts";
 
 const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
-  shelly_cloud: "shelly-periodic-sync",
+  // shelly_cloud läuft ausschließlich über den eigenen Job shelly-periodic-sync –
+  // ein zweiter Abruf pro Minute überschritt das Shelly-Kontingent (HTTP 429).
   abb_free_at_home: "abb-api",
   siemens_building_x: "siemens-api",
   tuya_cloud: "tuya-api",

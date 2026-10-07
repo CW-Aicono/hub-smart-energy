@@ -426,11 +426,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         }
 
 
+        // Leistungsverläufe werden systemweit in kW gespeichert. Ist der Zähler
+        // in W bzw. MW konfiguriert, für die Anzeige passend umrechnen.
+        const powerScale = (meterId: string): number => {
+          const u = powerUnitForMeter(meterDetails[meterId] as MeterLike | undefined, "kW");
+          if (u === "W") return 1000;
+          if (u === "MW") return 0.001;
+          return 1;
+        };
+        const powerSet = new Set(powerMeterIds);
         for (const row of mergedRows) {
           const label = getDayBucketLabel(new Date(row.recorded_at));
           if (!valuesByBucket[label]) continue;
           if (!valuesByBucket[label][row.meter_id]) valuesByBucket[label][row.meter_id] = [];
-          valuesByBucket[label][row.meter_id].push(row.value);
+          const v = Number(row.value);
+          valuesByBucket[label][row.meter_id].push(powerSet.has(row.meter_id) ? v * powerScale(row.meter_id) : v);
         }
 
         const rows = timeline.map((label) => {
@@ -565,6 +575,22 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   // Compute single KPI value
   const kpiValue = useMemo(() => {
     if (activeChartType !== "kpi" && activeChartType !== "gauge") return 0;
+    // Leistung (W/kW/MW, m³/h …) im Tagesverlauf: Werte zu summieren ergibt
+    // keinen Sinn. Gezeigt wird der jüngste Messwert (Summe über die Zähler),
+    // bei Durchschnitt/Max/Min die jeweilige Kennzahl über echte Messpunkte.
+    if (selectedPeriod === "day") {
+      const series = config.meter_ids.map((mid) =>
+        chartData.map((d: any) => d[mid]).filter((v: any) => typeof v === "number" && Number.isFinite(v)) as number[],
+      );
+      const flat = series.flat();
+      if (!flat.length) return 0;
+      switch (config.aggregation) {
+        case "avg": return flat.reduce((a, b) => a + b, 0) / flat.length;
+        case "max": return Math.max(...flat);
+        case "min": return Math.min(...flat);
+        default: return series.reduce((acc, s) => acc + (s.length ? s[s.length - 1] : 0), 0);
+      }
+    }
     const allValues = chartData.flatMap((d: any) =>
       config.meter_ids.map((mid) => (d[mid] as number) || 0)
     );
@@ -576,7 +602,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       case "min": return Math.min(...allValues);
       default: return allValues.reduce((a, b) => a + b, 0);
     }
-  }, [chartData, config, activeChartType]);
+  }, [chartData, config, activeChartType, selectedPeriod]);
 
   return (
     <Card>

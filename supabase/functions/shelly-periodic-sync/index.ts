@@ -270,6 +270,13 @@ serve(async (req) => {
       }
     }
 
+    // Rohwerte zu 5-Minuten-Werten verdichten, damit der Tagesverlauf auch
+    // ältere Punkte zeigt (vorher nur die letzten 15 Minuten aus Rohdaten).
+    if (totalReadingsWritten > 0) {
+      const { error: aggErr } = await supabase.rpc("aggregate_raw_power_to_5min", { p_meter_ids: null, p_lookback_minutes: 15 });
+      if (aggErr) console.warn("aggregate_raw_power_to_5min failed:", aggErr.message);
+    }
+
     const successCount = results.filter((r) => r.success).length;
     console.log(`shelly-periodic-sync: Completed. ${successCount}/${results.length} integrations, ${totalReadingsWritten} readings written.`);
 

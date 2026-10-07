@@ -30,3 +30,9 @@
 - [x] v1.6.3: Widget-Hinweis fehlende Werte, Shelly-Sensorfehler sichtbar, Portal-Modulvergabe, Änderungsprotokoll-Migration
 - [ ] Bolan Live-Diagnose ausführen (docs/LIVE_DIAGNOSE_BOLAN_WIDGET.sql) – wartet auf Nutzer
 - [ ] Live-Deploy v1.6.3 freigeben
+
+## Bolan / Shelly (07.10.)
+- [x] Werte nach 15 min verschwunden: Rohwerte werden jetzt zu 5-Min-Werten verdichtet (v1.6.5)
+- [x] Shelly HTTP 429 / wechselnder Sync-Fehler: doppelte Abholung entfernt, Browser liest Zwischenspeicher
+- [x] Tacho zeigt aktuellen Leistungswert, W-Einheit im Verlauf korrekt
+- [ ] Live-Deploy v1.6.5 (wartet auf Nutzer)
