@@ -2,6 +2,9 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.6.7 – 2026-10-07
+- Automatische Lückenfüllung für Shelly Cloud: `shelly-api` Aktion `backfillRange` (nur intern) liest `/v2/statistics/power-consumption/em-3p|em-1p` (stündliche Wh je Phase, Europe/Berlin), berechnet mittlere Netto-Leistung je Stunde und schreibt fehlende 5-Min-Buckets mit `source='shelly_cloud_backfill'` (ignoreDuplicates – Live-Werte bleiben). `gap-backfill-scheduler` kennt jetzt `shelly_cloud`. Migration 0024 plant `gap-backfill-hourly` (Minute 23, versetzt) – der Scheduler war bisher gar nicht eingeplant.
+
 ## v1.6.6 – 2026-10-07
 - CustomWidget: Die im Widget konfigurierte Einheit (W/kW/MW bzw. Wh/kWh/MWh) hat jetzt Vorrang vor der Zähler-Einheit. Werte werden systemweit in kW/kWh gespeichert und für die Anzeige korrekt umgerechnet; W/Wh ganzzahlig, kW/MW/kWh/MWh mit 2 Dezimalstellen (deutsches Zahlenformat). Betrifft Tacho, KPI, Tabelle, Tooltip und Tages-/Periodenverläufe. Behebt: nach STRG+F5 falsche Werte trotz gespeicherter kW-Konfiguration.
 

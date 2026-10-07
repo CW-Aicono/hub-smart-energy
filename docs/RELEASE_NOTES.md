@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.6.7
+- Fallen Messwerte von Shelly-Zählern zeitweise aus (z. B. Internet- oder Serverausfall), werden die Lücken jetzt stündlich automatisch aus der Shelly Cloud nachgeladen. Nachgeladene Abschnitte zeigen den Stundenmittelwert.
+
 ## v1.6.6
 - Dashboard-Widgets: Die gewählte Einheit (z. B. Watt oder Kilowatt) wird jetzt immer zuverlässig angewendet – auch nach einem Neuladen der Seite. Werte werden korrekt umgerechnet und im deutschen Zahlenformat angezeigt.
 
