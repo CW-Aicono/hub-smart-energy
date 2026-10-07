@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Shield, User, UserCheck, UserX, Trash2 } from "lucide-react";
+import { Shield, User, UserCheck, UserX, Trash2, Send } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -208,6 +208,23 @@ const SuperAdminUsers = () => {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <EditSAUserDialog user={u} />
+                            <Button variant="ghost" size="icon" aria-label="Einladung erneut senden"
+                              title="Einladung / Zugangslink erneut senden (alter Link wird ungültig)"
+                              disabled={u.is_blocked || !u.email}
+                              onClick={async () => {
+                                const { data, error } = await supabase.functions.invoke("activate-invited-user", {
+                                  body: { resendInvite: true, email: u.email, redirectTo: window.location.origin },
+                                });
+                                const ok = !error && data?.success;
+                                toast({
+                                  title: ok ? "Einladung erneut gesendet" : "Senden fehlgeschlagen",
+                                  description: ok ? `Neuer 7-Tage-Link an ${u.email} verschickt.` : (data?.error || error?.message || "Unbekannter Fehler"),
+                                  variant: ok ? undefined : "destructive",
+                                });
+                              }}
+                            >
+                              <Send className="h-4 w-4" />
+                            </Button>
                             {(() => {
                               const isLastSA = u.role === "super_admin" && users.filter((x) => x.role === "super_admin" && !x.is_blocked).length <= 1;
                               const isSelf = u.user_id === user?.id;

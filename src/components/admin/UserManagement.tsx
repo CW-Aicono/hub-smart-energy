@@ -244,10 +244,9 @@ const UserManagement = () => {
     try {
       const { data, error } = await supabase.functions.invoke("activate-invited-user", {
         body: {
-          directInvite: true,
+          resendInvite: true,
           email,
           role,
-          tenantId: tenant?.id,
           redirectTo: `${window.location.origin}/set-password`,
         },
       });

@@ -84,6 +84,12 @@ const SetPassword = () => {
       return;
     }
 
+    // Einladungslink erst jetzt als verwendet markieren
+    const inviteToken = sessionStorage.getItem("aicono_invite_token");
+    if (inviteToken) {
+      sessionStorage.removeItem("aicono_invite_token");
+      void supabase.functions.invoke("activate-invited-user", { body: { consumeInvite: true, tokenId: inviteToken } });
+    }
     // Clear recovery flag so user can navigate freely
     clearRecovery();
     setDone(true);
