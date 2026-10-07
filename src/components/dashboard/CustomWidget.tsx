@@ -518,6 +518,10 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         if (row.einspeisung > 0) hasBidi.add(row.meter_id);
       }
 
+      // Energie-Werte werden systemweit in kWh gespeichert und hier in die im
+      // Widget konfigurierte Anzeige-Einheit (Wh/kWh/MWh) umgerechnet.
+      const energyScale = displayUnit === "Wh" ? 1000 : displayUnit === "MWh" ? 0.001 : 1;
+
       // Group by period label
       const dayMap: Record<string, Record<string, number>> = {};
       for (const row of rows) {
@@ -528,10 +532,10 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         if (hasBidi.has(row.meter_id)) {
           const bezugKey = `${row.meter_id}_bezug`;
           const einspeisungKey = `${row.meter_id}_einspeisung`;
-          dayMap[label][bezugKey] = (dayMap[label][bezugKey] ?? 0) + row.bezug;
-          dayMap[label][einspeisungKey] = (dayMap[label][einspeisungKey] ?? 0) + row.einspeisung;
+          dayMap[label][bezugKey] = (dayMap[label][bezugKey] ?? 0) + row.bezug * energyScale;
+          dayMap[label][einspeisungKey] = (dayMap[label][einspeisungKey] ?? 0) + row.einspeisung * energyScale;
         } else {
-          dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.bezug;
+          dayMap[label][row.meter_id] = (dayMap[label][row.meter_id] ?? 0) + row.bezug * energyScale;
         }
       }
 
