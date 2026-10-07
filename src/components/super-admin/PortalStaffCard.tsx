@@ -6,11 +6,13 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Briefcase, Cpu, UserPlus } from "lucide-react";
+import { Briefcase, Cpu, ShieldCheck, UserPlus } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
-type StaffRole = "portal_commercial" | "portal_technical";
+type StaffRole = "super_admin" | "portal_commercial" | "portal_technical";
 const ROLES: { role: StaffRole; label: string; Icon: typeof Cpu }[] = [
+  { role: "super_admin", label: "Admin", Icon: ShieldCheck },
   { role: "portal_commercial", label: "Kaufmännisch", Icon: Briefcase },
   { role: "portal_technical", label: "Technisch", Icon: Cpu },
 ];
@@ -24,6 +26,7 @@ export default function PortalStaffCard() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
+  const { user } = useAuth();
 
   const { data: staff = [], isLoading } = useQuery({
     queryKey: ["portal-staff"],
@@ -31,7 +34,7 @@ export default function PortalStaffCard() {
       const { data, error } = await supabase
         .from("user_roles")
         .select("user_id, role")
-        .in("role", ["portal_commercial", "portal_technical"] as any);
+        .in("role", ["super_admin", "portal_commercial", "portal_technical"] as any);
       if (error) throw error;
       const ids = Array.from(new Set((data ?? []).map((r) => r.user_id)));
       if (!ids.length) return [];
@@ -50,6 +53,10 @@ export default function PortalStaffCard() {
 
   const toggle = useMutation({
     mutationFn: async ({ userId, role, on }: { userId: string; role: StaffRole; on: boolean }) => {
+      if (!on && role === "super_admin") {
+        if (userId === user?.id) throw new Error("Sie können sich die Admin-Rolle nicht selbst entziehen.");
+        if (adminCount <= 1) throw new Error("Der letzte Portal-Admin kann nicht entfernt werden.");
+      }
       const res = on
         ? await supabase.from("user_roles").insert({ user_id: userId, role: role as any })
         : await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", role as any);
@@ -58,6 +65,8 @@ export default function PortalStaffCard() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["portal-staff"] }),
     onError: (e: Error) => toast({ title: "Änderung fehlgeschlagen", description: e.message, variant: "destructive" }),
   });
+
+  const adminCount = staff.filter((s) => s.roles.includes("super_admin")).length;
 
   const add = useMutation({
     mutationFn: async () => {
@@ -83,7 +92,7 @@ export default function PortalStaffCard() {
         <CardDescription>
           Kaufmännisch: Abrechnung, Lizenzen, Modulpreise; bearbeitet Kunden/Partner, liest Roadmap.
           Technisch: Gateways, Templates, OCPP, Monitoring, Support; bearbeitet Roadmap, liest Kunden/Partner.
-          Portal-Admins (oben) dürfen alles.
+          Admin: darf alles, auch Portal-Rollen vergeben. Mehrere Rollen pro Person sind möglich.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -111,7 +120,7 @@ export default function PortalStaffCard() {
                   <TableCell key={r.role}>
                     <Checkbox
                       checked={s.roles.includes(r.role)}
-                      disabled={toggle.isPending}
+                      disabled={toggle.isPending || (r.role === "super_admin" && s.roles.includes("super_admin") && (s.user_id === user?.id || adminCount <= 1))}
                       onCheckedChange={(v) => toggle.mutate({ userId: s.user_id, role: r.role, on: !!v })}
                       aria-label={r.label}
                     />
@@ -120,7 +129,7 @@ export default function PortalStaffCard() {
               </TableRow>
             ))}
             {!isLoading && staff.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Noch keine Portal-Benutzer.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Noch keine Portal-Benutzer.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
