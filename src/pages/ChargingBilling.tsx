@@ -690,6 +690,7 @@ const ChargingBilling = () => {
                       Nach Abrechnungsgruppen
                     </Button>
                   </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Input
@@ -983,6 +984,7 @@ const ChargingBilling = () => {
                       </Button>
                     </div>
                   )}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Input
