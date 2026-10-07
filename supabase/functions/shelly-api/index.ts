@@ -422,6 +422,7 @@ serve(async (req) => {
         sensors,
         (li as any).location?.tenant_id ?? null,
         (li as any).location_id ?? null,
+        isServiceInvocation,
       );
       return new Response(JSON.stringify({ success: true, sensors }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
