@@ -96,8 +96,8 @@ const handler = async (req: Request): Promise<Response> => {
         // Kunden-Admin: only users of the own tenant (home tenant or membership)
         let allowed = !!target && !!tenantId && target.tenant_id === tenantId;
         if (!allowed && target && tenantId) {
-          const { data: m } = await supabase.from("user_tenant_memberships").select("user_id").eq("user_id", target.user_id).eq("tenant_id", tenantId).maybeSingle();
-          allowed = !!m;
+          const { data: m } = await supabase.rpc("is_tenant_member", { _user_id: target.user_id, _tenant_id: tenantId });
+          allowed = m === true;
         }
         if (!allowed) return json({ success: false, error: "Nur Benutzer der eigenen Organisation." }, 403);
       }

@@ -15,6 +15,7 @@ const AcceptInvite = () => {
 
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tokenId) {
@@ -30,11 +31,24 @@ const AcceptInvite = () => {
       const { data, error } = await supabase.functions.invoke("activate-invited-user", {
         body: { getInviteLink: true, tokenId },
       });
-      if (error || !data?.success) {
-        setErrorMessage(data?.error || t("invite.expiredLink" as any));
+      let payload: any = data;
+      if (error && (error as any).context?.json) {
+        try { payload = await (error as any).context.json(); } catch { /* ignore */ }
+      }
+      if (!payload?.success) {
+        const code = payload?.code ?? null;
+        setErrorCode(code);
+        setErrorMessage(
+          code === "used" ? "Dieser Link wurde bereits zum Festlegen des Passworts verwendet. Bitte melden Sie sich an oder nutzen Sie „Passwort vergessen“."
+          : code === "expired" ? "Dieser Link ist abgelaufen (7 Tage). Bitte bitten Sie Ihren Administrator um eine neue Einladung."
+          : code === "not_found" ? "Dieser Link ist unbekannt – evtl. wurde inzwischen eine neuere Einladung verschickt. Bitte den Link aus der neuesten E-Mail verwenden."
+          : payload?.error || t("invite.expiredLink" as any),
+        );
         setStatus("error");
         return;
       }
+      // Merken, damit der Link erst nach erfolgreichem Passwort-Speichern verbraucht wird.
+      sessionStorage.setItem("aicono_invite_token", tokenId);
       // Redirect to the Supabase recovery action link.
       // The RecoveryGuard + useAuth isRecovery flag will ensure the user
       // lands on /set-password and cannot navigate away until PW is set.
@@ -75,7 +89,12 @@ const AcceptInvite = () => {
               <div className="flex flex-col items-center gap-4 py-6">
                 <AlertCircle className="h-16 w-16 text-destructive" />
                 <p className="text-center text-muted-foreground text-sm">{errorMessage}</p>
-                <Button variant="outline" onClick={() => navigate("/auth")}>{t("invite.toLogin" as any)}</Button>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button variant="outline" onClick={() => navigate("/auth")}>{t("invite.toLogin" as any)}</Button>
+                  {errorCode !== "expired" && (
+                    <Button variant="outline" onClick={() => navigate("/auth?forgot=1")}>Passwort vergessen</Button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-6 py-4">
