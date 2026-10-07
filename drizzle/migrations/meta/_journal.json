@@ -204,6 +204,13 @@
       "when": 1791390854501,
       "tag": "0028_fix_audit_portal_role_change_uuid_cast",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791390870269,
+      "tag": "0029_fix_audit_portal_role_change_profile_columns",
+      "breakpoints": true
     }
   ]
 }
