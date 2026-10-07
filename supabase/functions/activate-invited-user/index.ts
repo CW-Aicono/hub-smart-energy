@@ -17,49 +17,44 @@ const handler = async (req: Request): Promise<Response> => {
 
     const body = await req.json();
 
-    // ── MODE: Retrieve invite action_link by token (no auth needed) ──
-    // Called from /accept-invite page when user clicks the button
+    const json = (obj: unknown, status = 200) =>
+      new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json", ...corsHeaders } });
+
+    // ── MODE: Retrieve a fresh sign-in link by token (no auth needed) ──
+    // The token is NOT consumed here – only after the password was saved (consumeInvite).
     if (body.getInviteLink) {
       const { tokenId } = body;
-      if (!tokenId) throw new Error("Missing tokenId");
+      if (!tokenId || typeof tokenId !== "string") return json({ success: false, code: "not_found", error: "Einladungslink unvollständig." }, 400);
 
-      const { data: tokenRow, error: tokenError } = await supabase
-        .from("invite_tokens")
-        .select("*")
-        .eq("id", tokenId)
-        .single();
+      const { data: tokenRow } = await supabase.from("invite_tokens").select("*").eq("id", tokenId).maybeSingle();
+      if (!tokenRow) return json({ success: false, code: "not_found", error: "Einladungslink nicht gefunden." }, 404);
+      if (tokenRow.used_at) return json({ success: false, code: "used", error: "Dieser Einladungslink wurde bereits verwendet." }, 410);
+      if (new Date(tokenRow.expires_at) < new Date()) return json({ success: false, code: "expired", error: "Dieser Einladungslink ist abgelaufen." }, 410);
 
-      if (tokenError || !tokenRow) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Einladungslink nicht gefunden oder abgelaufen." }),
-          { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
+      // Recovery links are single-use → generate a fresh one on every click.
+      let redirectTo = `${resolveOrigin(null)}/set-password`;
+      try {
+        const rt = new URL(tokenRow.action_link).searchParams.get("redirect_to");
+        if (rt) redirectTo = `${resolveOrigin(rt)}/set-password`;
+      } catch { /* keep default */ }
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: "recovery", email: tokenRow.email, options: { redirectTo },
+      });
+      if (linkError || !linkData?.properties?.action_link) {
+        return json({ success: false, code: "error", error: "Anmeldelink konnte nicht erzeugt werden." }, 500);
       }
+      return json({ success: true, actionLink: linkData.properties.action_link, email: tokenRow.email });
+    }
 
-      if (tokenRow.used_at) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Dieser Einladungslink wurde bereits verwendet." }),
-          { status: 410, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
-
-      if (new Date(tokenRow.expires_at) < new Date()) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Dieser Einladungslink ist abgelaufen." }),
-          { status: 410, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
-      }
-
-      // Mark as used
-      await supabase
-        .from("invite_tokens")
-        .update({ used_at: new Date().toISOString() })
-        .eq("id", tokenId);
-
-      return new Response(
-        JSON.stringify({ success: true, actionLink: tokenRow.action_link, email: tokenRow.email }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+    // ── MODE: Mark invite as used after the password was saved (auth: invited user) ──
+    if (body.consumeInvite) {
+      const authH = req.headers.get("Authorization");
+      if (!authH || typeof body.tokenId !== "string") return json({ success: false }, 400);
+      const { data: { user } } = await supabase.auth.getUser(authH.replace("Bearer ", ""));
+      if (!user?.email) return json({ success: false }, 401);
+      await supabase.from("invite_tokens").update({ used_at: new Date().toISOString() })
+        .eq("id", body.tokenId).ilike("email", user.email).is("used_at", null);
+      return json({ success: true });
     }
 
     // ── All other modes require authentication ──
@@ -90,6 +85,36 @@ const handler = async (req: Request): Promise<Response> => {
     const tenantId = callerProfile?.tenant_id;
 
     const { redirectTo } = body;
+
+    // ── MODE: Resend invitation / access link for an existing user (roles stay untouched) ──
+    if (body.resendInvite) {
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      if (!email) return json({ success: false, error: "E-Mail fehlt." }, 400);
+      const callerIsSuper = roles.includes("super_admin");
+      const { data: target } = await supabase.from("profiles").select("user_id, tenant_id, contact_person").ilike("email", email).maybeSingle();
+      if (!callerIsSuper) {
+        // Kunden-Admin: only users of the own tenant (home tenant or membership)
+        let allowed = !!target && !!tenantId && target.tenant_id === tenantId;
+        if (!allowed && target && tenantId) {
+          const { data: m } = await supabase.from("user_tenant_memberships").select("user_id").eq("user_id", target.user_id).eq("tenant_id", tenantId).maybeSingle();
+          allowed = !!m;
+        }
+        if (!allowed) return json({ success: false, error: "Nur Benutzer der eigenen Organisation." }, 403);
+      }
+      const origin = resolveOrigin(typeof redirectTo === "string" ? redirectTo : req.headers.get("Origin"));
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: "recovery", email, options: { redirectTo: `${origin}/set-password` },
+      });
+      if (linkError || !linkData?.properties?.action_link) return json({ success: false, error: "Für diese E-Mail existiert kein Konto." }, 404);
+      // Invalidate older open links
+      await supabase.from("invite_tokens").update({ used_at: new Date().toISOString() }).ilike("email", email).is("used_at", null);
+      const { data: tokenRow, error: tErr } = await supabase.from("invite_tokens")
+        .insert({ action_link: linkData.properties.action_link, email }).select("id").single();
+      if (tErr || !tokenRow) return json({ success: false, error: "Einladung konnte nicht gespeichert werden." }, 500);
+      const url = `${origin}/accept-invite?t=${tokenRow.id}`;
+      const emailSent = await sendInvitationEmail(supabase, email, target?.contact_person, url, target?.tenant_id ?? null, body.role || "user");
+      return json({ success: true, emailSent });
+    }
 
     // ── MODE 1: Direct invite (new flow – no invitation record needed) ──
     if (body.directInvite) {
@@ -173,7 +198,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       // Generate password-reset link
-      const appSetPasswordUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
+      const appSetPasswordUrl = `${resolveOrigin(typeof redirectTo === "string" ? redirectTo : req.headers.get("Origin"))}/set-password`;
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: "recovery",
         email,
@@ -258,7 +283,7 @@ const handler = async (req: Request): Promise<Response> => {
       .update({ accepted_at: new Date().toISOString() })
       .eq("id", invitationId);
 
-    const appSetPasswordUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
+    const appSetPasswordUrl = `${resolveOrigin(typeof redirectTo === "string" ? redirectTo : req.headers.get("Origin"))}/set-password`;
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email: invitation.email,
@@ -301,6 +326,18 @@ const handler = async (req: Request): Promise<Response> => {
     );
   }
 };
+
+/** Only production/staging hosts are allowed in mail links – never preview hosts. */
+function resolveOrigin(candidate: string | null | undefined): string {
+  const fallback = (Deno.env.get("APP_URL") || "https://hub-smart-energy.lovable.app").replace(/\/$/, "");
+  if (!candidate) return fallback;
+  try {
+    const u = new URL(candidate);
+    const h = u.hostname;
+    if (u.protocol === "https:" && (h === "aicono.org" || h.endsWith(".aicono.org") || h === "hub-smart-energy.lovable.app")) return u.origin;
+  } catch { /* ignore */ }
+  return fallback;
+}
 
 async function sendInvitationEmail(
   // deno-lint-ignore no-explicit-any
