@@ -438,12 +438,11 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         }
 
 
-        // Leistungsverläufe werden systemweit in kW gespeichert. Ist der Zähler
-        // in W bzw. MW konfiguriert, für die Anzeige passend umrechnen.
-        const powerScale = (meterId: string): number => {
-          const u = powerUnitForMeter(meterDetails[meterId] as MeterLike | undefined, "kW");
-          if (u === "W") return 1000;
-          if (u === "MW") return 0.001;
+        // Leistungsverläufe werden systemweit in kW gespeichert und hier in
+        // die im Widget konfigurierte Anzeige-Einheit (W/kW/MW) umgerechnet.
+        const powerScale = (): number => {
+          if (displayUnit === "W") return 1000;
+          if (displayUnit === "MW") return 0.001;
           return 1;
         };
         const powerSet = new Set(powerMeterIds);
@@ -452,7 +451,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           if (!valuesByBucket[label]) continue;
           if (!valuesByBucket[label][row.meter_id]) valuesByBucket[label][row.meter_id] = [];
           const v = Number(row.value);
-          valuesByBucket[label][row.meter_id].push(powerSet.has(row.meter_id) ? v * powerScale(row.meter_id) : v);
+          valuesByBucket[label][row.meter_id].push(powerSet.has(row.meter_id) ? v * powerScale() : v);
         }
 
         const rows = timeline.map((label) => {
