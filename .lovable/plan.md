@@ -16,7 +16,11 @@ Ein Aufräumjob fasst Leistungswerte zu 15-Minuten-Blöcken zusammen (`compact_m
 ### Neu: Einheit im Verlauf
 Das Diagramm zeigt etwa 8–9 „W“, live sind es aber etwa 9.488 W. Der Verlauf ist also wahrscheinlich in kW gespeichert und wird als W beschriftet. Ich prüfe das mit demselben Befehl und vereinheitliche die Einheit.
 
-## 2. „Sync-Fehler: Shelly“ beim Kunden, bei dir „Online“
+## 2. „Sync-Fehler: Shelly“ und Verbindungsabbrüche – Ursache: zu viele Abfragen (HTTP 429)
+Die Meldung „Geräte konnten nicht geladen werden: HTTP 429“ heißt: Die Shelly-Cloud weist Abfragen ab, weil in kurzer Zeit zu viele gekommen sind. Derzeit fragen gleichzeitig die automatische Abholung, jedes geöffnete Dashboard (Live-Werte) und die Geräteliste dasselbe Shelly-Konto ab. Je mehr Leute eingeloggt sind, desto öfter wird das Limit erreicht. Danach kommen Lücken und „kein Sync seit > 30 min“.
+- Nur noch die Abholung auf dem Server fragt Shelly direkt ab. Dashboards und Gerätelisten lesen den zuletzt gespeicherten Wert (höchstens ca. 1 Minute alt) und belasten Shelly nicht mehr.
+- Mehrere Standorte mit demselben Shelly-Konto (Keplerweg und Prozessionsweg) werden in einem Abruf geholt statt in zwei.
+- Bei 429 wartet die Abholung kurz und versucht es einmal neu. Erst danach entsteht ein Fehlereintrag.
 Der Hinweis stammt aus einem alten Fehlereintrag (z. B. aus der Zeit, als die Abholung pausiert war oder Shelly kurz nicht erreichbar war). Die Abholung löscht alte Fehler zwar wieder, aber der Kunde sieht noch den alten Stand im Zwischenspeicher.
 - Fehler werden nach einer erfolgreichen Abholung zuverlässig als erledigt markiert und die Anzeige lädt sie neu.
 - Ein kurzer einzelner Aussetzer zeigt keinen Fehler mehr an, sondern erst wiederholte Fehlschläge (z. B. 3 in Folge).
