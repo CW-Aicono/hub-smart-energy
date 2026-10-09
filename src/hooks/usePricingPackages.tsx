@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { PackageDef, UnitPrice } from "@/lib/packagePricing";
 
 export interface PricingCatalog {
-  packages: (PackageDef & { sort: number; active: boolean; modules: string[] })[];
+  packages: (PackageDef & { sort: number; active: boolean; modules: string[]; partner_unlock_fee: number })[];
   units: (UnitPrice & { name: string; unit: string })[];
   flags: Record<string, "sellable" | "hidden" | "on_request">;
 }
@@ -23,7 +23,7 @@ export function usePricingPackages() {
       for (const r of [p, m, u, f]) if (r.error) throw r.error;
       return {
         packages: (p.data ?? []).map((x: any) => ({
-          ...x, uvp: Number(x.uvp), ek: Number(x.ek),
+          ...x, uvp: Number(x.uvp), ek: Number(x.ek), partner_unlock_fee: Number(x.partner_unlock_fee ?? 0),
           modules: (m.data ?? []).filter((y: any) => y.package_code === x.code).map((y: any) => y.module_code),
         })),
         units: (u.data ?? []).map((x: any) => ({ ...x, uvp: Number(x.uvp), ek: Number(x.ek) })),
@@ -41,5 +41,13 @@ export function usePricingPackages() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["pricing-catalog"] }),
   });
 
-  return { ...query, catalog: query.data, updatePrice };
+  const updateUnlockFee = useMutation({
+    mutationFn: async ({ code, fee }: { code: string; fee: number }) => {
+      const { error } = await (supabase as any).from("pricing_packages").update({ partner_unlock_fee: fee, updated_at: new Date().toISOString() }).eq("code", code);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pricing-catalog"] }),
+  });
+
+  return { ...query, catalog: query.data, updatePrice, updateUnlockFee };
 }

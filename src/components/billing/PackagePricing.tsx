@@ -46,7 +46,7 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
       </CardHeader>
       <CardContent className="space-y-6">
         <Table>
-          <TableHeader><TableRow><TableHead>Paket</TableHead><TableHead>Module</TableHead><TableHead>Voraussetzung</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Paket</TableHead><TableHead>Module</TableHead><TableHead>Voraussetzung</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right" title="Einmalig an den Partner, wenn ihm das erste Modul des Pakets freigeschaltet wird">Freischaltung Partner</TableHead></TableRow></TableHeader>
           <TableBody>
             {catalog.packages.map((p) => (
               <TableRow key={p.code}>
@@ -55,6 +55,16 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
                 <TableCell className="text-xs">{p.requires_package ? catalog.packages.find((x) => x.code === p.requires_package)?.name : p.requires_any_other ? "mind. ein anderes Paket" : "–"}</TableCell>
                 <TableCell className="text-right">{p.always_active ? eur(0) : cell("pricing_packages", p.code, p.uvp, p.ek, "uvp")}</TableCell>
                 <TableCell className="text-right">{p.always_active ? eur(0) : cell("pricing_packages", p.code, p.uvp, p.ek, "ek")}</TableCell>
+                <TableCell className="text-right">{p.always_active ? "–" : (
+                  <Input className="h-8 w-24 ml-auto text-right" disabled={!canEdit}
+                    defaultValue={p.partner_unlock_fee.toLocaleString("de-DE", { minimumFractionDigits: 2 })}
+                    onBlur={async (e) => {
+                      const v = Number(e.target.value.replace(/\./g, "").replace(",", "."));
+                      if (!Number.isFinite(v) || v < 0 || v === p.partner_unlock_fee) return;
+                      try { await updateUnlockFee.mutateAsync({ code: p.code, fee: v }); toast({ title: "Freischaltgebühr gespeichert" }); }
+                      catch (err) { toast({ title: "Fehler", description: (err as Error).message, variant: "destructive" }); }
+                    }} />
+                )}</TableCell>
               </TableRow>
             ))}
           </TableBody>
