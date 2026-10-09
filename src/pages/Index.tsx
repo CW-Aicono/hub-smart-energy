@@ -36,7 +36,9 @@ const Index = () => {
     // Der Wizard wird nur einmal pro Mandant gezeigt (vom Erst-Nutzer).
     if (tenantLoading) return;
     setOnboardingChecked(true);
-    if (tenant && !(tenant as any).onboarding_completed) {
+    let dismissed = false;
+    try { dismissed = !!tenant && sessionStorage.getItem(`onboarding_dismissed:${tenant.id}`) === "1"; } catch { /* ignore */ }
+    if (tenant && !(tenant as any).onboarding_completed && !dismissed) {
       navigate("/getting-started", { replace: true });
     }
   }, [user, onboardingChecked, navigate, tenant, tenantLoading]);

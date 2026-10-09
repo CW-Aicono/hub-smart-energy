@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## Unveröffentlicht
+- Einrichtungsassistent: „Abbrechen“ führt jetzt zuverlässig ins Dashboard, statt den Assistenten erneut zu öffnen.
+
 ## v1.8.1 – 09.10.2026
 - Aktive Lizenzen und Gain-Sharing haben eigene Symbole. Modulpreise und Bundles stehen gemeinsam unter „Module & Bundles“ mit zwei Reitern und unterschiedlichen Symbolen.
 
