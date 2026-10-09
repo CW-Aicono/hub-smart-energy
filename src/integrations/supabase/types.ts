@@ -9937,6 +9937,7 @@ export type Database = {
           custom_domain: string | null
           id: string
           is_active: boolean
+          lexware_contact_id: string | null
           logo_url: string | null
           name: string
           notes: string | null
@@ -9961,6 +9962,7 @@ export type Database = {
           custom_domain?: string | null
           id?: string
           is_active?: boolean
+          lexware_contact_id?: string | null
           logo_url?: string | null
           name: string
           notes?: string | null
@@ -9985,6 +9987,7 @@ export type Database = {
           custom_domain?: string | null
           id?: string
           is_active?: boolean
+          lexware_contact_id?: string | null
           logo_url?: string | null
           name?: string
           notes?: string | null
@@ -11328,6 +11331,7 @@ export type Database = {
           description: string | null
           ek: number
           name: string
+          partner_unlock_fee: number
           requires_any_other: boolean
           requires_package: string | null
           sort: number
@@ -11341,6 +11345,7 @@ export type Database = {
           description?: string | null
           ek?: number
           name: string
+          partner_unlock_fee?: number
           requires_any_other?: boolean
           requires_package?: string | null
           sort?: number
@@ -11354,6 +11359,7 @@ export type Database = {
           description?: string | null
           ek?: number
           name?: string
+          partner_unlock_fee?: number
           requires_any_other?: boolean
           requires_package?: string | null
           sort?: number
@@ -14253,13 +14259,16 @@ export type Database = {
           created_at: string
           document_type: string
           id: string
+          invoice_kind: string
           invoice_number: string
           lexware_invoice_id: string | null
           line_items: Json | null
           module_total: number
+          partner_id: string | null
           pdf_url: string | null
           period_end: string
           period_start: string
+          source_ref: string | null
           status: string
           support_total: number
           tenant_id: string
@@ -14270,13 +14279,16 @@ export type Database = {
           created_at?: string
           document_type?: string
           id?: string
+          invoice_kind?: string
           invoice_number: string
           lexware_invoice_id?: string | null
           line_items?: Json | null
           module_total?: number
+          partner_id?: string | null
           pdf_url?: string | null
           period_end: string
           period_start: string
+          source_ref?: string | null
           status?: string
           support_total?: number
           tenant_id: string
@@ -14287,19 +14299,29 @@ export type Database = {
           created_at?: string
           document_type?: string
           id?: string
+          invoice_kind?: string
           invoice_number?: string
           lexware_invoice_id?: string | null
           line_items?: Json | null
           module_total?: number
+          partner_id?: string | null
           pdf_url?: string | null
           period_end?: string
           period_start?: string
+          source_ref?: string | null
           status?: string
           support_total?: number
           tenant_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tenant_invoices_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tenant_invoices_tenant_id_fkey"
             columns: ["tenant_id"]

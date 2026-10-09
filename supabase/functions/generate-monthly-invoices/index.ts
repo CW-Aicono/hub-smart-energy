@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // 1. Get all tenants
     const { data: tenants, error: tErr } = await supabase
       .from("tenants")
-      .select("id, name, support_price_per_15min, is_aicono_member, is_kommune");
+      .select("id, name, partner_id, support_price_per_15min, is_aicono_member, is_kommune");
     if (tErr) throw tErr;
 
     // 2. Get all tenant_modules (active)
@@ -101,6 +101,33 @@ Deno.serve(async (req) => {
       d.module_code ? d.module_code === code : d.bundle_id ? (bundleModules[d.bundle_id] ?? []).includes(code) : true;
     const invoicedDiscountIds: string[] = [];
 
+    // 3e. Paketbuchungen (neue Preislogik). Mandanten mit Paketbuchung werden über
+    // den Paketkatalog abgerechnet, alle anderen weiter über module_prices (Altpreis).
+    const pkgByTenant: Record<string, string[]> = {};
+    const pkgDefs: Record<string, { name: string; uvp: number; ek: number; always_active: boolean }> = {};
+    const unitPrice: Record<string, { uvp: number; ek: number }> = {};
+    const locCount: Record<string, number> = {};
+    {
+      const [{ data: bookings }, { data: defs }, { data: units }, { data: locs }] = await Promise.all([
+        supabase.from("tenant_package_bookings").select("tenant_id, package_code, booked_at, cancelled_at")
+          .lt("booked_at", lastMonthStart.toISOString())
+          .or(`cancelled_at.is.null,cancelled_at.gte.${lastMonthStart.toISOString()}`),
+        supabase.from("pricing_packages").select("code, name, uvp, ek, always_active"),
+        supabase.from("pricing_unit_prices").select("code, uvp, ek"),
+        supabase.from("locations").select("tenant_id"),
+      ]);
+      for (const b of bookings ?? []) (pkgByTenant[b.tenant_id] ??= []).push(b.package_code);
+      for (const d of defs ?? []) pkgDefs[d.code] = { name: d.name, uvp: Number(d.uvp), ek: Number(d.ek), always_active: !!d.always_active };
+      for (const u of units ?? []) unitPrice[u.code] = { uvp: Number(u.uvp), ek: Number(u.ek) };
+      for (const l of locs ?? []) if (l.tenant_id) locCount[l.tenant_id] = (locCount[l.tenant_id] ?? 0) + 1;
+      // Mandanten, deren gesamte Buchungshistorie erst im Abrechnungsmonat beginnt, sind über
+      // die Anteilsrechnung abgedeckt; sie haben hier keine Einträge (booked_at < Monatsbeginn).
+      const { data: anyBooking } = await supabase.from("tenant_package_bookings").select("tenant_id").lt("booked_at", currentMonthStart.toISOString());
+      for (const b of anyBooking ?? []) pkgByTenant[b.tenant_id] ??= [];
+    }
+    const monthKey = fmt(lastMonthStart).slice(0, 7);
+    const partnerDrafts: any[] = [];
+
     // 4. Get support sessions from last month for all tenants
     const { data: supportSessions, error: sErr } = await supabase
       .from("support_sessions")
@@ -120,7 +147,7 @@ Deno.serve(async (req) => {
     // Match by month: any invoice whose period overlaps this billing month
     const { data: existingInvoices } = await supabase
       .from("tenant_invoices")
-      .select("id, tenant_id, line_items, module_total, support_total, amount, period_start, period_end, status, lexware_invoice_id")
+      .select("id, tenant_id, partner_id, invoice_kind, source_ref, line_items, module_total, support_total, amount, period_start, period_end, status, lexware_invoice_id")
       .gte("period_start", fmt(lastMonthStart))
       .lte("period_start", fmt(lastMonthEnd))
       .neq("status", "voided");
@@ -129,6 +156,8 @@ Deno.serve(async (req) => {
     const duplicatesToDelete: string[] = [];
     for (const inv of existingInvoices ?? []) {
       // Never merge into or delete Lexware-synced invoices
+      // Einmalrechnungen und an Partner adressierte Rechnungen nie zusammenführen
+      if (inv.invoice_kind === "one_time" || inv.partner_id) continue;
       if (inv.lexware_invoice_id) {
         // Keep Lexware-synced invoices as-is, don't use as merge target
         continue;
@@ -175,7 +204,37 @@ Deno.serve(async (req) => {
       const prepaidDiscounts = tenantDiscounts.filter((d: any) => (d.payment_mode ?? "monthly") !== "monthly");
       const grossByCode: Record<string, number> = {};
       const netByCode: Record<string, number> = {};
-      for (const tm of tenantModules) {
+      const isPkg = Object.prototype.hasOwnProperty.call(pkgByTenant, tenant.id);
+      if (isPkg) {
+        // Paketkunde: Pakete + Mengenpreise. Partnerkunde -> Entwurf an Partner zum EK, sonst Kunde zur UVP.
+        const toPartner = !!tenant.partner_id;
+        const price = (x: { uvp: number; ek: number } | undefined) => Number((toPartner ? x?.ek : x?.uvp) ?? 0);
+        const codes = [...new Set(pkgByTenant[tenant.id])];
+        const lines: any[] = [];
+        for (const c of codes) {
+          const d = pkgDefs[c];
+          if (!d || d.always_active) continue;
+          const a = price(d);
+          if (a > 0) lines.push({ type: "package", code: c, label: d.name, quantity: 1, unit_price: a, amount: a });
+        }
+        const extraLoc = codes.includes("p6_enterprise") ? 0 : Math.max(0, (locCount[tenant.id] ?? 0) - 1);
+        const lp = price(unitPrice["extra_location"]);
+        if (extraLoc > 0 && lp > 0) lines.push({ type: "package_unit", code: "extra_location", label: `${extraLoc} weitere Liegenschaft(en)`, quantity: extraLoc, unit_price: lp, amount: Math.round(extraLoc * lp * 100) / 100 });
+        const cpp = price(unitPrice["charge_point"]);
+        if (codes.includes("p4_charging") && activeCp > 0 && cpp > 0) lines.push({ type: "package_unit", code: "charge_point", label: `${activeCp} aktive Ladepunkte`, quantity: activeCp, unit_price: cpp, amount: Math.round(activeCp * cpp * 100) / 100 });
+        const sum = Math.round(lines.reduce((x, l) => x + l.amount, 0) * 100) / 100;
+        if (toPartner) {
+          if (lines.length) partnerDrafts.push({ tenant_id: tenant.id, partner_id: tenant.partner_id, invoice_kind: "recurring",
+            source_ref: `monthly:partner:${tenant.id}:${monthKey}`, invoice_number: sum > 0 ? "DRAFT" : "ABO-BELEG",
+            document_type: sum > 0 ? "invoice" : "subscription_notice", status: "draft",
+            period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), amount: sum, module_total: sum, support_total: 0,
+            line_items: lines.map((l) => ({ ...l, label: `${l.label} – ${tenant.name}` })) });
+        } else {
+          moduleLineItems.push(...lines);
+          moduleTotal += sum;
+        }
+      }
+      for (const tm of isPkg ? [] : tenantModules) {
         if (tm.module_code === "dashboard") continue;
         const priceEntry = globalPriceMap[tm.module_code];
         let globalPrice = 0;
@@ -243,7 +302,7 @@ Deno.serve(async (req) => {
       }
 
       // Bundle-Rabatte (monatlich) auf die Summe der Bundle-Module nach Modul-Rabatten
-      for (const d of tenantDiscounts.filter((x: any) => x.bundle_id && (x.payment_mode ?? "monthly") === "monthly")) {
+      for (const d of isPkg ? [] : tenantDiscounts.filter((x: any) => x.bundle_id && (x.payment_mode ?? "monthly") === "monthly")) {
         const base = (bundleModules[d.bundle_id] ?? []).reduce((s2, c) => s2 + (netByCode[c] ?? 0), 0);
         const raw = d.discount_type === "percent" ? base * Number(d.value) / 100 : Number(d.value);
         const amt = Math.max(0, Math.min(base, Math.round(raw * 100) / 100));
@@ -255,7 +314,7 @@ Deno.serve(async (req) => {
       }
 
       // Vorkasse / Einmalzahlung: einmalig für die ganze Laufzeit berechnen
-      for (const d of prepaidDiscounts) {
+      for (const d of isPkg ? [] : prepaidDiscounts) {
         if (d.invoiced_at || d.valid_from > fmt(lastMonthEnd)) continue;
         const months = Number(d.duration_value ?? 0) * (d.duration_unit === "year" ? 12 : 1);
         if (!(months > 0)) continue;
@@ -348,6 +407,7 @@ Deno.serve(async (req) => {
 
         invoicesToInsert.push({
           tenant_id: tenant.id,
+          source_ref: `monthly:tenant:${tenant.id}:${monthKey}`,
           invoice_number: totalAmount > 0 ? invNum : "ABO-BELEG",
           // 0 € = keine Rechnung, sondern Abo-Beleg (nicht buchbar, nie an Lexware)
           document_type: totalAmount > 0 ? "invoice" : "subscription_notice",
@@ -385,6 +445,22 @@ Deno.serve(async (req) => {
       if (updErr) throw updErr;
     }
 
+    // Partner-Entwürfe (EK): je Partnerkunde und Monat genau einer; offene Entwürfe werden aktualisiert
+    let partnerCreated = 0;
+    for (const pd of partnerDrafts) {
+      const { data: ex } = await supabase.from("tenant_invoices").select("id, lexware_invoice_id")
+        .eq("source_ref", pd.source_ref).neq("status", "voided").maybeSingle();
+      if (ex?.lexware_invoice_id) continue;
+      if (ex) {
+        const { error } = await supabase.from("tenant_invoices").update({ line_items: pd.line_items, amount: pd.amount, module_total: pd.module_total, document_type: pd.document_type }).eq("id", ex.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("tenant_invoices").insert(pd);
+        if (error && error.code !== "23505") throw error;
+        if (!error) partnerCreated++;
+      }
+    }
+
     if (invoicedDiscountIds.length > 0) {
       const { error: invErr } = await supabase.from("tenant_module_discounts")
         .update({ invoiced_at: new Date().toISOString() }).in("id", invoicedDiscountIds);
@@ -396,6 +472,7 @@ Deno.serve(async (req) => {
         success: true,
         invoices_created: invoicesToInsert.length,
         invoices_updated: invoicesToUpdate.length,
+        partner_invoices_created: partnerCreated,
         month: fmt(lastMonthStart),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

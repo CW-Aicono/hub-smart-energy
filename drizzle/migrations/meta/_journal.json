@@ -239,6 +239,13 @@
       "when": 1791536614678,
       "tag": "0033_dirk_markus_home_tenant_brightnetworks",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791538598653,
+      "tag": "0034_auto_one_time_and_recurring_invoices",
+      "breakpoints": true
     }
   ]
 }

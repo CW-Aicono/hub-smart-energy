@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
       // Fetch invoices with tenant data
       const { data: invoices, error: invErr } = await supabase
         .from("tenant_invoices")
-        .select("*, tenants(id, name, street, house_number, city, postal_code, contact_email, lexware_contact_id)")
+        .select("*, tenants(id, name, street, house_number, city, postal_code, contact_email, lexware_contact_id), partners(id, name, billing_address, contact_email, lexware_contact_id)")
         .in("id", invoiceIds);
       if (invErr) throw invErr;
       if (!invoices || invoices.length === 0) throw new Error("No invoices found");
@@ -93,7 +93,17 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          const tenant = inv.tenants;
+          // Empfänger: Partner (EK-Rechnung) oder der Mandant selbst
+          const p = inv.partner_id ? inv.partners : null;
+          const ba = (p?.billing_address ?? {}) as Record<string, string>;
+          const tenant = p
+            ? { id: p.id, name: ba.company || p.name, street: ba.street, house_number: ba.house_number, city: ba.city,
+                postal_code: ba.postal_code || ba.zip, contact_email: ba.email || p.contact_email, lexware_contact_id: p.lexware_contact_id, _table: "partners" }
+            : inv.tenants ? { ...inv.tenants, _table: "tenants" } : null;
+          if (inv.partner_id && !p) {
+            results.push({ invoiceId: inv.id, status: "error", reason: "no_partner" });
+            continue;
+          }
           if (!tenant) {
             results.push({ invoiceId: inv.id, status: "error", reason: "no_tenant" });
             continue;
@@ -109,7 +119,7 @@ Deno.serve(async (req) => {
               await checkRes.text(); // consume body
               lexwareContactId = null;
               // Clear stale contact ID
-              await supabase.from("tenants").update({ lexware_contact_id: null }).eq("id", tenant.id);
+              await supabase.from(tenant._table).update({ lexware_contact_id: null }).eq("id", tenant.id);
             } else {
               await checkRes.text(); // consume body
             }
@@ -234,7 +244,7 @@ async function ensureContact(
 
   // Store contact ID on tenant
   await supabase
-    .from("tenants")
+    .from(tenant._table ?? "tenants")
     .update({ lexware_contact_id: contactId })
     .eq("id", tenant.id);
 
@@ -296,6 +306,20 @@ function buildLineItems(invoice: any): any[] {
             netAmount: Number(li.price_per_block || li.amount || 0),
             taxRatePercentage: 19,
           },
+        });
+      } else {
+        // Alle übrigen Positionen (Pakete, Ladepunkte, Rabatte, Einmal-, Vorkasse-Zeilen) mit Betrag übernehmen,
+        // damit die Lexware-Summe der Rechnungssumme entspricht.
+        const amount = Number(li.amount ?? 0);
+        if (!amount) continue;
+        const qty = Number(li.quantity ?? 1) || 1;
+        const unit = li.unit_price != null && qty > 1 ? Number(li.unit_price) : amount;
+        items.push({
+          type: "custom",
+          name: String(li.label || li.code || "Position"),
+          quantity: li.unit_price != null && qty > 1 ? qty : 1,
+          unitName: liType === "one_time" ? "einmalig" : liType === "discount" ? "Rabatt" : "Monat",
+          unitPrice: { currency: "EUR", netAmount: unit, taxRatePercentage: 19 },
         });
       }
     }
