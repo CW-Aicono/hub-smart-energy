@@ -1,4 +1,5 @@
 import { Navigate, useParams, useNavigate } from "react-router-dom";
+import { PackageBookingCard } from "@/components/billing/PackagePricing";
 import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndReturn } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
 import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
@@ -564,6 +565,7 @@ const SuperAdminTenantDetail = () => {
             </TabsList>
 
             <TabsContent value="info" className="mt-6 space-y-6">
+              {id && <PackageBookingCard tenantId={id} />}
               {/* Stats tiles */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* Gebuchte Bundles tile with dialog */}
