@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PackageQuoteCalculator } from "@/components/billing/PackagePricing";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -332,6 +333,9 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
 
             <CompletenessCheck projectId={projectId} onFixed={() => { /* reload trigger */ }} />
 
+            <Separator />
+
+            <PackageQuoteCalculator />
             <Separator />
 
             {/* Modules */}

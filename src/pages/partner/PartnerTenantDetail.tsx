@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { PackageBookingCard } from "@/components/billing/PackagePricing";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -233,6 +234,7 @@ export default function PartnerTenantDetail() {
         </TabsContent>
 
         <TabsContent value="modules" className="space-y-4">
+          {tenantId && <PackageBookingCard tenantId={tenantId} />}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Module ({modules.length} aktiv)</CardTitle>
