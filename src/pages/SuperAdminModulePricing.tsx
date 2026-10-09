@@ -1,4 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
+import { PackageCatalogCard } from "@/components/billing/PackagePricing";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
@@ -65,7 +66,8 @@ const SuperAdminModulePricing = () => {
           <h1 className="text-2xl font-bold">{t("module_pricing.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">{t("module_pricing.subtitle")}</p>
         </header>
-        <div className="p-6">
+        <div className="p-6 space-y-6">
+          <PackageCatalogCard canEdit />
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">

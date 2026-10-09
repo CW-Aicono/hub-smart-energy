@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import { PackageBillingOverviewCard } from "@/components/billing/PackagePricing";
 import { useAuth } from "@/hooks/useAuth";
 import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -305,6 +306,7 @@ const SuperAdminBilling = () => {
 
         <div className="p-6 space-y-6">
           <PortalDiscountRequestsCard />
+          <PackageBillingOverviewCard />
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
