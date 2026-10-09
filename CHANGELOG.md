@@ -5,6 +5,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 ## Unreleased
 - AICONO Portal → Modulpreise: Karte „Monatliche Standardpreise" ausgeblendet; Altpreise bleiben für Bestandskunden in der Abrechnung aktiv.
 - Daten (Migration drizzle 0032): d.markus@bright-networks.de als Partner-Admin der AICONO Partner GmbH (idempotent, per E-Mail aufgelöst; greift auf Live nur, wenn das Konto dort existiert).
+- Daten (Migration drizzle 0033): Heimatmandant BrightNetWorks für d.markus@bright-networks.de (nur wenn bisher leer), damit der EMS-Bereich verfügbar ist.
 
 ## v1.8.1 – 09.10.2026
 - Portal-Navigation: BadgeCheck für aktive Lizenzen, Handshake für Gain-Sharing; gemeinsamer Einstieg „Module & Bundles“ (Layers) mit Reitern Modulpreise (Tags) und Bundles (Package). URLs, Berechtigungen und Abrechnung unverändert.

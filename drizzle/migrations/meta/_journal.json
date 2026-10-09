@@ -232,6 +232,13 @@
       "when": 1791536153446,
       "tag": "0032_dirk_markus_partner_admin_aicono",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791536614678,
+      "tag": "0033_dirk_markus_home_tenant_brightnetworks",
+      "breakpoints": true
     }
   ]
 }
