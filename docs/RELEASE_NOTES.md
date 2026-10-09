@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.8.0 – 09.10.2026
+- Neue Paketpreise (Basis + 6 Pakete) mit unverbindlicher Preisempfehlung und Partner-Einkaufspreis.
+- Angebotsrechner mit Paketen, Liegenschaften, Ladepunkten und Ladevorgängen; Rabatt auf UVP und Aufschlag auf EK; Warnung unter EK.
+- Pakete je Kunde buchen; Monatsübersicht je Partner. Bestehende Kunden behalten ihre Module und Preise.
+
 ## v1.7.2 – 08.10.2026
 - Passwort direkt im Profil ändern (aktuelles und neues Passwort), ohne Umweg über E-Mail.
 - Links in Passwort-E-Mails führen immer auf die richtige AICONO-Adresse.

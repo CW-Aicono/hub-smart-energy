@@ -2,6 +2,13 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.8.0 – 09.10.2026
+- Neue Preislogik Basis + 6 Pakete (Migration 0030): `pricing_packages`, `pricing_package_modules`, `pricing_unit_prices`, `module_catalog_flags`, `tenant_package_bookings` mit RLS (Lesen angemeldet, Schreiben `can_portal_write(commercial)`).
+- `src/lib/packagePricing.ts` (Preisrechnung, Abhängigkeiten, Rabatt/Aufschlag) mit Akzeptanztests (31 €, 242/181 €, 678/506 €).
+- Edge Functions `package-book` (schaltet Modul-Codes über portal-/partner-set-tenant-module) und `package-billing-overview` (nur lesend).
+- UI: Paketkatalog in Modulpreisen, Paket-Angebotsrechner im Angebotsbaukasten (hidden/on_request-Module ausgeblendet), Paketbuchung in Kundendetail (Portal + Partner), Monatsübersicht in Abrechnung (Portal + Partner).
+- Unverändert: `generate-monthly-invoices`, Inhalte `module_prices`, ModuleGuard, alle EMS-Funktionen. Bestandskunden ohne Paketbuchung = „Altpreis“.
+
 ## v1.7.2 – 08.10.2026
 - Passwort-Mails: `send-auth-email` prüft `redirectTo` serverseitig gegen Positivliste (`_shared/appOrigin.ts`: staging/ems-pro, Pfade `/set-password`, `/mein-sharing/set-password`); Vorschau-/Fremdadressen werden ersetzt.
 - Profil: direkte Passwortänderung (aktuelles Passwort prüfen, dann `updateUser`); E-Mail-Weg bleibt.
