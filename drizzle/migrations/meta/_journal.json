@@ -218,6 +218,13 @@
       "when": 1791523804399,
       "tag": "0030_pricing_packages",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791527106131,
+      "tag": "0031_restore_portal_role_audit_filter",
+      "breakpoints": true
     }
   ]
 }
