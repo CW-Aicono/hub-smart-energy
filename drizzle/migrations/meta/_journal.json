@@ -211,6 +211,13 @@
       "when": 1791390870269,
       "tag": "0029_fix_audit_portal_role_change_profile_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791523804399,
+      "tag": "0030_pricing_packages",
+      "breakpoints": true
     }
   ]
 }

@@ -9145,6 +9145,21 @@ export type Database = {
         }
         Relationships: []
       }
+      module_catalog_flags: {
+        Row: {
+          module_code: string
+          visibility: string
+        }
+        Insert: {
+          module_code: string
+          visibility?: string
+        }
+        Update: {
+          module_code?: string
+          visibility?: string
+        }
+        Relationships: []
+      }
       module_prices: {
         Row: {
           charge_point_price_monthly: number
@@ -11281,6 +11296,98 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pricing_package_modules: {
+        Row: {
+          module_code: string
+          package_code: string
+        }
+        Insert: {
+          module_code: string
+          package_code: string
+        }
+        Update: {
+          module_code?: string
+          package_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_package_modules_package_code_fkey"
+            columns: ["package_code"]
+            isOneToOne: false
+            referencedRelation: "pricing_packages"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      pricing_packages: {
+        Row: {
+          active: boolean
+          always_active: boolean
+          code: string
+          description: string | null
+          ek: number
+          name: string
+          requires_any_other: boolean
+          requires_package: string | null
+          sort: number
+          updated_at: string
+          uvp: number
+        }
+        Insert: {
+          active?: boolean
+          always_active?: boolean
+          code: string
+          description?: string | null
+          ek?: number
+          name: string
+          requires_any_other?: boolean
+          requires_package?: string | null
+          sort?: number
+          updated_at?: string
+          uvp?: number
+        }
+        Update: {
+          active?: boolean
+          always_active?: boolean
+          code?: string
+          description?: string | null
+          ek?: number
+          name?: string
+          requires_any_other?: boolean
+          requires_package?: string | null
+          sort?: number
+          updated_at?: string
+          uvp?: number
+        }
+        Relationships: []
+      }
+      pricing_unit_prices: {
+        Row: {
+          code: string
+          ek: number
+          name: string
+          unit: string
+          updated_at: string
+          uvp: number
+        }
+        Insert: {
+          code: string
+          ek?: number
+          name: string
+          unit: string
+          updated_at?: string
+          uvp?: number
+        }
+        Update: {
+          code?: string
+          ek?: number
+          name?: string
+          unit?: string
+          updated_at?: string
+          uvp?: number
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -14376,6 +14483,48 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tenant_modules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_package_bookings: {
+        Row: {
+          booked_at: string
+          booked_by: string | null
+          cancelled_at: string | null
+          id: string
+          package_code: string
+          tenant_id: string
+        }
+        Insert: {
+          booked_at?: string
+          booked_by?: string | null
+          cancelled_at?: string | null
+          id?: string
+          package_code: string
+          tenant_id: string
+        }
+        Update: {
+          booked_at?: string
+          booked_by?: string | null
+          cancelled_at?: string | null
+          id?: string
+          package_code?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_package_bookings_package_code_fkey"
+            columns: ["package_code"]
+            isOneToOne: false
+            referencedRelation: "pricing_packages"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "tenant_package_bookings_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
