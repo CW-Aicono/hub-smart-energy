@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.7.2 – 08.10.2026
+- Passwort direkt im Profil ändern (aktuelles und neues Passwort), ohne Umweg über E-Mail.
+- Links in Passwort-E-Mails führen immer auf die richtige AICONO-Adresse.
+- Passwörter aus bekannten Datenlecks werden abgelehnt; neue Passwörter brauchen mind. 8 Zeichen mit Buchstabe und Ziffer.
+
 ## v1.7.1 – 07.10.2026
 - Portal-Rollen: Übersicht aller Teammitglieder mit Rollen, Status und letztem Login; Rollen per „Rollen bearbeiten“ anpassen. Der letzte Portal-Admin ist jetzt auch serverseitig geschützt.
 - Portal-Rollen: Änderungsprotokoll zeigt, wer wann welche Rolle vergeben oder entzogen hat.

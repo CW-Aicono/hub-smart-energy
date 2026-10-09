@@ -17,6 +17,61 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { validatePassword, passwordErrorMessage } from "@/lib/passwordPolicy";
+
+function DirectPasswordChangeForm() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const v = validatePassword(next, confirm, current);
+    if (v) return setError(v);
+    if (!user?.email) return;
+    setBusy(true);
+    const { error: authErr } = await supabase.auth.signInWithPassword({ email: user.email, password: current });
+    if (authErr) {
+      setBusy(false);
+      return setError("Das aktuelle Passwort ist nicht korrekt.");
+    }
+    const { error: updErr } = await supabase.auth.updateUser({ password: next });
+    setBusy(false);
+    if (updErr) return setError(passwordErrorMessage(updErr as any));
+    setCurrent(""); setNext(""); setConfirm("");
+    toast({ title: "Passwort geändert", description: "Ihr neues Passwort ist ab sofort gültig." });
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-3 max-w-md">
+      <p className="font-medium">Passwort direkt ändern</p>
+      <div className="space-y-1">
+        <Label htmlFor="pw-current">Aktuelles Passwort</Label>
+        <Input id="pw-current" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="pw-new">Neues Passwort</Label>
+        <Input id="pw-new" type="password" autoComplete="new-password" placeholder="Mind. 8 Zeichen, Buchstabe und Ziffer" value={next} onChange={(e) => setNext(e.target.value)} required />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="pw-confirm">Neues Passwort bestätigen</Label>
+        <Input id="pw-confirm" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <Button type="submit" disabled={busy}>
+        {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+        Passwort ändern
+      </Button>
+    </form>
+  );
+}
 
 export function ChangePasswordCard() {
   const { user } = useAuth();
@@ -74,7 +129,8 @@ export function ChangePasswordCard() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex items-start gap-4 p-4 rounded-lg border bg-muted/30">
+        <DirectPasswordChangeForm />
+        <div className="flex items-start gap-4 p-4 rounded-lg border bg-muted/30 mt-6">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Mail className="h-5 w-5 text-primary" />
           </div>

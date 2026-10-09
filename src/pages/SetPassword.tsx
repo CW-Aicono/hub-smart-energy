@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import aiconoLogo from "@/assets/aicono-logo.png";
+import { validatePassword, passwordErrorMessage } from "@/lib/passwordPolicy";
 
 const SetPassword = () => {
   const navigate = useNavigate();
@@ -65,13 +66,9 @@ const SetPassword = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (password.length < 8) {
-      toast({ title: "Fehler", description: "Das Passwort muss mindestens 8 Zeichen lang sein.", variant: "destructive" });
-      return;
-    }
-
-    if (password !== passwordConfirm) {
-      toast({ title: "Fehler", description: "Die Passwörter stimmen nicht überein.", variant: "destructive" });
+    const invalid = validatePassword(password, passwordConfirm);
+    if (invalid) {
+      toast({ title: "Fehler", description: invalid, variant: "destructive" });
       return;
     }
 
@@ -80,7 +77,7 @@ const SetPassword = () => {
     setSubmitting(false);
 
     if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      toast({ title: "Fehler", description: passwordErrorMessage(error as any), variant: "destructive" });
       return;
     }
 

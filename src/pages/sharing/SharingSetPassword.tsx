@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { SharingLayout } from "@/components/sharing/SharingLayout";
+import { validatePassword, passwordErrorMessage } from "@/lib/passwordPolicy";
 
 export default function SharingSetPassword() {
   const navigate = useNavigate();
@@ -66,12 +67,9 @@ export default function SharingSetPassword() {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 8) {
-      setError("Das Passwort muss mindestens 8 Zeichen lang sein.");
-      return;
-    }
-    if (password !== confirm) {
-      setError("Die Passwörter stimmen nicht überein.");
+    const invalid = validatePassword(password, confirm);
+    if (invalid) {
+      setError(invalid);
       return;
     }
 
@@ -80,7 +78,7 @@ export default function SharingSetPassword() {
     setSubmitting(false);
 
     if (error) {
-      setError(error.message);
+      setError(passwordErrorMessage(error as any));
       return;
     }
 
