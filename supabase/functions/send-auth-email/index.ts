@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { resendFrom } from "../_shared/resend-from.ts";
 import { renderAuthEmail, type AuthEmailType } from "../_shared/email-templates.ts";
+import { safeAuthRedirect } from "../_shared/appOrigin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -136,7 +137,7 @@ Deno.serve(async (req) => {
   try {
     const linkType = TYPE_TO_GENERATE_LINK[type];
     const linkOpts: Record<string, unknown> = {};
-    if (redirectTo) linkOpts.redirectTo = redirectTo;
+    linkOpts.redirectTo = safeAuthRedirect(redirectTo, req.headers.get("Origin"), Deno.env.get("APP_ORIGIN"));
     if (type === "email_change" && newEmail) linkOpts.newEmail = newEmail;
 
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
