@@ -7,6 +7,7 @@ import { useModulePrices } from "@/hooks/useModulePrices";
 import { ALL_MODULES } from "@/hooks/useTenantModules";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
+import ModulePricingTabs from "@/components/super-admin/ModulePricingTabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,11 +101,11 @@ const SuperAdminBundles = () => {
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">{t("bundles.title")}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{t("bundles.subtitle")}</p>
+            <h1 className="text-2xl font-bold">{t("nav.bundles_modules")}</h1>
           </div>
           <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />{t("bundles.create")}</Button>
         </header>
+        <ModulePricingTabs />
 
         <div className="p-6 space-y-4">
           {isLoading && <div className="text-muted-foreground animate-pulse">{t("common.loading")}</div>}

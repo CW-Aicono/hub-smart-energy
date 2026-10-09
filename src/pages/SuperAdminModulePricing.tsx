@@ -7,6 +7,7 @@ import { useModulePrices } from "@/hooks/useModulePrices";
 import { ALL_MODULES } from "@/hooks/useTenantModules";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
+import ModulePricingTabs from "@/components/super-admin/ModulePricingTabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,9 +64,9 @@ const SuperAdminModulePricing = () => {
       <SuperAdminSidebar />
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6">
-          <h1 className="text-2xl font-bold">{t("module_pricing.title")}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{t("module_pricing.subtitle")}</p>
+          <h1 className="text-2xl font-bold">{t("nav.bundles_modules")}</h1>
         </header>
+        <ModulePricingTabs />
         <div className="p-6 space-y-6">
           <PackageCatalogCard canEdit />
           {/* Legacy-Einzelmodulpreise (module_prices) bleiben für Bestandskunden-Abrechnung aktiv, werden hier aber nicht mehr angezeigt. */}

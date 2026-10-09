@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.8.1 – 09.10.2026
+- Aktive Lizenzen und Gain-Sharing haben eigene Symbole. Modulpreise und Bundles stehen gemeinsam unter „Module & Bundles“ mit zwei Reitern und unterschiedlichen Symbolen.
+
 ## v1.8.0 – 09.10.2026
 - Neue Paketpreise (Basis + 6 Pakete) mit unverbindlicher Preisempfehlung und Partner-Einkaufspreis.
 - Angebotsrechner mit Paketen, Liegenschaften, Ladepunkten und Ladevorgängen; Rabatt auf UVP und Aufschlag auf EK; Warnung unter EK.

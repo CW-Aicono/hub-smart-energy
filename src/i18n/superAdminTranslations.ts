@@ -91,7 +91,7 @@ export const saTranslations: SATranslations = {
   "module_pricing.subtitle": { de: "Globale Standardpreise pro Modul (monatlich)", en: "Global default prices per module (monthly)", es: "Globale Standardpreise pro Modul (monatlich)", nl: "Globale Standardpreise pro Modul (monatlich)" },
   "module_pricing.monthly_defaults": { de: "Monatliche Standardpreise", en: "Monthly Default Prices", es: "Monatliche Standardpreise", nl: "Monatliche Standardpreise" },
   "module_pricing.hint": { de: "Diese Preise gelten als Standard für alle Mandanten. Individuelle Preise können in der Mandantenansicht überschrieben werden.", en: "These prices are the default for all tenants. Individual prices can be overridden in the tenant view.", es: "Diese Preise gelten als Standard für alle Mandanten. Individuelle Preise können in der Mandantenansicht überschrieben werden.", nl: "Diese Preise gelten als Standard für alle Mandanten. Individuelle Preise können in der Mandantenansicht überschrieben werden." },
-  "nav.bundles_modules": { de: "Bundles & Module", en: "Bundles & Modules", es: "Bundles & Module", nl: "Bundles & Module" },
+  "nav.bundles_modules": { de: "Module & Bundles", en: "Modules & Bundles", es: "Módulos y paquetes", nl: "Modules & bundels" },
   "nav.bundles": { de: "Bundles", en: "Bundles", es: "Bundles", nl: "Bundles" },
   "bundles.title": { de: "Modul-Bundles", en: "Module Bundles", es: "Modul-Bundles", nl: "Modul-Bundles" },
   "bundles.subtitle": { de: "Bundles aus mehreren Modulen zusammenstellen und bepreisen", en: "Create and price bundles from multiple modules", es: "Bundles aus mehreren Modulen zusammenstellen und bepreisen", nl: "Bundles aus mehreren Modulen zusammenstellen und bepreisen" },

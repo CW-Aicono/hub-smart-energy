@@ -12,3 +12,5 @@
 - Display-role wording changes must preserve role enum values, route paths and authorization logic — labels must never change access rights.
 
 - New bookings are priced via the package catalog (`pricing_packages` + `src/lib/packagePricing.ts`), while tenants without a package booking keep the legacy `module_prices` billing — existing customers must never be repriced automatically.
+
+- Portal module pricing and bundles share route-backed navigation tabs while retaining their existing URLs and authorization wrappers, so deep links and permissions remain unchanged.

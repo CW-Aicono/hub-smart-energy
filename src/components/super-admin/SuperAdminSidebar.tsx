@@ -8,7 +8,7 @@ import { saColorPresetNames, SALanguage } from "@/i18n/superAdminTranslations";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, LogOut, UserCircle, Building2, BarChart3, Receipt, HeadsetIcon,
-  ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, Euro,
+   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, BadgeCheck, Handshake, Layers,
   Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap, Settings, Activity,
   Cpu, ListChecks, Briefcase, Plug, Upload, LayoutDashboard as BoardIcon, Puzzle,
 } from "lucide-react";
@@ -89,7 +89,7 @@ export default function SuperAdminSidebar() {
     if (isTablet) setCollapsed(true);
   }, [isTablet]);
 
-  type NavChild = { to: string; icon: any; label: string };
+   type NavChild = { to: string; icon: any; label: string; activePaths?: string[] };
   type NavItem = NavChild & { children?: NavChild[]; section?: string };
   const groups: { section: string; area: PortalArea; items: NavItem[] }[] = [
     {
@@ -120,10 +120,9 @@ export default function SuperAdminSidebar() {
       area: "commercial",
       items: [
         { to: "/super-admin/billing", icon: Receipt, label: t("nav.billing") },
-        { to: "/super-admin/licenses", icon: Euro, label: t("nav.active_licenses") },
-        { to: "/super-admin/savings-share", icon: Euro, label: "Gain-Sharing" },
-        { to: "/super-admin/module-pricing", icon: Euro, label: t("nav.module_pricing") },
-        { to: "/super-admin/bundles", icon: Euro, label: t("nav.bundles") },
+         { to: "/super-admin/licenses", icon: BadgeCheck, label: t("nav.active_licenses") },
+         { to: "/super-admin/savings-share", icon: Handshake, label: "Gain-Sharing" },
+         { to: "/super-admin/module-pricing", icon: Layers, label: t("nav.bundles_modules"), activePaths: ["/super-admin/bundles"] },
       ],
     },
     {
@@ -234,7 +233,7 @@ export default function SuperAdminSidebar() {
             );
           }
           const hasChildren = item.children && item.children.length > 0;
-          const isActive = location.pathname === item.to || (item.to !== "/super-admin" && location.pathname.startsWith(item.to));
+           const isActive = location.pathname === item.to || item.activePaths?.includes(location.pathname) || (item.to !== "/super-admin" && location.pathname.startsWith(item.to));
           const isChildActive = hasChildren && item.children?.some((child) => location.pathname === child.to);
           const isOpen = openMenus.includes(item.to);
 
