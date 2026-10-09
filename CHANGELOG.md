@@ -2,6 +2,9 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## Unreleased
+- AICONO Portal → Modulpreise: Karte „Monatliche Standardpreise" ausgeblendet; Altpreise bleiben für Bestandskunden in der Abrechnung aktiv.
+
 ## v1.8.0 – 09.10.2026
 - Neue Preislogik Basis + 6 Pakete (Migration 0030): `pricing_packages`, `pricing_package_modules`, `pricing_unit_prices`, `module_catalog_flags`, `tenant_package_bookings` mit RLS (Lesen angemeldet, Schreiben `can_portal_write(commercial)`).
 - `src/lib/packagePricing.ts` (Preisrechnung, Abhängigkeiten, Rabatt/Aufschlag) mit Akzeptanztests (31 €, 242/181 €, 678/506 €).
