@@ -3,6 +3,7 @@
 // partner-set-tenant-module). Ändert keine EMS-Funktion.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { createOneTimeDraft, isoDate, monthEnd, proRataAmount } from "../_shared/invoiceDrafts.ts";
 
 Deno.serve(async (req) => {
   const cors = getCorsHeaders(req);
@@ -71,12 +72,33 @@ Deno.serve(async (req) => {
       if (!r.ok || j?.success === false || j?.error) return json({ error: j?.error ?? `Modul ${m} konnte nicht geschaltet werden.` }, r.status >= 400 ? r.status : 400);
     }
 
+    let invoice: { created: boolean; amount: number } | null = null;
     if (book && !active.has(pkg)) {
-      await admin.from("tenant_package_bookings").insert({ tenant_id: tenantId, package_code: pkg, booked_by: user.id });
+      const { data: booking } = await admin.from("tenant_package_bookings")
+        .insert({ tenant_id: tenantId, package_code: pkg, booked_by: user.id }).select("id, booked_at").single();
+      // Anteiliger erster Monat als Einmal-Entwurf (Kunde zur UVP, Partnerkunde an Partner zum EK)
+      try {
+        const { data: t } = await admin.from("tenants").select("partner_id, name").eq("id", tenantId).maybeSingle();
+        const { data: full } = await admin.from("pricing_packages").select("uvp, ek").eq("code", pkg).maybeSingle();
+        const partnerId = t?.partner_id ?? null;
+        const monthly = Number((partnerId ? full?.ek : full?.uvp) ?? 0);
+        const when = booking?.booked_at ? new Date(booking.booked_at) : new Date();
+        const amount = proRataAmount(monthly, when);
+        if (booking?.id && amount > 0) {
+          invoice = await createOneTimeDraft(admin, {
+            tenantId, partnerId, sourceRef: `prorata:${booking.id}`,
+            periodStart: isoDate(when), periodEnd: isoDate(monthEnd(when)),
+            lines: [{ type: "one_time", code: pkg, label: `${def.name} anteilig ${isoDate(when)} – ${isoDate(monthEnd(when))}${t?.name ? ` (${t.name})` : ""}`, amount }],
+          });
+        }
+      } catch (e) {
+        console.error("[package-book] Anteilsrechnung fehlgeschlagen", e);
+      }
     } else if (!book) {
+      // Kündigung wirkt zum Monatsende: der laufende Monat wird noch voll berechnet, keine Erstattung.
       await admin.from("tenant_package_bookings").update({ cancelled_at: new Date().toISOString() }).eq("tenant_id", tenantId).eq("package_code", pkg).is("cancelled_at", null);
     }
-    return json({ success: true, modules: targets });
+    return json({ success: true, modules: targets, invoice });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
