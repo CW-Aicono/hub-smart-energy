@@ -192,7 +192,7 @@ const SuperAdminBilling = () => {
       return;
     }
     const sepaInvoices = invoices.filter((inv: any) =>
-      (inv.tenants?.payment_method === "sepa") &&
+      !inv.partner_id && (inv.tenants?.payment_method === "sepa") &&
       (inv.status === "draft" || inv.status === "sent") &&
       Number(inv.amount) > 0 && inv.document_type !== "subscription_notice" &&
       inv.tenants?.sepa_iban &&
