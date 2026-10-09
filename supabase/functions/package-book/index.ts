@@ -84,7 +84,11 @@ Deno.serve(async (req) => {
         const monthly = Number((partnerId ? full?.ek : full?.uvp) ?? 0);
         const when = booking?.booked_at ? new Date(booking.booked_at) : new Date();
         const amount = proRataAmount(monthly, when);
-        if (booking?.id && amount > 0) {
+        // Im selben Monat gekündigt und neu gebucht: Monat ist bereits voll berechnet
+        const mStart = new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth(), 1)).toISOString();
+        const { data: recent } = await admin.from("tenant_package_bookings").select("id")
+          .eq("tenant_id", tenantId).eq("package_code", pkg).gte("cancelled_at", mStart).lt("booked_at", mStart).limit(1);
+        if (booking?.id && amount > 0 && !(recent ?? []).length) {
           invoice = await createOneTimeDraft(admin, {
             tenantId, partnerId, sourceRef: `prorata:${booking.id}`,
             periodStart: isoDate(when), periodEnd: isoDate(monthEnd(when)),
