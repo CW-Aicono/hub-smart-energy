@@ -75,17 +75,22 @@ const GettingStarted = () => {
 
   const handleCancel = async () => {
     await markOnboardingComplete();
-    navigate("/");
+    navigate("/", { replace: true });
   };
 
   const markOnboardingComplete = async () => {
     if (!tenant) return;
+    // Sitzungs-Merker: verhindert, dass die Startseite mit noch nicht
+    // aktualisierten Mandantendaten sofort wieder hierher umleitet.
+    try { sessionStorage.setItem(`onboarding_dismissed:${tenant.id}`, "1"); } catch { /* ignore */ }
     // Onboarding wird pro Tenant gespeichert (nicht pro User),
     // damit nachfolgende Nutzer desselben Mandanten den Wizard nicht erneut sehen.
-    await supabase
+    const { error } = await supabase
       .from("tenants")
       .update({ onboarding_completed: true } as any)
       .eq("id", tenant.id);
+    if (error) console.warn("[GettingStarted] onboarding_completed konnte nicht gespeichert werden", error);
+    await refetchTenant();
   };
 
   const handleFinish = async () => {
