@@ -18,7 +18,7 @@ const pct = (n: number) => `${n.toLocaleString("de-DE", { maximumFractionDigits:
 
 /** AICONO Portal: Paketkatalog pflegen (UVP / Partner-EK). */
 export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
-  const { catalog, isLoading, error, updatePrice } = usePricingPackages();
+  const { catalog, isLoading, error, updatePrice, updateUnlockFee } = usePricingPackages();
   const [draft, setDraft] = useState<Record<string, { uvp: string; ek: string }>>({});
   if (isLoading) return <Card><CardContent className="p-6"><Loader2 className="h-4 w-4 animate-spin" /></CardContent></Card>;
   if (error || !catalog) return <Card><CardContent className="p-6 text-destructive text-sm">Paketkatalog konnte nicht geladen werden.</CardContent></Card>;

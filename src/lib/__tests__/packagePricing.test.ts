@@ -50,3 +50,16 @@ describe("Preissichten", () => {
     expect(priceViews(70, 100, 75).belowEk).toBe(true);
   });
 });
+
+import { proRataAmount } from "../packagePricing";
+describe("proRataAmount", () => {
+  it("bucht am 15. Oktober 17 von 31 Tagen", () => {
+    expect(proRataAmount(99, new Date(Date.UTC(2026, 9, 15)))).toBe(54.29);
+  });
+  it("bucht am Monatsersten den vollen Monat", () => {
+    expect(proRataAmount(99, new Date(Date.UTC(2026, 9, 1)))).toBe(99);
+  });
+  it("bucht am letzten Februartag einen Tag", () => {
+    expect(proRataAmount(28, new Date(Date.UTC(2026, 1, 28)))).toBe(1);
+  });
+});

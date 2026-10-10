@@ -63,3 +63,10 @@ export function priceViews(endPrice: number, uvp: number, ek: number) {
     belowEk: endPrice < ek,
   };
 }
+
+/** Anteil des Monatspreises ab Buchungstag (inkl.) bis Monatsende, tagesgenau (UTC). Spiegel von _shared/invoiceDrafts.ts. */
+export function proRataAmount(monthly: number, date: Date): number {
+  const daysInMonth = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  const remaining = daysInMonth - date.getUTCDate() + 1;
+  return r2((monthly * remaining) / daysInMonth);
+}
