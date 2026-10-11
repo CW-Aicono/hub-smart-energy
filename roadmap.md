@@ -46,3 +46,5 @@
 - [x] Portal-Rollen (Admin/Kaufmännisch/Technisch) durch Admins pflegbar (v1.7.0)
 - [x] Partner-Rabatt-Anfragen mit Freigabe/Ablehnung im AICONO Portal (v1.7.0)
 - [ ] Schutz „letzter Portal-Admin“ zusätzlich serverseitig in der Datenbank erzwingen
+- [x] Automatische Einmal- und Monatsrechnungen als Entwurf, Partner zum EK (v1.9.0)
+- [ ] Ende-zu-Ende-Test Paketbuchung + Monatslauf mit angemeldetem Portal-Admin (wartet auf Nutzer)
