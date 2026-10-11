@@ -1,6 +1,10 @@
 # Versionshinweise
 
-## Unveröffentlicht
+## v1.9.0 – 09.10.2026
+- Rechnungen entstehen automatisch als Entwurf: Einrichtungsgebühr bei neuen Kunden, anteiliger erster Monat bei Paketbuchung, Freischaltgebühr bei Partner-Freischaltung. Freigabe an Lexware weiterhin per Button.
+- Partnerkunden mit Paketen werden an den Partner zum Einkaufspreis berechnet; Endkunden sehen diese Rechnungen nicht.
+- Rechnungsübersicht: Filter Monatlich / Einmalig / An Partner.
+- An Lexware übergebene Rechnungen enthalten jetzt alle Positionen inkl. Rabatte und Ladepunkte.
 - Einrichtungsassistent: „Abbrechen“ führt jetzt zuverlässig ins Dashboard, statt den Assistenten erneut zu öffnen.
 
 ## v1.8.1 – 09.10.2026
