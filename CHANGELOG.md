@@ -2,6 +2,13 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.9.0 – 09.10.2026
+- Daten: 20 nicht übergebene Rechnungsentwürfe storniert (status voided); 7 Lexware-Rechnungen unverändert.
+- Migration drizzle 0034: tenant_invoices.partner_id/invoice_kind/source_ref (Unique auf aktive source_refs), partners.lexware_contact_id, pricing_packages.partner_unlock_fee; Trigger create_setup_invoice auf tenants (Einrichtung aus pricing_unit_prices.setup); RLS: Mandant sieht keine an Partner adressierten Rechnungen, Partner nur an sich adressierte.
+- _shared/invoiceDrafts.ts (proRataAmount, createOneTimeDraft); package-book erzeugt Anteilsrechnung; super-admin-set-partner-module erzeugt Freischaltrechnung je Paket (Anker: erster Kunde des Partners).
+- generate-monthly-invoices: Paketkunden über Paketkatalog (UVP bzw. EK an Partner, je Partnerkunde ein Entwurf), Altpreis-Kunden unverändert; Einmal- und Partnerrechnungen werden nie zusammengeführt.
+- lexware-api: Partner als Rechnungsempfänger; alle Positionstypen werden übertragen (vorher fehlten Rabatt-/Ladepunkt-/Vorkassezeilen).
+
 ## Unreleased
 - AICONO Portal → Modulpreise: Karte „Monatliche Standardpreise" ausgeblendet; Altpreise bleiben für Bestandskunden in der Abrechnung aktiv.
 - Daten (Migration drizzle 0032): d.markus@bright-networks.de als Partner-Admin der AICONO Partner GmbH (idempotent, per E-Mail aufgelöst; greift auf Live nur, wenn das Konto dort existiert).
