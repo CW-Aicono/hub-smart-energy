@@ -90,7 +90,10 @@ const SetPassword = () => {
     // Clear recovery flag so user can navigate freely
     clearRecovery();
     setDone(true);
-    setTimeout(() => navigate("/", { replace: true }), 2500);
+    // Zurück in die Herkunfts-App (z. B. /ev, /te), falls der Link sie mitbrachte
+    const nextParam = new URLSearchParams(window.location.search).get("next");
+    const target = nextParam && ["/ev", "/te", "/mein-sharing"].includes(nextParam) ? nextParam : "/";
+    setTimeout(() => navigate(target, { replace: true }), 2500);
   };
 
   return (

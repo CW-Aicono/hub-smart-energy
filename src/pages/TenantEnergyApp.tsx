@@ -144,7 +144,7 @@ function TenantAppAuth({ onAuth, lang }: { onAuth: () => void; lang: TenantLang 
       body: {
         type: "password_reset",
         email,
-        redirectTo: window.location.origin + "/te",
+        redirectTo: window.location.origin + "/set-password?next=/te",
         locale: "de",
       },
     });
