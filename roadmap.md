@@ -50,3 +50,7 @@
 - [ ] Ende-zu-Ende-Test Paketbuchung + Monatslauf mit angemeldetem Portal-Admin (wartet auf Nutzer)
 - [x] Ladepunkte als Zähler im Energiemonitoring (v1.10.0)
 - [ ] 5 Ladepunkte (Stadt Steinfurt 4, ESB 1) ohne Liegenschaft – Zuordnung nötig (wartet auf Nutzer)
+
+## ESB Übersicht 13.10.
+- [x] Live-Werte schneller (10 s), Ladestationen-Kachel, mehr Spaltenbreiten, 15-Min-Energieanalyse + Jahres-CSV, Sensor-Meldung entprellt (v1.11.0)
+- [ ] Idee: Inbetriebnahme- und Abnahme-Tool (Anlagen-, Abnahme-, Prüfprotokoll, Funktionsnachweis, Datenblätter)

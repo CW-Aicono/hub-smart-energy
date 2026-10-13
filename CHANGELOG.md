@@ -2,6 +2,13 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.11.0 – 13.10.2026
+- Migration drizzle 0036: get_power_series_step(meter_ids, start, end, step 5/15/60/1440) – feste Auflösung, max. 400 Tage, gleiche Zugriffsprüfung wie get_power_series_auto.
+- Energieanalyse: Auflösung „15min“, Abfrage über fetchPowerSeriesStep (Chunks < 1000 Zeilen, 4 parallel) statt Server-Automatik.
+- useGatewayLivePower: 10-s-Poll (nicht im Hintergrund) statt 5 min.
+- Dashboard: Größen 1/6, 1/4, 3/4; neues Widget charge_station (ChargeStationWidget, 15-s-Poll).
+- shelly-periodic-sync: sensor_missing nur bei > 10 min ohne Messwert, Zählername in Meldung, Auto-Resolve.
+
 ## v1.10.0 – 13.10.2026
 - Migration drizzle 0035: meters.source_charge_point_id (unique), Trigger sync_charge_point_meter (Anlage/Umbenennung/Liegenschaft, Archivierung bei Löschung), linked_meter_id gesetzt; Backfill Zähler + Historie aus ocpp_meter_samples (5-Min-Leistung, stündlicher Zählerstand). Staging: 2 Ladepunkte mit Liegenschaft angebunden, 5 ohne Liegenschaft (kein Zähler möglich).
 - UI: Badge „Ladepunkt“ in Zählerlisten, Name im Zählerdialog gesperrt, Device-Tree erkennt Ladepunkt-Zähler über source_charge_point_id.
