@@ -35,7 +35,7 @@ export function useDeviceTree() {
         if (m.capture_type === "virtual") nodeType = "virtual";
         else if (m.device_type === "sensor") nodeType = "sensor";
         else if (m.device_type === "actuator") nodeType = "actuator";
-        else if (m.energy_type === "strom" && (m.name.toLowerCase().includes("wallbox") || m.name.toLowerCase().includes("ladepunkt"))) {
+        else if ((m as any).source_charge_point_id || m.energy_type === "strom" && (m.name.toLowerCase().includes("wallbox") || m.name.toLowerCase().includes("ladepunkt"))) {
           nodeType = "wallbox";
         }
 

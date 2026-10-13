@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.10.0 – 13.10.2026
+- Ladepunkte erscheinen automatisch als Stromzähler im Energiemonitoring (Kennzeichnung „Ladepunkt“) mit Live-Leistung, Zählerstand, Verlauf, Widgets, Export, Alarmen und Kosten. Vorhandene Messwerte der Ladestationen wurden übernommen.
+
 ## v1.9.0 – 09.10.2026
 - Rechnungen entstehen automatisch als Entwurf: Einrichtungsgebühr bei neuen Kunden, anteiliger erster Monat bei Paketbuchung, Freischaltgebühr bei Partner-Freischaltung. Freigabe an Lexware weiterhin per Button.
 - Partnerkunden mit Paketen werden an den Partner zum Einkaufspreis berechnet; Endkunden sehen diese Rechnungen nicht.

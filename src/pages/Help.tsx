@@ -102,6 +102,7 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.10.0", date: "2026-10-13", changes: [{ type: "feature", textKey: "help.changelog1100Feature1" }] },
     { version: "1.9.0", date: "2026-10-09", changes: [{ type: "feature", textKey: "help.changelog190Feature1" }] },
     { version: "1.8.1", date: "2026-10-09", changes: [{ type: "improvement", textKey: "help.changelog181Improvement1" }] },
     { version: "1.6.5", date: "2026-10-07", changes: [{ type: "fix", textKey: "help.changelog165Fix1" }] },
