@@ -553,6 +553,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               <li>{T("manual.ev.billingItem1")}</li>
               <li>{T("manual.ev.billingItem2")}</li>
               <li>{T("manual.ev.billingItem3")}</li>
+              <li>{T("manual.ev.billingItem4")}</li>
             </ul>
           </section>
 
@@ -899,6 +900,12 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             </h3>
             <p className="text-muted-foreground mb-4">{T("manual.acc.intro")}</p>
             <p className="text-sm text-muted-foreground">{T("manual.acc.adminLevels")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.acc.inviteLink")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.acc.portalRolesDiscounts")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.acc.moduleBundleNavigation")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.acc.autoInvoices")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.acc.chargePointMeters")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.acc.dashboardV111")}</p>
           </section>
           <Separator />
           <section>

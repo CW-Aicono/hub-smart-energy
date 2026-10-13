@@ -6,7 +6,7 @@ import { z } from "zod";
  * Analyse per Link geteilt werden kann. Der Link enthält nur Einstellungen;
  * Daten werden beim Öffnen mit den Rechten des jeweiligen Nutzers geladen.
  */
-export const RESOLUTIONS = ["auto", "5min", "hour", "day", "week", "month"] as const;
+export const RESOLUTIONS = ["auto", "5min", "15min", "hour", "day", "week", "month"] as const;
 export type Resolution = (typeof RESOLUTIONS)[number];
 
 export const PRESETS = ["today", "yesterday", "7d", "30d", "month", "lastMonth", "year", "lastYear", "custom"] as const;

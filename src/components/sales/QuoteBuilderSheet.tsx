@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { usePricingPackages } from "@/hooks/usePricingPackages";
+import { PackageQuoteCalculator } from "@/components/billing/PackagePricing";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -58,6 +60,8 @@ interface DeviceLine {
 
 export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onGenerated }: Props) {
   const { prices } = useModulePrices();
+  const { catalog } = usePricingPackages();
+  const catalogFlags = catalog?.flags ?? {};
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [available, setAvailable] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -186,8 +190,9 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
 
   const allModules = useMemo(() => {
     const set = new Set<string>([...available, ...suggestions.map((s) => s.module_code)]);
-    return Array.from(set).sort();
-  }, [available, suggestions]);
+    // Nicht mehr einzeln verkäuflich bzw. nur auf Anfrage: aus dem Angebot ausblenden
+    return Array.from(set).filter((c) => !catalogFlags[c]).sort();
+  }, [available, suggestions, catalogFlags]);
 
   const toggle = (code: string) => {
     const s = new Set(selected);
@@ -332,6 +337,9 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
 
             <CompletenessCheck projectId={projectId} onFixed={() => { /* reload trigger */ }} />
 
+            <Separator />
+
+            <PackageQuoteCalculator />
             <Separator />
 
             {/* Modules */}

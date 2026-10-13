@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { PackageBillingOverviewCard } from "@/components/billing/PackagePricing";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
@@ -13,13 +14,14 @@ import { Receipt, TrendingUp, Percent, Building2, Factory, Search } from "lucide
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "@/hooks/use-toast";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+import { PartnerDiscountRequestsCard } from "@/components/billing/DiscountRequests";
 
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
 const fmtEur = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 const fmtPct = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " %";
 
 export default function PartnerBilling() {
-  const { partnerId, loading, permissions } = usePartnerAccess();
+  const { partnerId, loading, permissions, isPartnerAdmin } = usePartnerAccess();
   const canEditPrices = permissions.viewBilling;
   const qc = useQueryClient();
   const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
@@ -212,6 +214,9 @@ export default function PartnerBilling() {
           {isCommission ? <><Percent className="h-3 w-3 mr-1" /> Provision</> : <><TrendingUp className="h-3 w-3 mr-1" /> Wiederverkauf</>}
         </Badge>
       </header>
+
+      {partnerId && <PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} />}
+      {partnerId && <PackageBillingOverviewCard partnerId={partnerId} />}
 
       {isCommission ? (
         <Card>

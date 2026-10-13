@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -8900,6 +8900,7 @@ export type Database = {
           sim_step: number | null
           sim_unit: string | null
           smgw_id: string | null
+          source_charge_point_id: string | null
           source_unit_energy: string | null
           source_unit_power: string | null
           tenant_id: string
@@ -8963,6 +8964,7 @@ export type Database = {
           sim_step?: number | null
           sim_unit?: string | null
           smgw_id?: string | null
+          source_charge_point_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
           tenant_id: string
@@ -9026,6 +9028,7 @@ export type Database = {
           sim_step?: number | null
           sim_unit?: string | null
           smgw_id?: string | null
+          source_charge_point_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
           tenant_id?: string
@@ -9075,6 +9078,13 @@ export type Database = {
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "floor_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_source_charge_point_id_fkey"
+            columns: ["source_charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
             referencedColumns: ["id"]
           },
           {
@@ -9142,6 +9152,21 @@ export type Database = {
           name?: string
           price_monthly?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      module_catalog_flags: {
+        Row: {
+          module_code: string
+          visibility: string
+        }
+        Insert: {
+          module_code: string
+          visibility?: string
+        }
+        Update: {
+          module_code?: string
+          visibility?: string
         }
         Relationships: []
       }
@@ -9707,6 +9732,78 @@ export type Database = {
           },
         ]
       }
+      partner_discount_requests: {
+        Row: {
+          approved_module_codes: string[] | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          discount_type: string
+          duration_months: number | null
+          id: string
+          module_codes: string[]
+          partner_id: string
+          reason: string | null
+          requested_by: string
+          status: string
+          tenant_id: string | null
+          valid_from: string
+          value: number
+        }
+        Insert: {
+          approved_module_codes?: string[] | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          discount_type: string
+          duration_months?: number | null
+          id?: string
+          module_codes: string[]
+          partner_id: string
+          reason?: string | null
+          requested_by: string
+          status?: string
+          tenant_id?: string | null
+          valid_from: string
+          value: number
+        }
+        Update: {
+          approved_module_codes?: string[] | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          discount_type?: string
+          duration_months?: number | null
+          id?: string
+          module_codes?: string[]
+          partner_id?: string
+          reason?: string | null
+          requested_by?: string
+          status?: string
+          tenant_id?: string | null
+          valid_from?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_discount_requests_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_discount_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_members: {
         Row: {
           can_create_tenant: boolean
@@ -9850,6 +9947,7 @@ export type Database = {
           custom_domain: string | null
           id: string
           is_active: boolean
+          lexware_contact_id: string | null
           logo_url: string | null
           name: string
           notes: string | null
@@ -9874,6 +9972,7 @@ export type Database = {
           custom_domain?: string | null
           id?: string
           is_active?: boolean
+          lexware_contact_id?: string | null
           logo_url?: string | null
           name: string
           notes?: string | null
@@ -9898,6 +9997,7 @@ export type Database = {
           custom_domain?: string | null
           id?: string
           is_active?: boolean
+          lexware_contact_id?: string | null
           logo_url?: string | null
           name?: string
           notes?: string | null
@@ -11209,6 +11309,101 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pricing_package_modules: {
+        Row: {
+          module_code: string
+          package_code: string
+        }
+        Insert: {
+          module_code: string
+          package_code: string
+        }
+        Update: {
+          module_code?: string
+          package_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_package_modules_package_code_fkey"
+            columns: ["package_code"]
+            isOneToOne: false
+            referencedRelation: "pricing_packages"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      pricing_packages: {
+        Row: {
+          active: boolean
+          always_active: boolean
+          code: string
+          description: string | null
+          ek: number
+          name: string
+          partner_unlock_fee: number
+          requires_any_other: boolean
+          requires_package: string | null
+          sort: number
+          updated_at: string
+          uvp: number
+        }
+        Insert: {
+          active?: boolean
+          always_active?: boolean
+          code: string
+          description?: string | null
+          ek?: number
+          name: string
+          partner_unlock_fee?: number
+          requires_any_other?: boolean
+          requires_package?: string | null
+          sort?: number
+          updated_at?: string
+          uvp?: number
+        }
+        Update: {
+          active?: boolean
+          always_active?: boolean
+          code?: string
+          description?: string | null
+          ek?: number
+          name?: string
+          partner_unlock_fee?: number
+          requires_any_other?: boolean
+          requires_package?: string | null
+          sort?: number
+          updated_at?: string
+          uvp?: number
+        }
+        Relationships: []
+      }
+      pricing_unit_prices: {
+        Row: {
+          code: string
+          ek: number
+          name: string
+          unit: string
+          updated_at: string
+          uvp: number
+        }
+        Insert: {
+          code: string
+          ek?: number
+          name: string
+          unit: string
+          updated_at?: string
+          uvp?: number
+        }
+        Update: {
+          code?: string
+          ek?: number
+          name?: string
+          unit?: string
+          updated_at?: string
+          uvp?: number
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -14074,13 +14269,16 @@ export type Database = {
           created_at: string
           document_type: string
           id: string
+          invoice_kind: string
           invoice_number: string
           lexware_invoice_id: string | null
           line_items: Json | null
           module_total: number
+          partner_id: string | null
           pdf_url: string | null
           period_end: string
           period_start: string
+          source_ref: string | null
           status: string
           support_total: number
           tenant_id: string
@@ -14091,13 +14289,16 @@ export type Database = {
           created_at?: string
           document_type?: string
           id?: string
+          invoice_kind?: string
           invoice_number: string
           lexware_invoice_id?: string | null
           line_items?: Json | null
           module_total?: number
+          partner_id?: string | null
           pdf_url?: string | null
           period_end: string
           period_start: string
+          source_ref?: string | null
           status?: string
           support_total?: number
           tenant_id: string
@@ -14108,19 +14309,29 @@ export type Database = {
           created_at?: string
           document_type?: string
           id?: string
+          invoice_kind?: string
           invoice_number?: string
           lexware_invoice_id?: string | null
           line_items?: Json | null
           module_total?: number
+          partner_id?: string | null
           pdf_url?: string | null
           period_end?: string
           period_start?: string
+          source_ref?: string | null
           status?: string
           support_total?: number
           tenant_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tenant_invoices_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tenant_invoices_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -14304,6 +14515,48 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tenant_modules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_package_bookings: {
+        Row: {
+          booked_at: string
+          booked_by: string | null
+          cancelled_at: string | null
+          id: string
+          package_code: string
+          tenant_id: string
+        }
+        Insert: {
+          booked_at?: string
+          booked_by?: string | null
+          cancelled_at?: string | null
+          id?: string
+          package_code: string
+          tenant_id: string
+        }
+        Update: {
+          booked_at?: string
+          booked_by?: string | null
+          cancelled_at?: string | null
+          id?: string
+          package_code?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_package_bookings_package_code_fkey"
+            columns: ["package_code"]
+            isOneToOne: false
+            referencedRelation: "pricing_packages"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "tenant_package_bookings_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -15675,6 +15928,21 @@ export type Database = {
           resolution_minutes: number
         }[]
       }
+      get_power_series_step: {
+        Args: {
+          p_end: string
+          p_meter_ids: string[]
+          p_start: string
+          p_step_minutes: number
+        }
+        Returns: {
+          bucket: string
+          meter_id: string
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+        }[]
+      }
       get_pv_actual_daily_sums: {
         Args: { p_from_date: string; p_location_id: string; p_to_date: string }
         Returns: {
@@ -15857,6 +16125,22 @@ export type Database = {
         Returns: Json
       }
       portal_roles: { Args: { _uid: string }; Returns: string[] }
+      portal_set_user_roles: {
+        Args: { _roles: string[]; _target: string }
+        Returns: undefined
+      }
+      portal_staff_overview: {
+        Args: never
+        Returns: {
+          email: string
+          invited: boolean
+          is_blocked: boolean
+          last_sign_in_at: string
+          name: string
+          roles: string[]
+          user_id: string
+        }[]
+      }
       purge_meter_power_readings_retention: { Args: never; Returns: undefined }
       refresh_meter_daily_totals: {
         Args: {

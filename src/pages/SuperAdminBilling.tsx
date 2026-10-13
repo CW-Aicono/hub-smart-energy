@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import { PackageBillingOverviewCard } from "@/components/billing/PackagePricing";
 import { useAuth } from "@/hooks/useAuth";
 import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -12,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck, RefreshCw, Receipt, Search } from "lucide-react";
 import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
 import EditInvoiceContent from "@/components/super-admin/EditInvoiceContent";
+import { PortalDiscountRequestsCard } from "@/components/billing/DiscountRequests";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -86,25 +88,29 @@ const SuperAdminBilling = () => {
   const { data: invoices = [] } = useQuery({
     queryKey: ["super-admin-invoices"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("tenant_invoices").select("*, tenants(name, payment_method, sepa_iban, sepa_bic, sepa_account_holder, sepa_mandate_ref, sepa_mandate_date)").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("tenant_invoices").select("*, partners(name), tenants(name, payment_method, sepa_iban, sepa_bic, sepa_account_holder, sepa_mandate_ref, sepa_mandate_date)").order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
   });
 
   const [docFilter, setDocFilter] = useState<"all" | "invoice" | "subscription_notice">("all");
+  const [kindFilter, setKindFilter] = useState<"all" | "one_time" | "recurring" | "partner">("all");
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("asc"); }
   };
 
   const sorted = useMemo(() => {
-    const byType = invoices.filter((r: any) => docFilter === "all" || (r.document_type ?? "invoice") === docFilter);
+    const byType = invoices.filter((r: any) =>
+      (docFilter === "all" || (r.document_type ?? "invoice") === docFilter) &&
+      (kindFilter === "all" || (kindFilter === "partner" ? !!r.partner_id : (r.invoice_kind ?? "recurring") === kindFilter)));
     const filtered = search.trim()
       ? byType.filter((r: any) => {
           const q = search.toLowerCase();
           return (
             (r.tenants?.name ?? "").toLowerCase().includes(q) ||
+            (r.partners?.name ?? "").toLowerCase().includes(q) ||
             (r.status ?? "").toLowerCase().includes(q) ||
             (r.invoice_number ?? "").toLowerCase().includes(q) ||
             (r.lexware_invoice_number ?? "").toLowerCase().includes(q)
@@ -186,7 +192,7 @@ const SuperAdminBilling = () => {
       return;
     }
     const sepaInvoices = invoices.filter((inv: any) =>
-      (inv.tenants?.payment_method === "sepa") &&
+      !inv.partner_id && (inv.tenants?.payment_method === "sepa") &&
       (inv.status === "draft" || inv.status === "sent") &&
       Number(inv.amount) > 0 && inv.document_type !== "subscription_notice" &&
       inv.tenants?.sepa_iban &&
@@ -303,6 +309,8 @@ const SuperAdminBilling = () => {
         </header>
 
         <div className="p-6 space-y-6">
+          <PortalDiscountRequestsCard />
+          <PackageBillingOverviewCard />
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
@@ -382,6 +390,10 @@ const SuperAdminBilling = () => {
             {([["all", "Alle"], ["invoice", "Rechnungen"], ["subscription_notice", "Abo-Belege (0 €)"]] as const).map(([v, l]) => (
               <Button key={v} size="sm" variant={docFilter === v ? "default" : "outline"} onClick={() => setDocFilter(v)}>{l}</Button>
             ))}
+            <span className="mx-2 border-l" />
+            {([["all", "Alle Arten"], ["recurring", "Monatlich"], ["one_time", "Einmalig"], ["partner", "An Partner"]] as const).map(([v, l]) => (
+              <Button key={v} size="sm" variant={kindFilter === v ? "default" : "outline"} onClick={() => setKindFilter(v)}>{l}</Button>
+            ))}
           </div>
 
           {/* Table */}
@@ -409,6 +421,12 @@ const SuperAdminBilling = () => {
                       <TableRow key={inv.id}>
                         <TableCell className="font-medium">
                           {inv.tenants?.name ?? "–"}
+                          {inv.partner_id && (
+                            <div className="text-xs text-muted-foreground">an Partner: {inv.partners?.name ?? "–"} (EK)</div>
+                          )}
+                          {inv.invoice_kind === "one_time" && (
+                            <Badge variant="outline" className="ml-2 text-xs">Einmalig</Badge>
+                          )}
                           {inv.document_type === "subscription_notice" && (
                             <Badge variant="secondary" className="ml-2 text-xs" title="Kein Zahlbetrag – keine Rechnung">Abo-Beleg</Badge>
                           )}

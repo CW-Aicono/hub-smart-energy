@@ -176,6 +176,90 @@
       "when": 1791370947431,
       "tag": "0024_schedule_gap_backfill_scheduler",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791389361060,
+      "tag": "0025_partner_discount_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791390416001,
+      "tag": "0026_portal_staff_role_management",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1791390674859,
+      "tag": "0027_audit_portal_role_changes",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1791390854501,
+      "tag": "0028_fix_audit_portal_role_change_uuid_cast",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791390870269,
+      "tag": "0029_fix_audit_portal_role_change_profile_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791523804399,
+      "tag": "0030_pricing_packages",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791527106131,
+      "tag": "0031_restore_portal_role_audit_filter",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791536153446,
+      "tag": "0032_dirk_markus_partner_admin_aicono",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791536614678,
+      "tag": "0033_dirk_markus_home_tenant_brightnetworks",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791538598653,
+      "tag": "0034_auto_one_time_and_recurring_invoices",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791927788140,
+      "tag": "0035_charge_point_meters",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791929181122,
+      "tag": "0036_power_series_fixed_step",
+      "breakpoints": true
     }
   ]
 }

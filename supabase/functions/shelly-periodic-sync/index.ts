@@ -118,7 +118,7 @@ serve(async (req) => {
         // 3. Find meters linked to this integration
         const { data: linkedMeters } = await supabase
           .from("meters")
-          .select("id, sensor_uuid, energy_type, tenant_id")
+          .select("id, name, sensor_uuid, energy_type, tenant_id")
           .eq("location_integration_id", integrationId)
           .eq("capture_type", "automatic")
           .eq("is_archived", false);
@@ -226,24 +226,41 @@ serve(async (req) => {
         }
 
 
-        // 3b. Zähler ohne passenden Sensor sichtbar melden statt still zu überspringen.
-        if (missingSensors.length > 0) {
-          console.warn(`Integration ${integrationId}: ${missingSensors.length} Zähler ohne passenden Sensor`, missingSensors);
-          const { data: openErr } = await supabase
-            .from("integration_errors").select("id")
-            .eq("location_integration_id", integrationId).eq("error_type", "sensor_missing").eq("is_resolved", false)
-            .maybeSingle();
+        // 3b. Zähler ohne passenden Sensor sichtbar melden – aber erst, wenn der
+        // Sensor dauerhaft fehlt (kein Messwert seit > 10 min). Kurze, unvollständige
+        // Antworten der Shelly Cloud lösen so keine Fehlmeldung mehr aus.
+        let persistentMissing: string[] = [];
+        if (missingSensors.length > 0 && sensors.length > 0) {
+          const cutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+          const { data: recent } = await supabase
+            .from("meter_power_readings").select("meter_id")
+            .in("meter_id", missingSensors).gte("recorded_at", cutoff).limit(1000);
+          const fresh = new Set((recent ?? []).map((r: any) => r.meter_id));
+          persistentMissing = missingSensors.filter((id) => !fresh.has(id));
+        }
+        const { data: openErr } = await supabase
+          .from("integration_errors").select("id")
+          .eq("location_integration_id", integrationId).eq("error_type", "sensor_missing").eq("is_resolved", false)
+          .maybeSingle();
+        if (persistentMissing.length > 0) {
+          console.warn(`Integration ${integrationId}: ${persistentMissing.length} Zähler ohne passenden Sensor`, persistentMissing);
           if (!openErr) {
+            const names = linkedMeters.filter((m: any) => persistentMissing.includes(m.id)).map((m: any) => m.name || m.id);
             await supabase.from("integration_errors").insert({
               tenant_id: linkedMeters[0].tenant_id,
               location_id: locationId,
               location_integration_id: integrationId,
               integration_type: "shelly_cloud",
               error_type: "sensor_missing",
-              error_message: `${missingSensors.length} Zähler: Sensor nicht gefunden – bitte in „Gerät bearbeiten“ neu wählen. Zähler-IDs: ${missingSensors.join(", ")}`,
+              error_message: `${persistentMissing.length} Zähler: Sensor nicht gefunden – bitte in „Gerät bearbeiten“ neu wählen. Zähler: ${names.join(", ")} (IDs: ${persistentMissing.join(", ")})`,
               severity: "warning",
             });
           }
+        } else if (openErr && missingSensors.length === 0) {
+          // Sensor ist wieder da → Meldung automatisch auflösen.
+          await supabase.from("integration_errors")
+            .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+            .eq("id", openErr.id);
         }
 
         // 4. Batch insert into meter_power_readings

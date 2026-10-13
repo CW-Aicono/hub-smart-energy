@@ -76,6 +76,10 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: {
+          // React must live in its own chunk; otherwise Rollup hoists it into
+          // the recharts chunk, creating a circular chunk init that breaks
+          // React.lazy ("e._result.default" undefined → blank screen).
+          react: ["react", "react-dom", "react/jsx-runtime", "scheduler"],
           translations: ["./src/i18n/translations.ts"],
           leaflet: ["leaflet", "react-leaflet", "@react-leaflet/core"],
           recharts: ["recharts"],

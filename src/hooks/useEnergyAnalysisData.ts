@@ -1,6 +1,6 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+import { fetchPowerSeriesStep } from "@/lib/powerSeries";
 import { useTenant } from "@/hooks/useTenant";
 import type { Resolution } from "@/lib/energyAnalysisState";
 
@@ -22,6 +22,7 @@ export function bucketStart(t: number, res: ConcreteResolution): number {
   const d = new Date(t);
   switch (res) {
     case "5min": d.setMinutes(Math.floor(d.getMinutes() / 5) * 5, 0, 0); break;
+    case "15min": d.setMinutes(Math.floor(d.getMinutes() / 15) * 15, 0, 0); break;
     case "hour": d.setMinutes(0, 0, 0); break;
     case "day": d.setHours(0, 0, 0, 0); break;
     case "week": { d.setHours(0, 0, 0, 0); const wd = (d.getDay() + 6) % 7; d.setDate(d.getDate() - wd); break; }
@@ -30,7 +31,7 @@ export function bucketStart(t: number, res: ConcreteResolution): number {
   return d.getTime();
 }
 
-const PTS_PER_DAY: Record<ConcreteResolution, number> = { "5min": 288, hour: 24, day: 24, week: 24, month: 1 };
+const PTS_PER_DAY: Record<ConcreteResolution, number> = { "5min": 288, "15min": 96, hour: 24, day: 24, week: 24, month: 1 };
 
 function energyUnit(unit: string): string {
   const u = unit.trim().toLowerCase();
@@ -81,9 +82,9 @@ export function useEnergyAnalysisData(
       const meterRows = meterIds.filter((id) => byId.has(id) && !isSensor(byId.get(id)));
       const sensorRows = meterIds.filter((id) => byId.has(id) && isSensor(byId.get(id)));
       const days = Math.max(1, (to.getTime() - from.getTime()) / 86_400_000);
-      const maxPoints = Math.min(20000, Math.ceil(days * PTS_PER_DAY[res]));
-
-      const power = meterRows.length ? await fetchPowerSeriesAuto(meterRows, from, to, maxPoints) : [];
+      // Gewählte Auflösung wird serverseitig erzwungen (nicht mehr vom Zeitraum überstimmt).
+      const step = res === "5min" ? 5 : res === "15min" ? 15 : res === "hour" ? 60 : 1440;
+      const power = meterRows.length ? await fetchPowerSeriesStep(meterRows, from, to, step) : [];
 
       const series: EASeries[] = [];
       for (const id of meterRows) {

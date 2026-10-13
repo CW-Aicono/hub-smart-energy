@@ -33,7 +33,7 @@ const PRESET_LABEL: Record<Preset, string> = {
   today: "Heute", yesterday: "Gestern", "7d": "Letzte 7 Tage", "30d": "Letzte 30 Tage", month: "Dieser Monat",
   lastMonth: "Letzter Monat", year: "Dieses Jahr", lastYear: "Letztes Jahr", custom: "Frei wählen",
 };
-const RES_LABEL: Record<Resolution, string> = { auto: "Automatisch", "5min": "5 Minuten", hour: "Stunde", day: "Tag", week: "Woche", month: "Monat" };
+const RES_LABEL: Record<Resolution, string> = { auto: "Automatisch", "5min": "5 Minuten", "15min": "15 Minuten", hour: "Stunde", day: "Tag", week: "Woche", month: "Monat" };
 
 const fmt = (n: number | null | undefined, d = 2) =>
   n == null || !Number.isFinite(n) ? "–" : n.toLocaleString("de-DE", { maximumFractionDigits: d });
@@ -41,7 +41,7 @@ const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padS
 
 function fmtTime(t: number, res: ConcreteResolution) {
   const d = new Date(t);
-  if (res === "5min" || res === "hour") return d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  if (res === "5min" || res === "15min" || res === "hour") return d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   if (res === "month") return d.toLocaleDateString("de-DE", { month: "short", year: "numeric" });
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }

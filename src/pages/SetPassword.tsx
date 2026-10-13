@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import aiconoLogo from "@/assets/aicono-logo.png";
+import { validatePassword, passwordErrorMessage } from "@/lib/passwordPolicy";
 
 const SetPassword = () => {
   const navigate = useNavigate();
@@ -65,13 +66,9 @@ const SetPassword = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (password.length < 8) {
-      toast({ title: "Fehler", description: "Das Passwort muss mindestens 8 Zeichen lang sein.", variant: "destructive" });
-      return;
-    }
-
-    if (password !== passwordConfirm) {
-      toast({ title: "Fehler", description: "Die Passwörter stimmen nicht überein.", variant: "destructive" });
+    const invalid = validatePassword(password, passwordConfirm);
+    if (invalid) {
+      toast({ title: "Fehler", description: invalid, variant: "destructive" });
       return;
     }
 
@@ -80,14 +77,23 @@ const SetPassword = () => {
     setSubmitting(false);
 
     if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      toast({ title: "Fehler", description: passwordErrorMessage(error as any), variant: "destructive" });
       return;
     }
 
+    // Einladungslink erst jetzt als verwendet markieren
+    const inviteToken = sessionStorage.getItem("aicono_invite_token");
+    if (inviteToken) {
+      sessionStorage.removeItem("aicono_invite_token");
+      void supabase.functions.invoke("activate-invited-user", { body: { consumeInvite: true, tokenId: inviteToken } });
+    }
     // Clear recovery flag so user can navigate freely
     clearRecovery();
     setDone(true);
-    setTimeout(() => navigate("/", { replace: true }), 2500);
+    // Zurück in die Herkunfts-App (z. B. /ev, /te), falls der Link sie mitbrachte
+    const nextParam = new URLSearchParams(window.location.search).get("next");
+    const target = nextParam && ["/ev", "/te", "/mein-sharing"].includes(nextParam) ? nextParam : "/";
+    setTimeout(() => navigate(target, { replace: true }), 2500);
   };
 
   return (

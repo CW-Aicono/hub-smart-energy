@@ -134,7 +134,7 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
       body: {
         type: "password_reset",
         email,
-        redirectTo: window.location.origin + "/ev",
+        redirectTo: window.location.origin + "/set-password?next=/ev",
         locale: "de",
       },
     });

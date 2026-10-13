@@ -382,6 +382,9 @@ const MetersOverview = () => {
                                   {captureLabel}
                                 </Badge>
                               )}
+                              {(m as any).source_charge_point_id && (
+                                <Badge variant="outline" className="ml-1">{t("mm.chargePointMeter" as any)}</Badge>
+                              )}
                             </TableCell>
                             <TableCell>
                               {isSimulation ? (

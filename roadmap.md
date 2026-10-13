@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Portal-Navigation: eigene Symbole, Module & Bundles gemeinsam mit zwei Reitern (v1.8.1; angemeldeter Menü- und Reiterwechsel geprüft)
+
 - [x] Benutzerliste repariert; Portal-Admin, Partner-Admin, Kunden-Admin vereinheitlicht (v1.6.2; 16 Tests erfolgreich, angemeldete Browserprüfung mangels Sitzung offen)
 
 - [x] Dashboard: Zeitraum pro Grafik
@@ -36,3 +38,19 @@
 - [x] Shelly HTTP 429 / wechselnder Sync-Fehler: doppelte Abholung entfernt, Browser liest Zwischenspeicher
 - [x] Tacho zeigt aktuellen Leistungswert, W-Einheit im Verlauf korrekt
 - [ ] Live-Deploy v1.6.5 (wartet auf Nutzer)
+
+## Anmeldung & Sicherheit (07.10.)
+- [x] Einladungslink erst nach Passwort-Speichern verbraucht, erneut senden, Profil in allen Bereichen (v1.6.9)
+- [ ] 2FA (Authenticator-App), zunächst Pflicht für Portal-Admins und Partner-Admins
+
+- [x] Portal-Rollen (Admin/Kaufmännisch/Technisch) durch Admins pflegbar (v1.7.0)
+- [x] Partner-Rabatt-Anfragen mit Freigabe/Ablehnung im AICONO Portal (v1.7.0)
+- [ ] Schutz „letzter Portal-Admin“ zusätzlich serverseitig in der Datenbank erzwingen
+- [x] Automatische Einmal- und Monatsrechnungen als Entwurf, Partner zum EK (v1.9.0)
+- [ ] Ende-zu-Ende-Test Paketbuchung + Monatslauf mit angemeldetem Portal-Admin (wartet auf Nutzer)
+- [x] Ladepunkte als Zähler im Energiemonitoring (v1.10.0)
+- [ ] 5 Ladepunkte (Stadt Steinfurt 4, ESB 1) ohne Liegenschaft – Zuordnung nötig (wartet auf Nutzer)
+
+## ESB Übersicht 13.10.
+- [x] Live-Werte schneller (10 s), Ladestationen-Kachel, mehr Spaltenbreiten, 15-Min-Energieanalyse + Jahres-CSV, Sensor-Meldung entprellt (v1.11.0)
+- [ ] Idee: Inbetriebnahme- und Abnahme-Tool (Anlagen-, Abnahme-, Prüfprotokoll, Funktionsnachweis, Datenblätter)

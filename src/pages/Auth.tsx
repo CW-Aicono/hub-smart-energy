@@ -27,7 +27,7 @@ const Auth = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { branding: partnerBranding } = usePartnerHostBranding();
-  const [view, setView] = useState<AuthView>("login");
+  const [view, setView] = useState<AuthView>(() => new URLSearchParams(window.location.search).get("forgot") === "1" ? "forgotPassword" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);

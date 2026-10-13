@@ -890,6 +890,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                         <Badge variant={m.capture_type === "automatic" ? "default" : m.capture_type === "virtual" ? "outline" : "secondary"}>
                           {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : m.capture_type === "virtual" ? t("mm.captureVirtual" as any) : t("mm.captureManual" as any)}
                         </Badge>
+                        {(m as any).source_charge_point_id && (
+                          <Badge variant="outline" className="ml-1">{t("mm.chargePointMeter" as any)}</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">{valueText}</TableCell>
                       {isAdmin && (

@@ -5,7 +5,7 @@ import { useTenant } from "./useTenant";
 import { useDemoMode } from "@/contexts/DemoMode";
 import type { Database, Json } from "@/integrations/supabase/types";
 
-export type WidgetSize = "full" | "2/3" | "1/2" | "1/3";
+export type WidgetSize = "full" | "3/4" | "2/3" | "1/2" | "1/3" | "1/4" | "1/6";
 
 export interface WidgetLayout {
   x?: number;
@@ -47,6 +47,7 @@ const DEFAULT_WIDGETS = [
   { widget_type: "integration_errors", position: 16, is_visible: true },
   { widget_type: "savings_share", position: 17, is_visible: true },
   { widget_type: "charge_point_power", position: 18, is_visible: false },
+  { widget_type: "charge_station", position: 19, is_visible: false },
 ];
 
 export function useDashboardWidgets() {

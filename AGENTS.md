@@ -10,3 +10,10 @@
 - AICONO Portal access is area-based (`can_portal_read/write` in SQL, `usePortalAccess` + `SuperAdminWrapper` in UI); `super_admin` means portal admin and portal roles may only be changed by portal admins — UI area checks are navigation only, RLS enforces.
 
 - Display-role wording changes must preserve role enum values, route paths and authorization logic — labels must never change access rights.
+
+- New bookings are priced via the package catalog (`pricing_packages` + `src/lib/packagePricing.ts`), while tenants without a package booking keep the legacy `module_prices` billing — existing customers must never be repriced automatically.
+
+- Portal module pricing and bundles share route-backed navigation tabs while retaining their existing URLs and authorization wrappers, so deep links and permissions remain unchanged.
+
+- Automatic invoices are created only as drafts with a unique `source_ref` per triggering event (`_shared/invoiceDrafts.ts`, `create_setup_invoice` trigger) and partner-addressed invoices carry `partner_id` — prevents double billing and keeps purchase prices hidden from end customers.
+- Charge points are mirrored as meters via the `sync_charge_point_meter` trigger and `meters.source_charge_point_id`, reusing the existing OCPP forwarding to `linked_meter_id` — one data path, all meter features apply.

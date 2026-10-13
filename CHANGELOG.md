@@ -2,6 +2,63 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.11.0 – 13.10.2026
+- Migration drizzle 0036: get_power_series_step(meter_ids, start, end, step 5/15/60/1440) – feste Auflösung, max. 400 Tage, gleiche Zugriffsprüfung wie get_power_series_auto.
+- Energieanalyse: Auflösung „15min“, Abfrage über fetchPowerSeriesStep (Chunks < 1000 Zeilen, 4 parallel) statt Server-Automatik.
+- useGatewayLivePower: 10-s-Poll (nicht im Hintergrund) statt 5 min.
+- Dashboard: Größen 1/6, 1/4, 3/4; neues Widget charge_station (ChargeStationWidget, 15-s-Poll).
+- shelly-periodic-sync: sensor_missing nur bei > 10 min ohne Messwert, Zählername in Meldung, Auto-Resolve.
+
+## v1.10.0 – 13.10.2026
+- Migration drizzle 0035: meters.source_charge_point_id (unique), Trigger sync_charge_point_meter (Anlage/Umbenennung/Liegenschaft, Archivierung bei Löschung), linked_meter_id gesetzt; Backfill Zähler + Historie aus ocpp_meter_samples (5-Min-Leistung, stündlicher Zählerstand). Staging: 2 Ladepunkte mit Liegenschaft angebunden, 5 ohne Liegenschaft (kein Zähler möglich).
+- UI: Badge „Ladepunkt“ in Zählerlisten, Name im Zählerdialog gesperrt, Device-Tree erkennt Ladepunkt-Zähler über source_charge_point_id.
+
+## v1.9.0 – 09.10.2026
+- Daten: 20 nicht übergebene Rechnungsentwürfe storniert (status voided); 7 Lexware-Rechnungen unverändert.
+- Migration drizzle 0034: tenant_invoices.partner_id/invoice_kind/source_ref (Unique auf aktive source_refs), partners.lexware_contact_id, pricing_packages.partner_unlock_fee; Trigger create_setup_invoice auf tenants (Einrichtung aus pricing_unit_prices.setup); RLS: Mandant sieht keine an Partner adressierten Rechnungen, Partner nur an sich adressierte.
+- _shared/invoiceDrafts.ts (proRataAmount, createOneTimeDraft); package-book erzeugt Anteilsrechnung; super-admin-set-partner-module erzeugt Freischaltrechnung je Paket (Anker: erster Kunde des Partners).
+- generate-monthly-invoices: Paketkunden über Paketkatalog (UVP bzw. EK an Partner, je Partnerkunde ein Entwurf), Altpreis-Kunden unverändert; Einmal- und Partnerrechnungen werden nie zusammengeführt.
+- lexware-api: Partner als Rechnungsempfänger; alle Positionstypen werden übertragen (vorher fehlten Rabatt-/Ladepunkt-/Vorkassezeilen).
+
+## Unreleased
+- Fix Auth-Mail-Links: Bestätigungs- und Magic-Links führen zurück in die anfragende App (safeAppRedirect, ALLOWED_APP_PATHS /, /ev, /te, /mein-sharing); Passwort-Links bleiben auf /set-password, merken sich die Herkunfts-App als ?next= (Whitelist) und SetPassword navigiert nach dem Speichern dorthin zurück. Betroffen: _shared/appOrigin.ts, send-auth-email, ChargingApp, TenantEnergyApp, SetPassword.
+- AICONO Portal → Modulpreise: Karte „Monatliche Standardpreise" ausgeblendet; Altpreise bleiben für Bestandskunden in der Abrechnung aktiv.
+- Daten (Migration drizzle 0032): d.markus@bright-networks.de als Partner-Admin der AICONO Partner GmbH (idempotent, per E-Mail aufgelöst; greift auf Live nur, wenn das Konto dort existiert).
+- Daten (Migration drizzle 0033): Heimatmandant BrightNetWorks für d.markus@bright-networks.de (nur wenn bisher leer), damit der EMS-Bereich verfügbar ist.
+- Fix GettingStarted: „Abbrechen“/Abschluss lädt den Mandanten neu und setzt einen Sitzungs-Merker; Index leitet nicht mehr mit veralteten Mandantendaten zurück in den Assistenten (Umleitungsschleife).
+
+## v1.8.1 – 09.10.2026
+- Portal-Navigation: BadgeCheck für aktive Lizenzen, Handshake für Gain-Sharing; gemeinsamer Einstieg „Module & Bundles“ (Layers) mit Reitern Modulpreise (Tags) und Bundles (Package). URLs, Berechtigungen und Abrechnung unverändert.
+
+## v1.8.0 – 09.10.2026
+- Neue Preislogik Basis + 6 Pakete (Migration 0030): `pricing_packages`, `pricing_package_modules`, `pricing_unit_prices`, `module_catalog_flags`, `tenant_package_bookings` mit RLS (Lesen angemeldet, Schreiben `can_portal_write(commercial)`).
+- `src/lib/packagePricing.ts` (Preisrechnung, Abhängigkeiten, Rabatt/Aufschlag) mit Akzeptanztests (31 €, 242/181 €, 678/506 €).
+- Edge Functions `package-book` (schaltet Modul-Codes über portal-/partner-set-tenant-module) und `package-billing-overview` (nur lesend).
+- UI: Paketkatalog in Modulpreisen, Paket-Angebotsrechner im Angebotsbaukasten (hidden/on_request-Module ausgeblendet), Paketbuchung in Kundendetail (Portal + Partner), Monatsübersicht in Abrechnung (Portal + Partner).
+- Unverändert: `generate-monthly-invoices`, Inhalte `module_prices`, ModuleGuard, alle EMS-Funktionen. Bestandskunden ohne Paketbuchung = „Altpreis“.
+
+## v1.7.2 – 08.10.2026
+- Passwort-Mails: `send-auth-email` prüft `redirectTo` serverseitig gegen Positivliste (`_shared/appOrigin.ts`: staging/ems-pro, Pfade `/set-password`, `/mein-sharing/set-password`); Vorschau-/Fremdadressen werden ersetzt.
+- Profil: direkte Passwortänderung (aktuelles Passwort prüfen, dann `updateUser`); E-Mail-Weg bleibt.
+- Gemeinsame Passwortregeln `src/lib/passwordPolicy.ts` (8 Zeichen, Buchstabe + Ziffer, alt ≠ neu) in Profil, SetPassword, SharingSetPassword; Schutz vor geleakten Passwörtern (HIBP) aktiviert.
+
+## v1.7.1 – 07.10.2026
+- Portal-Rollen: Teammitglieder-Tabelle (Rollen-Badges, Status Aktiv/Eingeladen/Deaktiviert, letzter Login) und Dialog „Rollen bearbeiten“. Neue RPCs `portal_staff_overview` und `portal_set_user_roles` (nur super_admin, ändert nur Portal-Rollen), Trigger `guard_last_portal_admin` schützt DB-seitig vor Selbstentzug und Entfernen des letzten Portal-Admins (Migration 0026).
+- Audit: Trigger `audit_portal_role_change` schreibt jede Vergabe/Entzug einer Portal-Rolle mit Bearbeiter und Zeitstempel in `audit_logs` (entity_type `portal_role`, Migration 0027); Anzeige „Änderungsprotokoll“ unter Portal-Rollen.
+
+## v1.7.0 – 07.10.2026
+- AICONO Portal → Rollen: Spalte „Admin“ in der Portal-Benutzerliste; Admins vergeben/entziehen Admin, Kaufmännisch und Technisch. Selbstentzug und Entzug des letzten Admins gesperrt.
+- Partner-Rabatt-Anfragen: Partner-Admins fragen unter Partner-Portal → Abrechnung Rabatte für ein oder mehrere Module an (ein Kunde oder alle Kunden). AICONO Portal → Abrechnung: Freigabe ganz/teilweise oder Ablehnung mit Notiz; Freigabe legt Kundenrabatte an.
+
+## v1.6.9 – 2026-10-07
+- Einladungslink: `activate-invited-user` verbraucht den Token nicht mehr beim Klick, sondern erzeugt bei jedem Klick einen frischen Recovery-Link; neuer Modus `consumeInvite` (nach `updateUser` in SetPassword, E-Mail-Abgleich). Fehlercodes `used|expired|not_found` mit klaren Texten und „Passwort vergessen“-Knopf (`/auth?forgot=1`).
+- Link-Domain: `resolveOrigin` lässt nur `*.aicono.org` und die veröffentlichte App zu, Vorschau-Hosts werden verworfen (Fallback `APP_URL`).
+- Neuer Modus `resendInvite`: neuer 7-Tage-Link, alte offene Links werden gesperrt, Rollen bleiben unangetastet (Kunden-Admin nur eigene Organisation). Knopf im AICONO Portal → Benutzer; Kunden-Benutzerverwaltung nutzt denselben Modus.
+- „Profil & Passwort“ im Portal-Benutzermenü und in der Partner-Seitenleiste.
+
+## v1.6.8 – 2026-10-07
+- Ladeinfrastruktur → Abrechnung: CSV-Export in den Reitern „Ladevorgänge“ (nach Nutzern bzw. Abrechnungsgruppen) und „Rechnungen“. Exportiert alle gefilterten Zeilen (Zeitraum + Suche, nicht nur aktuelle Seite), UTF-8-BOM, Semikolon, deutsches Zahlenformat. Helper `src/lib/chargingCsvExport.ts`.
+
 ## v1.6.7 – 2026-10-07
 - Automatische Lückenfüllung für Shelly Cloud: `shelly-api` Aktion `backfillRange` (nur intern) liest `/v2/statistics/power-consumption/em-3p|em-1p` (stündliche Wh je Phase, Europe/Berlin), berechnet mittlere Netto-Leistung je Stunde und schreibt fehlende 5-Min-Buckets mit `source='shelly_cloud_backfill'` (ignoreDuplicates – Live-Werte bleiben). `gap-backfill-scheduler` kennt jetzt `shelly_cloud`. Migration 0024 plant `gap-backfill-hourly` (Minute 23, versetzt) – der Scheduler war bisher gar nicht eingeplant.
 

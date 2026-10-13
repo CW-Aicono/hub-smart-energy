@@ -2,6 +2,7 @@
 // Prüft die Super-Admin-Rolle serverseitig und schreibt mit Service-Rolle.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { createOneTimeDraft, isoDate } from "../_shared/invoiceDrafts.ts";
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -47,7 +48,33 @@ Deno.serve(async (req) => {
       actor_user_id: user.id,
       actor_email: user.email,
     });
-    return json({ success: true });
+    // Freischaltgebühr: einmal je Partner und Paket, sobald das erste Modul des Pakets freigeschaltet wird.
+    // Rechnungsentwurf an den Partner; ohne Kunden-Bezug wird ein Mandant des Partners nicht benötigt.
+    const invoices: unknown[] = [];
+    if (enabled) {
+      try {
+        const { data: links } = await admin.from("pricing_package_modules").select("package_code").eq("module_code", moduleCode);
+        const codes = [...new Set((links ?? []).map((l: any) => l.package_code))];
+        if (codes.length) {
+          const { data: pkgs } = await admin.from("pricing_packages").select("code,name,partner_unlock_fee,always_active").in("code", codes);
+          const { data: anchor } = await admin.from("tenants").select("id").eq("partner_id", partnerId).order("created_at").limit(1).maybeSingle();
+          for (const p of pkgs ?? []) {
+            const fee = Number(p.partner_unlock_fee ?? 0);
+            if (p.always_active || !(fee > 0)) continue;
+            if (!anchor?.id) { invoices.push({ package: p.code, skipped: "Partner hat noch keinen Kunden" }); continue; }
+            const today = isoDate(new Date());
+            invoices.push(await createOneTimeDraft(admin, {
+              tenantId: anchor.id, partnerId, sourceRef: `unlock:${partnerId}:${p.code}`,
+              periodStart: today, periodEnd: today,
+              lines: [{ type: "one_time", code: p.code, label: `Freischaltung Paket ${p.name}`, amount: fee }],
+            }));
+          }
+        }
+      } catch (e) {
+        console.error("[super-admin-set-partner-module] Freischaltrechnung fehlgeschlagen", e);
+      }
+    }
+    return json({ success: true, invoices });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

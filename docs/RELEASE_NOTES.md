@@ -1,5 +1,50 @@
 # Versionshinweise
 
+## v1.11.0 – 13.10.2026
+- Live-Leistungen (z. B. Shelly) im Dashboard werden bei geöffneter Seite alle 10 Sekunden aktualisiert.
+- Dashboard: neue Kachelbreiten 1/6, 1/4 und 3/4; neue Kachel „Ladestationen (Detail)“ mit Leistung, Status, Verbindung, Zählerstand und laufendem Ladevorgang je Ladepunkt.
+- Energieanalyse: gewählte Auflösung wird immer eingehalten, neu „15 Minuten“; Jahreslastgang im 15-Minuten-Raster als CSV exportierbar.
+- Meldung „Sensor nicht gefunden“ erscheint erst bei dauerhaft fehlendem Sensor, nennt den Zählernamen und verschwindet automatisch, wenn der Sensor wieder da ist.
+
+## v1.10.0 – 13.10.2026
+- Ladepunkte erscheinen automatisch als Stromzähler im Energiemonitoring (Kennzeichnung „Ladepunkt“) mit Live-Leistung, Zählerstand, Verlauf, Widgets, Export, Alarmen und Kosten. Vorhandene Messwerte der Ladestationen wurden übernommen.
+
+## v1.9.0 – 09.10.2026
+- Rechnungen entstehen automatisch als Entwurf: Einrichtungsgebühr bei neuen Kunden, anteiliger erster Monat bei Paketbuchung, Freischaltgebühr bei Partner-Freischaltung. Freigabe an Lexware weiterhin per Button.
+- Partnerkunden mit Paketen werden an den Partner zum Einkaufspreis berechnet; Endkunden sehen diese Rechnungen nicht.
+- Rechnungsübersicht: Filter Monatlich / Einmalig / An Partner.
+- An Lexware übergebene Rechnungen enthalten jetzt alle Positionen inkl. Rabatte und Ladepunkte.
+- Einrichtungsassistent: „Abbrechen“ führt jetzt zuverlässig ins Dashboard, statt den Assistenten erneut zu öffnen.
+
+## v1.8.1 – 09.10.2026
+- Aktive Lizenzen und Gain-Sharing haben eigene Symbole. Modulpreise und Bundles stehen gemeinsam unter „Module & Bundles“ mit zwei Reitern und unterschiedlichen Symbolen.
+
+## v1.8.0 – 09.10.2026
+- Neue Paketpreise (Basis + 6 Pakete) mit unverbindlicher Preisempfehlung und Partner-Einkaufspreis.
+- Angebotsrechner mit Paketen, Liegenschaften, Ladepunkten und Ladevorgängen; Rabatt auf UVP und Aufschlag auf EK; Warnung unter EK.
+- Pakete je Kunde buchen; Monatsübersicht je Partner. Bestehende Kunden behalten ihre Module und Preise.
+
+## v1.7.2 – 08.10.2026
+- Passwort direkt im Profil ändern (aktuelles und neues Passwort), ohne Umweg über E-Mail.
+- Links in Passwort-E-Mails führen immer auf die richtige AICONO-Adresse.
+- Passwörter aus bekannten Datenlecks werden abgelehnt; neue Passwörter brauchen mind. 8 Zeichen mit Buchstabe und Ziffer.
+
+## v1.7.1 – 07.10.2026
+- Portal-Rollen: Übersicht aller Teammitglieder mit Rollen, Status und letztem Login; Rollen per „Rollen bearbeiten“ anpassen. Der letzte Portal-Admin ist jetzt auch serverseitig geschützt.
+- Portal-Rollen: Änderungsprotokoll zeigt, wer wann welche Rolle vergeben oder entzogen hat.
+
+## v1.7.0 – 07.10.2026
+- AICONO Portal → Rollen: Spalte „Admin“ in der Portal-Benutzerliste; Admins vergeben/entziehen Admin, Kaufmännisch und Technisch. Selbstentzug und Entzug des letzten Admins gesperrt.
+- Partner-Rabatt-Anfragen: Partner-Admins fragen unter Partner-Portal → Abrechnung Rabatte für ein oder mehrere Module an (ein Kunde oder alle Kunden). AICONO Portal → Abrechnung: Freigabe ganz/teilweise oder Ablehnung mit Notiz; Freigabe legt Kundenrabatte an.
+
+## v1.6.9
+- Einladungslinks sind robuster: Der Link bleibt gültig, bis das Passwort wirklich gespeichert wurde. Doppelklicks oder Abbrüche machen ihn nicht mehr kaputt. Verständliche Hinweise, wenn ein Link bereits verwendet oder abgelaufen ist.
+- „Einladung erneut senden“ im AICONO Portal unter Benutzer.
+- „Profil & Passwort“ ist jetzt auch im AICONO Portal und im Partner-Portal erreichbar.
+
+## v1.6.8
+- Unter Ladeinfrastruktur → Abrechnung gibt es jetzt einen Button „CSV-Export“ für Ladevorgänge und Rechnungen. Exportiert werden alle Einträge des gewählten Zeitraums und der Suche – direkt in Excel lesbar.
+
 ## v1.6.7
 - Fallen Messwerte von Shelly-Zählern zeitweise aus (z. B. Internet- oder Serverausfall), werden die Lücken jetzt stündlich automatisch aus der Shelly Cloud nachgeladen. Nachgeladene Abschnitte zeigen den Stundenmittelwert.
 
