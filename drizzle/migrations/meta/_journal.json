@@ -253,6 +253,13 @@
       "when": 1791927788140,
       "tag": "0035_charge_point_meters",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791929181122,
+      "tag": "0036_power_series_fixed_step",
+      "breakpoints": true
     }
   ]
 }

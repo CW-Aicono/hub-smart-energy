@@ -15928,6 +15928,21 @@ export type Database = {
           resolution_minutes: number
         }[]
       }
+      get_power_series_step: {
+        Args: {
+          p_end: string
+          p_meter_ids: string[]
+          p_start: string
+          p_step_minutes: number
+        }
+        Returns: {
+          bucket: string
+          meter_id: string
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+        }[]
+      }
       get_pv_actual_daily_sums: {
         Args: { p_from_date: string; p_location_id: string; p_to_date: string }
         Returns: {
