@@ -14,6 +14,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 - lexware-api: Partner als Rechnungsempfänger; alle Positionstypen werden übertragen (vorher fehlten Rabatt-/Ladepunkt-/Vorkassezeilen).
 
 ## Unreleased
+- Fix Auth-Mail-Links: Bestätigungs- und Magic-Links führen zurück in die anfragende App (safeAppRedirect, ALLOWED_APP_PATHS /, /ev, /te, /mein-sharing); Passwort-Links bleiben auf /set-password, merken sich die Herkunfts-App als ?next= (Whitelist) und SetPassword navigiert nach dem Speichern dorthin zurück. Betroffen: _shared/appOrigin.ts, send-auth-email, ChargingApp, TenantEnergyApp, SetPassword.
 - AICONO Portal → Modulpreise: Karte „Monatliche Standardpreise" ausgeblendet; Altpreise bleiben für Bestandskunden in der Abrechnung aktiv.
 - Daten (Migration drizzle 0032): d.markus@bright-networks.de als Partner-Admin der AICONO Partner GmbH (idempotent, per E-Mail aufgelöst; greift auf Live nur, wenn das Konto dort existiert).
 - Daten (Migration drizzle 0033): Heimatmandant BrightNetWorks für d.markus@bright-networks.de (nur wenn bisher leer), damit der EMS-Bereich verfügbar ist.
