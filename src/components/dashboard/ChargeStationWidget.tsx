@@ -38,7 +38,7 @@ export default function ChargeStationWidget() {
     queryFn: async () => {
       const { data: cps, error } = await supabase
         .from("charge_points")
-        .select("id, name, status, ws_connected, max_power_kw, last_heartbeat")
+        .select("id, name, status, ws_connected, max_power_kw, last_heartbeat_at")
         .eq("tenant_id", tenant!.id)
         .order("name");
       if (error) throw error;
@@ -93,7 +93,7 @@ export default function ChargeStationWidget() {
           maxKw: cp.max_power_kw ? Number(cp.max_power_kw) : null,
           powerW, registerKwh,
           current: val(cp.id, "Current.Import"), voltage: val(cp.id, "Voltage"), soc: val(cp.id, "SoC"),
-          heartbeat: cp.last_heartbeat as string | null,
+          heartbeat: cp.last_heartbeat_at as string | null,
           session: sess ? { idTag: sess.id_tag as string | null, start: sess.start_time as string, kwh: sessKwh } : null,
         };
       });

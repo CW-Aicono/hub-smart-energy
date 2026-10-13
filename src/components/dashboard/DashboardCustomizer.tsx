@@ -43,6 +43,7 @@ const WIDGET_LABEL_KEYS: Record<string, string> = {
   integration_errors: "widget.integrationErrors",
   savings_share: "widget.savingsShare",
   charge_point_power: "widget.chargePointPower",
+  charge_station: "widget.chargeStation",
 };
 
 const SIZE_LABEL_KEYS: Record<WidgetSize, string> = {

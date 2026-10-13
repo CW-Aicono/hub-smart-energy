@@ -47,6 +47,7 @@ const DEFAULT_WIDGETS = [
   { widget_type: "integration_errors", position: 16, is_visible: true },
   { widget_type: "savings_share", position: 17, is_visible: true },
   { widget_type: "charge_point_power", position: 18, is_visible: false },
+  { widget_type: "charge_station", position: 19, is_visible: false },
 ];
 
 export function useDashboardWidgets() {
