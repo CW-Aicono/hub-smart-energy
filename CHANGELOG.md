@@ -2,6 +2,10 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.10.0 – 13.10.2026
+- Migration drizzle 0035: meters.source_charge_point_id (unique), Trigger sync_charge_point_meter (Anlage/Umbenennung/Liegenschaft, Archivierung bei Löschung), linked_meter_id gesetzt; Backfill Zähler + Historie aus ocpp_meter_samples (5-Min-Leistung, stündlicher Zählerstand). Staging: 2 Ladepunkte mit Liegenschaft angebunden, 5 ohne Liegenschaft (kein Zähler möglich).
+- UI: Badge „Ladepunkt“ in Zählerlisten, Name im Zählerdialog gesperrt, Device-Tree erkennt Ladepunkt-Zähler über source_charge_point_id.
+
 ## v1.9.0 – 09.10.2026
 - Daten: 20 nicht übergebene Rechnungsentwürfe storniert (status voided); 7 Lexware-Rechnungen unverändert.
 - Migration drizzle 0034: tenant_invoices.partner_id/invoice_kind/source_ref (Unique auf aktive source_refs), partners.lexware_contact_id, pricing_packages.partner_unlock_fee; Trigger create_setup_invoice auf tenants (Einrichtung aus pricing_unit_prices.setup); RLS: Mandant sieht keine an Partner adressierten Rechnungen, Partner nur an sich adressierte.

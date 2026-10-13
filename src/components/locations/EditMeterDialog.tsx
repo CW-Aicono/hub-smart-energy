@@ -602,7 +602,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
 
           <div>
             <Label>Name *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!!(meter as any)?.source_charge_point_id} />
+            {(meter as any)?.source_charge_point_id && (
+              <p className="text-xs text-muted-foreground mt-1">Zähler eines Ladepunkts: Name, Liegenschaft und Messwerte kommen von der Ladestation.</p>
+            )}
           </div>
           {deviceType === "meter" && (
             <div>

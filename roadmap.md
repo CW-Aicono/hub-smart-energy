@@ -48,3 +48,5 @@
 - [ ] Schutz „letzter Portal-Admin“ zusätzlich serverseitig in der Datenbank erzwingen
 - [x] Automatische Einmal- und Monatsrechnungen als Entwurf, Partner zum EK (v1.9.0)
 - [ ] Ende-zu-Ende-Test Paketbuchung + Monatslauf mit angemeldetem Portal-Admin (wartet auf Nutzer)
+- [x] Ladepunkte als Zähler im Energiemonitoring (v1.10.0)
+- [ ] 5 Ladepunkte (Stadt Steinfurt 4, ESB 1) ohne Liegenschaft – Zuordnung nötig (wartet auf Nutzer)

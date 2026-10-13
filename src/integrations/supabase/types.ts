@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -8900,6 +8900,7 @@ export type Database = {
           sim_step: number | null
           sim_unit: string | null
           smgw_id: string | null
+          source_charge_point_id: string | null
           source_unit_energy: string | null
           source_unit_power: string | null
           tenant_id: string
@@ -8963,6 +8964,7 @@ export type Database = {
           sim_step?: number | null
           sim_unit?: string | null
           smgw_id?: string | null
+          source_charge_point_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
           tenant_id: string
@@ -9026,6 +9028,7 @@ export type Database = {
           sim_step?: number | null
           sim_unit?: string | null
           smgw_id?: string | null
+          source_charge_point_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
           tenant_id?: string
@@ -9075,6 +9078,13 @@ export type Database = {
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "floor_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_source_charge_point_id_fkey"
+            columns: ["source_charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
             referencedColumns: ["id"]
           },
           {
