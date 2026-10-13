@@ -5,7 +5,7 @@ import { useTenant } from "./useTenant";
 import { useDemoMode } from "@/contexts/DemoMode";
 import type { Database, Json } from "@/integrations/supabase/types";
 
-export type WidgetSize = "full" | "2/3" | "1/2" | "1/3";
+export type WidgetSize = "full" | "3/4" | "2/3" | "1/2" | "1/3" | "1/4" | "1/6";
 
 export interface WidgetLayout {
   x?: number;

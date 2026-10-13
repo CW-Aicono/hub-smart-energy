@@ -47,9 +47,12 @@ const WIDGET_LABEL_KEYS: Record<string, string> = {
 
 const SIZE_LABEL_KEYS: Record<WidgetSize, string> = {
   "full": "widget.sizeFull",
+  "3/4": "widget.sizeThreeQuarters",
   "2/3": "widget.sizeTwoThirds",
   "1/2": "widget.sizeHalf",
   "1/3": "widget.sizeOneThird",
+  "1/4": "widget.sizeOneQuarter",
+  "1/6": "widget.sizeOneSixth",
 };
 
 const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeWidget, onResetLayout, customWidgetNames = {}, availabilitySignals = null }: DashboardCustomizerProps) => {
