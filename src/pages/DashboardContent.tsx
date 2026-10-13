@@ -67,6 +67,7 @@ const PvForecastWidget = lazy(() => import("@/components/dashboard/PvForecastWid
 const ArbitrageAiWidget = lazy(() => import("@/components/dashboard/ArbitrageAiWidget"));
 const IntegrationErrorsWidget = lazy(() => import("@/components/dashboard/IntegrationErrorsWidget"));
 const ChargePointPowerWidget = lazy(() => import("@/components/dashboard/ChargePointPowerWidget"));
+const ChargeStationWidget = lazy(() => import("@/components/dashboard/ChargeStationWidget"));
 const PPAFleetWidget = lazy(() => import("@/components/dashboard/PPAFleetWidget"));
 const SavingsShareWidget = lazy(() => import("@/components/dashboard/SavingsShareWidget"));
 
@@ -96,15 +97,19 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   arbitrage_ai: ArbitrageAiWidget,
   integration_errors: IntegrationErrorsWidget,
   charge_point_power: ChargePointPowerWidget,
+  charge_station: ChargeStationWidget,
   ppa_fleet: PPAFleetWidget,
   savings_share: SavingsShareWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {
   "full": "w-full",
+  "3/4": "w-3/4",
   "2/3": "w-2/3",
   "1/2": "w-1/2",
   "1/3": "w-1/3",
+  "1/4": "w-1/4",
+  "1/6": "w-1/6",
 };
 
 /** Maps widget types to module codes for filtering */
@@ -126,6 +131,7 @@ const WIDGET_MODULE_MAP: Record<string, string> = {
   ppa_fleet: "ppa_onsite",
   savings_share: "gain_sharing",
   charge_point_power: "ev_charging",
+  charge_station: "ev_charging",
 };
 
 const getLocationWidget = (_locationId: string | null): string => {

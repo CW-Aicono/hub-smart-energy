@@ -1,5 +1,11 @@
 # Versionshinweise
 
+## v1.11.0 – 13.10.2026
+- Live-Leistungen (z. B. Shelly) im Dashboard werden bei geöffneter Seite alle 10 Sekunden aktualisiert.
+- Dashboard: neue Kachelbreiten 1/6, 1/4 und 3/4; neue Kachel „Ladestationen (Detail)“ mit Leistung, Status, Verbindung, Zählerstand und laufendem Ladevorgang je Ladepunkt.
+- Energieanalyse: gewählte Auflösung wird immer eingehalten, neu „15 Minuten“; Jahreslastgang im 15-Minuten-Raster als CSV exportierbar.
+- Meldung „Sensor nicht gefunden“ erscheint erst bei dauerhaft fehlendem Sensor, nennt den Zählernamen und verschwindet automatisch, wenn der Sensor wieder da ist.
+
 ## v1.10.0 – 13.10.2026
 - Ladepunkte erscheinen automatisch als Stromzähler im Energiemonitoring (Kennzeichnung „Ladepunkt“) mit Live-Leistung, Zählerstand, Verlauf, Widgets, Export, Alarmen und Kosten. Vorhandene Messwerte der Ladestationen wurden übernommen.
 

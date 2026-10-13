@@ -87,9 +87,12 @@ export function useGatewayLivePower(meters: Meter[]) {
   const query = useQuery({
     queryKey: ["gateway-live-power", meterKey, integrationIds.join(",")],
     enabled: automaticMeters.length > 0,
-    staleTime: 60_000,
-    // Realtime invalidation pushes fresh data immediately; this 5-min poll is just a safety net.
-    refetchInterval: 5 * 60_000,
+    staleTime: 5_000,
+    // Cloud-Gateways (z. B. Shelly) liefern keine Push-Werte: bei sichtbarer Seite
+    // alle 10 s live nachfragen, damit die Anzeige so aktuell ist wie die Hersteller-Cloud.
+    // Im Hintergrund pausiert die Abfrage.
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
     queryFn: async (): Promise<Record<string, GatewayLivePowerValue>> => {
       const values: Record<string, GatewayLivePowerValue> = {};
 
