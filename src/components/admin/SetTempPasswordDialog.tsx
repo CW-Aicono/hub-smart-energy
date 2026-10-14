@@ -28,10 +28,13 @@ function generatePassword(): string {
   return /\d/.test(pw) && /[A-Za-z]/.test(pw) ? pw : pw.slice(0, 8) + "a7";
 }
 
-interface Props {
+interface Target {
   userId?: string;
   email?: string | null;
   label?: string | null;
+}
+
+interface Props extends Target {
   /** Rendert einen kleinen Schlüssel-Knopf; Dialog öffnet beim Klick. */
   disabled?: boolean;
 }
@@ -42,6 +45,32 @@ interface Props {
  */
 export function SetTempPasswordButton({ userId, email, label, disabled }: Props) {
   const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            onClick={() => setOpen(true)}
+            aria-label="Startpasswort vergeben"
+          >
+            <KeyRound className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Startpasswort vergeben</TooltipContent>
+      </Tooltip>
+      <SetTempPasswordDialog open={open} onOpenChange={setOpen} userId={userId} email={email} label={label} />
+    </>
+  );
+}
+
+/** Gesteuerter Dialog – z. B. aus einem Drei-Punkte-Menü heraus öffnen. */
+export function SetTempPasswordDialog({
+  open, onOpenChange, userId, email, label,
+}: Target & { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const setOpen = onOpenChange;
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
@@ -81,21 +110,6 @@ export function SetTempPasswordButton({ userId, email, label, disabled }: Props)
 
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={disabled}
-            onClick={() => { reset(); setOpen(true); }}
-            aria-label="Startpasswort vergeben"
-          >
-            <KeyRound className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Startpasswort vergeben</TooltipContent>
-      </Tooltip>
-
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
