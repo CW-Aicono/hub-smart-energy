@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserPlus, Trash2, Pencil, ShieldCheck, Search } from "lucide-react";
+import { SetTempPasswordButton } from "@/components/admin/SetTempPasswordDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import { useAuth } from "@/hooks/useAuth";
@@ -351,6 +352,9 @@ export default function PartnerMembers() {
                                 </TooltipTrigger>
                                 <TooltipContent>Bearbeiten</TooltipContent>
                               </Tooltip>
+                              {!isSelf && (
+                                <SetTempPasswordButton userId={m.user_id} email={m.email} label={m.contact_person || m.email} />
+                              )}
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span>

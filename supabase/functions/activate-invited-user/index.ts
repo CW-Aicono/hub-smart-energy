@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
 import { checkInviteConflict } from "../_shared/invite-conflict.ts";
+import { redirectFromStoredLink } from "../_shared/inviteLink.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -32,11 +33,8 @@ const handler = async (req: Request): Promise<Response> => {
       if (new Date(tokenRow.expires_at) < new Date()) return json({ success: false, code: "expired", error: "Dieser Einladungslink ist abgelaufen." }, 410);
 
       // Recovery links are single-use → generate a fresh one on every click.
-      let redirectTo = `${resolveOrigin(null)}/set-password`;
-      try {
-        const rt = new URL(tokenRow.action_link).searchParams.get("redirect_to");
-        if (rt) redirectTo = `${resolveOrigin(rt)}/set-password`;
-      } catch { /* keep default */ }
+      // action_link holds either the old recovery link (redirect_to param) or directly the target URL.
+      const redirectTo = redirectFromStoredLink(tokenRow.action_link);
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: "recovery", email: tokenRow.email, options: { redirectTo },
       });

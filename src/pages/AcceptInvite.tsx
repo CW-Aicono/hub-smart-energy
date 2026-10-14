@@ -12,6 +12,7 @@ const AcceptInvite = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const tokenId = searchParams.get("t");
+  const isReset = searchParams.get("mode") === "reset";
 
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -39,8 +40,12 @@ const AcceptInvite = () => {
         const code = payload?.code ?? null;
         setErrorCode(code);
         setErrorMessage(
-          code === "used" ? "Dieser Link wurde bereits zum Festlegen des Passworts verwendet. Bitte melden Sie sich an oder nutzen Sie „Passwort vergessen“."
-          : code === "expired" ? "Dieser Link ist abgelaufen (7 Tage). Bitte bitten Sie Ihren Administrator um eine neue Einladung."
+          code === "used" ? (isReset
+            ? "Dieser Link wurde bereits verwendet oder durch einen neueren ersetzt. Bitte den Link aus der neuesten E-Mail verwenden oder erneut „Passwort vergessen“ nutzen."
+            : "Dieser Link wurde bereits zum Festlegen des Passworts verwendet. Bitte melden Sie sich an oder nutzen Sie „Passwort vergessen“.")
+          : code === "expired" ? (isReset
+            ? "Dieser Link ist abgelaufen (7 Tage). Bitte erneut „Passwort vergessen“ nutzen."
+            : "Dieser Link ist abgelaufen (7 Tage). Bitte bitten Sie Ihren Administrator um eine neue Einladung oder ein Startpasswort.")
           : code === "not_found" ? "Dieser Link ist unbekannt – evtl. wurde inzwischen eine neuere Einladung verschickt. Bitte den Link aus der neuesten E-Mail verwenden."
           : payload?.error || t("invite.expiredLink" as any),
         );
@@ -78,10 +83,10 @@ const AcceptInvite = () => {
               <img src={aiconoLogo} alt="AICONO" className="h-16 object-contain" />
             </div>
             <CardTitle className="text-2xl font-display">
-              {status === "error" ? t("invite.linkInvalid" as any) : t("invite.acceptTitle" as any)}
+              {status === "error" ? t("invite.linkInvalid" as any) : isReset ? "Passwort zurücksetzen" : t("invite.acceptTitle" as any)}
             </CardTitle>
             <CardDescription>
-              {status === "error" ? t("invite.linkCannotBeUsed" as any) : t("invite.instructions" as any)}
+              {status === "error" ? t("invite.linkCannotBeUsed" as any) : isReset ? "Klicken Sie auf den Button, um ein neues Passwort festzulegen." : t("invite.instructions" as any)}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -91,14 +96,14 @@ const AcceptInvite = () => {
                 <p className="text-center text-muted-foreground text-sm">{errorMessage}</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button variant="outline" onClick={() => navigate("/auth")}>{t("invite.toLogin" as any)}</Button>
-                  {errorCode !== "expired" && (
+                  {(errorCode !== "expired" || isReset) && (
                     <Button variant="outline" onClick={() => navigate("/auth?forgot=1")}>Passwort vergessen</Button>
                   )}
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-6 py-4">
-                <p className="text-center text-muted-foreground text-sm">{t("invite.mainText" as any)}</p>
+                {!isReset && <p className="text-center text-muted-foreground text-sm">{t("invite.mainText" as any)}</p>}
                 <Button
                   className="w-full text-white hover:opacity-90"
                   style={{ backgroundColor: 'hsl(220, 60%, 20%)' }}
@@ -109,7 +114,7 @@ const AcceptInvite = () => {
                   {status === "loading" ? (
                     <><span className="animate-spin mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full inline-block" />{t("invite.loading" as any)}</>
                   ) : (
-                    <>{t("invite.setPassword" as any)}<ArrowRight className="ml-2 h-4 w-4" /></>
+                    <>{isReset ? "Neues Passwort festlegen" : t("invite.setPassword" as any)}<ArrowRight className="ml-2 h-4 w-4" /></>
                   )}
                 </Button>
               </div>

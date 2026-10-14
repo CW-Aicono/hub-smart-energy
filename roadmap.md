@@ -54,3 +54,9 @@
 ## ESB Übersicht 13.10.
 - [x] Live-Werte schneller (10 s), Ladestationen-Kachel, mehr Spaltenbreiten, 15-Min-Energieanalyse + Jahres-CSV, Sensor-Meldung entprellt (v1.11.0)
 - [ ] Idee: Inbetriebnahme- und Abnahme-Tool (Anlagen-, Abnahme-, Prüfprotokoll, Funktionsnachweis, Datenblätter)
+
+## Einladungen (14.10.)
+- [x] Einladungs-/Reset-Links scanner-sicher über Zwischenseite, echte 7 Tage (v1.11.1)
+- [x] Startpasswort vergeben mit Zwangswechsel bei erster Anmeldung (v1.11.1)
+- [ ] Live-Deploy v1.11.1 (wartet auf Nutzer); bis dahin Sofort-Befehl für Schmidt/Wigger
+- [ ] Idee: 2FA (Authenticator) für Portal- und Partner-Admins

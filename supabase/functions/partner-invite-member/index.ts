@@ -8,6 +8,7 @@ import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
 import { checkInviteConflict } from "../_shared/invite-conflict.ts";
+import { createSafeInviteLink } from "../_shared/inviteLink.ts";
 
 serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -39,8 +40,7 @@ serve(async (req: Request) => {
     const name = body.name ? String(body.name).trim() : null;
     const role = body.role === "partner_admin" ? "partner_admin" : "partner_user";
     const perms = body.permissions ?? {};
-    const redirectTo =
-      body.redirectTo ?? "https://hub-smart-energy.lovable.app/set-password";
+    const redirectTo: string | null = typeof body.redirectTo === "string" ? body.redirectTo : null;
 
     if (!email.includes("@")) throw new Error("E-Mail ungültig.");
 
@@ -100,15 +100,8 @@ serve(async (req: Request) => {
       await supabase.from("profiles").update({ contact_person: name }).eq("user_id", userId);
     }
 
-    const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-      type: "recovery",
-      email,
-      options: { redirectTo },
-    });
-    if (linkErr || !linkData?.properties?.action_link) {
-      throw new Error("Passwort-Link konnte nicht erzeugt werden.");
-    }
-    const actionLink = linkData.properties.action_link;
+    // Scanner-sicherer Link (Anmeldelink entsteht erst beim Klick, 7 Tage gültig)
+    const actionLink = await createSafeInviteLink(supabase, email, redirectTo, req.headers.get("Origin"));
 
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY nicht konfiguriert.");
