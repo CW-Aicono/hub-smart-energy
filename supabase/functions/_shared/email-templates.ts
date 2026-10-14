@@ -35,7 +35,7 @@ const STRINGS: Record<string, Record<Locale, BaseStrings>> = {
       heading: "Passwort zurücksetzen",
       greeting: (n) => (n ? `Hallo ${n},` : "Hallo,"),
       intro:
-        "wir haben eine Anfrage zum Zurücksetzen Ihres Passworts erhalten. Klicken Sie auf den folgenden Button, um ein neues Passwort festzulegen. Der Link ist 60 Minuten gültig.",
+        "wir haben eine Anfrage zum Zurücksetzen Ihres Passworts erhalten. Klicken Sie auf den folgenden Button, um ein neues Passwort festzulegen. Der Link ist 7 Tage gültig.",
       cta: "Neues Passwort festlegen",
       fallback: "Falls der Button nicht funktioniert, kopieren Sie bitte folgenden Link in Ihren Browser:",
       ignore:
@@ -48,7 +48,7 @@ const STRINGS: Record<string, Record<Locale, BaseStrings>> = {
       heading: "Reset password",
       greeting: (n) => (n ? `Hi ${n},` : "Hi,"),
       intro:
-        "We received a request to reset your password. Click the button below to set a new one. The link is valid for 60 minutes.",
+        "We received a request to reset your password. Click the button below to set a new one. The link is valid for 7 days.",
       cta: "Set new password",
       fallback: "If the button doesn't work, copy this link into your browser:",
       ignore: "If you didn't request this, you can safely ignore this email – your password won't change.",
@@ -60,7 +60,7 @@ const STRINGS: Record<string, Record<Locale, BaseStrings>> = {
       heading: "Restablecer contraseña",
       greeting: (n) => (n ? `Hola ${n},` : "Hola,"),
       intro:
-        "Hemos recibido una solicitud para restablecer tu contraseña. Haz clic en el botón para crear una nueva. El enlace es válido durante 60 minutos.",
+        "Hemos recibido una solicitud para restablecer tu contraseña. Haz clic en el botón para crear una nueva. El enlace es válido durante 7 días.",
       cta: "Crear nueva contraseña",
       fallback: "Si el botón no funciona, copia este enlace en tu navegador:",
       ignore: "Si no solicitaste este cambio, puedes ignorar este correo – tu contraseña no cambiará.",
@@ -72,7 +72,7 @@ const STRINGS: Record<string, Record<Locale, BaseStrings>> = {
       heading: "Wachtwoord resetten",
       greeting: (n) => (n ? `Hallo ${n},` : "Hallo,"),
       intro:
-        "We hebben een verzoek ontvangen om je wachtwoord opnieuw in te stellen. Klik op de knop om een nieuw wachtwoord te kiezen. De link is 60 minuten geldig.",
+        "We hebben een verzoek ontvangen om je wachtwoord opnieuw in te stellen. Klik op de knop om een nieuw wachtwoord te kiezen. De link is 7 dagen geldig.",
       cta: "Nieuw wachtwoord instellen",
       fallback: "Werkt de knop niet? Kopieer deze link in je browser:",
       ignore: "Heb je dit niet aangevraagd? Negeer deze e-mail – je wachtwoord verandert niet.",
