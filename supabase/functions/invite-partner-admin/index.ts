@@ -4,6 +4,7 @@ import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
 import { checkInviteConflict } from "../_shared/invite-conflict.ts";
+import { createSafeInviteLink } from "../_shared/inviteLink.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
