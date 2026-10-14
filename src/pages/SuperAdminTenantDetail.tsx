@@ -397,12 +397,9 @@ const SuperAdminTenantDetail = () => {
         );
       })
     : users;
-  // Einladungen ausblenden, deren Person bereits aktiv in diesem Kunden ist
-  const activeEmails = new Set(users.map((u: any) => (u.email ?? "").toLowerCase()).filter(Boolean));
-  const openInvitations = pendingInvitations.filter((inv: any) => !activeEmails.has((inv.email ?? "").toLowerCase()));
   const filteredInvitations = userSearch.trim()
-    ? openInvitations.filter((inv: any) => (inv.email ?? "").toLowerCase().includes(userSearch.toLowerCase()))
-    : openInvitations;
+    ? pendingInvitations.filter((inv: any) => (inv.email ?? "").toLowerCase().includes(userSearch.toLowerCase()))
+    : pendingInvitations;
   const { sorted: sortedUsers, sort: userSort, toggle: toggleUserSort } = useSortableData<any, "email" | "contact" | "status" | "created">(
     filteredUsers,
     (u, k) => {
