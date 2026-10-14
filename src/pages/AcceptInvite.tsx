@@ -96,7 +96,7 @@ const AcceptInvite = () => {
                 <p className="text-center text-muted-foreground text-sm">{errorMessage}</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   <Button variant="outline" onClick={() => navigate("/auth")}>{t("invite.toLogin" as any)}</Button>
-                  {errorCode !== "expired" && (
+                  {(errorCode !== "expired" || isReset) && (
                     <Button variant="outline" onClick={() => navigate("/auth?forgot=1")}>Passwort vergessen</Button>
                   )}
                 </div>
