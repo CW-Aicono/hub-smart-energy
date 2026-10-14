@@ -30,6 +30,7 @@ import {
 import { useModuleBundles } from "@/hooks/useModuleBundles";
 import { Fragment, useState } from "react";
 import { toast } from "sonner";
+import { SetTempPasswordButton } from "@/components/admin/SetTempPasswordDialog";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
@@ -396,9 +397,12 @@ const SuperAdminTenantDetail = () => {
         );
       })
     : users;
+  // Einladungen ausblenden, deren Person bereits aktiv in diesem Kunden ist
+  const activeEmails = new Set(users.map((u: any) => (u.email ?? "").toLowerCase()).filter(Boolean));
+  const openInvitations = pendingInvitations.filter((inv: any) => !activeEmails.has((inv.email ?? "").toLowerCase()));
   const filteredInvitations = userSearch.trim()
-    ? pendingInvitations.filter((inv: any) => (inv.email ?? "").toLowerCase().includes(userSearch.toLowerCase()))
-    : pendingInvitations;
+    ? openInvitations.filter((inv: any) => (inv.email ?? "").toLowerCase().includes(userSearch.toLowerCase()))
+    : openInvitations;
   const { sorted: sortedUsers, sort: userSort, toggle: toggleUserSort } = useSortableData<any, "email" | "contact" | "status" | "created">(
     filteredUsers,
     (u, k) => {
@@ -1164,6 +1168,8 @@ const SuperAdminTenantDetail = () => {
                               <TableCell><Badge variant={u.is_blocked ? "destructive" : "secondary"}>{u.is_blocked ? t("common.blocked") : t("common.active")}</Badge></TableCell>
                               <TableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString("de-DE")}</TableCell>
                               <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                <SetTempPasswordButton userId={u.user_id} email={u.email} label={u.contact_person || u.email} />
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
@@ -1188,6 +1194,7 @@ const SuperAdminTenantDetail = () => {
                                     </AlertDialogFooter>
                                   </AlertDialogContent>
                                 </AlertDialog>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -1225,6 +1232,7 @@ const SuperAdminTenantDetail = () => {
                                     >
                                       <Send className="h-4 w-4" />
                                     </Button>
+                                    <SetTempPasswordButton email={inv.email} label={inv.email} />
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
                                         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Einladung zurückziehen">

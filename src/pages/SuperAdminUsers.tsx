@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Shield, User, UserCheck, UserX, Trash2, Send } from "lucide-react";
+import { SetTempPasswordButton } from "@/components/admin/SetTempPasswordDialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -208,6 +209,7 @@ const SuperAdminUsers = () => {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <EditSAUserDialog user={u} />
+                            <SetTempPasswordButton userId={u.user_id} email={u.email} label={u.contact_person || u.email} disabled={u.user_id === user?.id} />
                             <Button variant="ghost" size="icon" aria-label="Einladung erneut senden"
                               title="Einladung / Zugangslink erneut senden (alter Link wird ungültig)"
                               disabled={u.is_blocked || !u.email}

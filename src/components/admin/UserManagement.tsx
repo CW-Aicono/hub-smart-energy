@@ -526,6 +526,13 @@ const UserManagement = () => {
           </Table>
         )}
       </CardContent>
+      <SetTempPasswordDialog
+        open={!!tempPwTarget}
+        onOpenChange={(o) => { if (!o) setTempPwTarget(null); }}
+        userId={tempPwTarget?.userId}
+        email={tempPwTarget?.email}
+        label={tempPwTarget?.label}
+      />
     </Card>
   );
 };
