@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserCheck, UserX, Shield, User, Mail, Clock, Send, Trash2, CalendarClock, CheckCircle, MapPin } from "lucide-react";
+import { UserCheck, UserX, Shield, User, Mail, Clock, Send, Trash2, CalendarClock, CheckCircle, MapPin, KeyRound } from "lucide-react";
+import { SetTempPasswordDialog } from "./SetTempPasswordDialog";
 import { RowActions } from "@/components/ui/row-actions";
 import { useToast } from "@/hooks/use-toast";
 import EditUserDialog from "./EditUserDialog";
@@ -40,6 +41,7 @@ const UserManagement = () => {
   const { roles: customRoles } = useCustomRoles();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tempPwTarget, setTempPwTarget] = useState<{ userId?: string; email?: string | null; label?: string | null } | null>(null);
   const { toast } = useToast();
 
   const adminCount = users.filter((u) => u.role === "admin").length;
@@ -469,6 +471,7 @@ const UserManagement = () => {
                           items={[
                             { label: t("users.activateUser"), icon: CheckCircle, onClick: () => activateInvitedUser(user) },
                             { label: t("users.resendInvitation"), icon: Send, onClick: () => resendInvitation(user.invitation_id!, user.email!, user.role) },
+                            { label: "Startpasswort vergeben", icon: KeyRound, onClick: () => setTempPwTarget({ email: user.email, label: user.email }) },
                             { label: t("users.revokeInvitation"), icon: Trash2, variant: "destructive", onClick: () => revokeInvitation(user.invitation_id!) },
                           ]}
                         />
@@ -480,6 +483,12 @@ const UserManagement = () => {
                               icon: user.is_blocked ? UserCheck : UserX,
                               disabled: cannotModify && !user.is_blocked,
                               onClick: () => toggleBlockUser(user.user_id, user.is_blocked),
+                            },
+                            {
+                              label: "Startpasswort vergeben",
+                              icon: KeyRound,
+                              hidden: user.user_id === currentUser?.id,
+                              onClick: () => setTempPwTarget({ userId: user.user_id, email: user.email, label: user.contact_person || user.email }),
                             },
                             {
                               label: t("users.manageLocations"),
