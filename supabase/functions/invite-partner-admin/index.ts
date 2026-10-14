@@ -39,8 +39,7 @@ const handler = async (req: Request): Promise<Response> => {
     const partnerSlug = String(body.partnerSlug ?? "").trim().toLowerCase();
     const adminEmail = String(body.adminEmail ?? "").trim().toLowerCase();
     const adminName = body.adminName ? String(body.adminName).trim() : null;
-    const redirectTo =
-      body.redirectTo ?? "https://hub-smart-energy.lovable.app/set-password";
+    const redirectTo: string | null = typeof body.redirectTo === "string" ? body.redirectTo : null;
 
     // Resolve / create partner
     let partner: { id: string; name: string };
@@ -165,17 +164,8 @@ const handler = async (req: Request): Promise<Response> => {
         .eq("user_id", newUserId);
     }
 
-    // 5) Passwort-Setz-Link erzeugen
-    const { data: linkData, error: linkError } =
-      await supabase.auth.admin.generateLink({
-        type: "recovery",
-        email: adminEmail,
-        options: { redirectTo },
-      });
-    if (linkError || !linkData?.properties?.action_link) {
-      throw new Error("Passwort-Link konnte nicht erzeugt werden.");
-    }
-    const actionLink = linkData.properties.action_link;
+    // 5) Scanner-sicheren Passwort-Setz-Link erzeugen (Anmeldelink entsteht erst beim Klick)
+    const actionLink = await createSafeInviteLink(supabase, adminEmail, redirectTo, req.headers.get("Origin"));
 
     // 6) E-Mail versenden
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
