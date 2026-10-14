@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +77,7 @@ export function SetTempPasswordDialog({
   const [copied, setCopied] = useState(false);
 
   const reset = () => { setPassword(""); setDone(false); setCopied(false); };
+  useEffect(() => { if (open) reset(); }, [open]);
 
   const submit = async () => {
     const invalid = validatePassword(password, password);
