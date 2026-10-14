@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.11.1 – 14.10.2026
+- Einladungs- und „Passwort vergessen“-Links funktionieren jetzt zuverlässig 7 Tage – auch wenn das Firmen-Postfach Links vorab automatisch prüft.
+- Neu: „Startpasswort vergeben“ (Schlüssel-Symbol) in den Benutzerlisten. Der Nutzer meldet sich damit an und muss danach ein eigenes Passwort festlegen.
+
 ## v1.11.0 – 13.10.2026
 - Live-Leistungen (z. B. Shelly) im Dashboard werden bei geöffneter Seite alle 10 Sekunden aktualisiert.
 - Dashboard: neue Kachelbreiten 1/6, 1/4 und 3/4; neue Kachel „Ladestationen (Detail)“ mit Leistung, Status, Verbindung, Zählerstand und laufendem Ladevorgang je Ladepunkt.

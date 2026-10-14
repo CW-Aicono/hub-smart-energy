@@ -2,6 +2,11 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.11.1 – 14.10.2026
+- Fix Einladung „Link abgelaufen“: invite-tenant-admin, invite-partner-admin, partner-invite-member und send-auth-email (password_reset) verschickten den einmaligen Recovery-Link direkt; Mail-Scanner (z. B. Defender) verbrauchten ihn vorab. Neu _shared/inviteLink.ts (createSafeInviteLink): Mail enthält nur /accept-invite?t=<invite_tokens.id>, Recovery-Link entsteht erst beim Klick (activate-invited-user getInviteLink, redirectFromStoredLink). Ältere offene Tokens derselben E-Mail werden gesperrt. Fallbacks auf hub-smart-energy.lovable.app entfernt, Ziel über safeAuthRedirect.
+- Neu Edge-Function admin-set-temp-password: Startpasswort + must_change_password; Rechte serverseitig (Portal-Admin alle; Kunden-Admin eigener Mandant; Partner-Admin/can_manage_members eigene Mitglieder; Partner-Admin Nutzer eigener Kunden; nie eigenes Konto; Portal-Admin-Ziel nur durch Portal-Admin). Sperrt offene invite_tokens, setzt user_invitations.accepted_at, schreibt audit_logs (action set_temp_password, ohne Passwort).
+- UI: SetTempPasswordDialog/Button in SuperAdminTenantDetail (Nutzer + Einladungen), UserManagement, SuperAdminUsers, PartnerMembers. AcceptInvite mit mode=reset. Reset-Mail-Text: 7 Tage statt 60 Minuten.
+
 ## v1.11.0 – 13.10.2026
 - Migration drizzle 0036: get_power_series_step(meter_ids, start, end, step 5/15/60/1440) – feste Auflösung, max. 400 Tage, gleiche Zugriffsprüfung wie get_power_series_auto.
 - Energieanalyse: Auflösung „15min“, Abfrage über fetchPowerSeriesStep (Chunks < 1000 Zeilen, 4 parallel) statt Server-Automatik.
