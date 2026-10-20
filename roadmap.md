@@ -63,7 +63,8 @@
 
 ## Impulszähler (20.10.)
 - [x] Live-Kachel Mittelwert + Hinweis im Zählerdialog (v1.11.2)
-- [ ] „Gaszähler Hausanschluss“ als Impulszähler markieren + Altdaten neu berechnen (wartet auf Nutzer)
+- [x] „Gaszähler Hausanschluss“ als Impulszähler markiert, Verlauf 22.09.–04.10. aus Zählerständen neu berechnet
+- [ ] Gaszähler Hausanschluss: seit 13.10. kein Zählerstand übertragen – Zählerstand im Miniserver/Worker zuordnen, dann 13.10.–heute neu berechnen (wartet auf Nutzer)
 
 ## ELMI All-in-One (20.10.)
 - [x] Vorlage, Speichersteuerung über Loxone, PV-Überschuss mit Priorität, Netzentladung gesperrt, Loxone-Anleitung (v1.12.0)
