@@ -11,6 +11,7 @@ import { useMeters } from "@/hooks/useMeters";
 import { useChargePoints } from "@/hooks/useChargePoints";
 import { useLocations } from "@/hooks/useLocations";
 import { useNavigate } from "react-router-dom";
+import { useEnergyStorages } from "@/hooks/useEnergyStorages";
 
 interface Props {
   groupId: string;
@@ -38,6 +39,13 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
   const [buffer, setBuffer] = useState(200);
   const [priorityMode, setPriorityMode] = useState("equal_split");
   const [isActive, setIsActive] = useState(true);
+  const [storageId, setStorageId] = useState("");
+  const [storagePriority, setStoragePriority] = useState("ev_first");
+  const { storages } = useEnergyStorages();
+  const locationStorages = useMemo(
+    () => storages.filter((s: any) => !locationId || s.location_id === locationId),
+    [storages, locationId]
+  );
 
   useEffect(() => {
     if (config) {
@@ -46,6 +54,8 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
       setBuffer(config.safety_buffer_w);
       setPriorityMode(config.priority_mode);
       setIsActive(config.is_active);
+      setStorageId((config as any).storage_id || "");
+      setStoragePriority((config as any).storage_priority || "ev_first");
     }
   }, [config]);
 
@@ -68,7 +78,9 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
       safety_buffer_w: buffer,
       priority_mode: priorityMode,
       is_active: isActive,
-    });
+      storage_id: storageId || null,
+      storage_priority: storagePriority,
+    } as any);
   };
 
   if (!pvSurplusEnabled) return null;
@@ -137,6 +149,32 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
           </Select>
         </div>
       </div>
+
+      {/* Batteriespeicher (z. B. ELMI All-in-One) */}
+      {locationStorages.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Batteriespeicher</Label>
+            <Select value={storageId || "none"} onValueChange={(v) => setStorageId(v === "none" ? "" : v)} disabled={!isAdmin}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Kein Speicher</SelectItem>
+                {locationStorages.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Überschuss zuerst</Label>
+            <Select value={storagePriority} onValueChange={setStoragePriority} disabled={!isAdmin || !storageId}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ev_first">Auto zuerst, Rest in Speicher</SelectItem>
+                <SelectItem value="storage_first">Speicher zuerst, dann Auto</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
 
       {isAdmin && (
         <Button size="sm" onClick={handleSave} disabled={upsert.isPending} className="gap-1.5">
