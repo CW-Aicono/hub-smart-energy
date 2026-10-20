@@ -7,6 +7,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 - _shared/elmiAio.ts: Register-Codierung (32 Bit Big-Endian, 0,1) und Sollwertregel (Netz → 0, < Mindestleistung = 0, Begrenzung, nie Netzentladung) + 10 Vitest-Tests.
 - solar-charging-scheduler: setzt Speicher-Sollwert minütlich über loxone-api executeCommand auf virtuellen Eingang; storage_first reduziert EV-Überschuss.
 - UI: StorageControlDialog (Energiehandel → Speicher), Speicherauswahl + Priorität in GroupSolarChargingConfig; Handbuch-Abschnitt mit Loxone-Anleitung (4 Sprachen).
+- Daten (Staging): Stadt Steinfurt „Gaszähler Hausanschluss“ is_pulse_meter=true; 5-Min-/Stundenwerte 22.09.–04.10. aus meter_cumulative_readings linear neu berechnet (Tagessummen = Loxone-Tageswerte). Ab 13.10. keine Zählerstände vorhanden → Tagessummen dort aus Momentanwerten zu hoch, Neuberechnung offen.
 - Offen: Rückfrage an ELMI zu Kapitel 6.1 (Vorzeichen/Funktionscode beim Schreiben).
 
 ## v1.11.2 – 20.10.2026
