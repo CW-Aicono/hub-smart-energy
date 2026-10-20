@@ -64,3 +64,9 @@
 ## Impulszähler (20.10.)
 - [x] Live-Kachel Mittelwert + Hinweis im Zählerdialog (v1.11.2)
 - [ ] „Gaszähler Hausanschluss“ als Impulszähler markieren + Altdaten neu berechnen (wartet auf Nutzer)
+
+## ELMI All-in-One (20.10.)
+- [x] Vorlage, Speichersteuerung über Loxone, PV-Überschuss mit Priorität, Netzentladung gesperrt, Loxone-Anleitung (v1.12.0)
+- [ ] Rückfrage an ELMI zu Kapitel 6.1 (Vorzeichen/Funktionscode) – wartet auf Hersteller
+- [ ] Inbetriebnahme vor Ort: Miniserver nach Anleitung einrichten, Sollwert-UUID eintragen (wartet auf Nutzer)
+- [ ] Peak-Shaving mit Netzentladung freischalten, sobald Netzbetreiber zustimmt

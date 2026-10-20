@@ -5101,17 +5101,28 @@ export type Database = {
       }
       energy_storages: {
         Row: {
+          allow_grid_discharge: boolean
+          allow_self_discharge: boolean
           capacity_kwh: number
+          charge_point_id: string | null
+          control_mode: string
           created_at: string
           current_soc_pct: number | null
+          device_template: string | null
           efficiency_pct: number
           gateway_device_id: string | null
           id: string
+          last_setpoint_at: string | null
+          last_setpoint_error: string | null
+          last_setpoint_kw: number | null
           location_id: string | null
           max_charge_kw: number
           max_discharge_kw: number
+          min_setpoint_kw: number
           name: string
           power_meter_id: string | null
+          setpoint_control_uuid: string | null
+          setpoint_integration_id: string | null
           soc_sensor_uuid: string | null
           soc_updated_at: string | null
           status: string
@@ -5119,17 +5130,28 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allow_grid_discharge?: boolean
+          allow_self_discharge?: boolean
           capacity_kwh?: number
+          charge_point_id?: string | null
+          control_mode?: string
           created_at?: string
           current_soc_pct?: number | null
+          device_template?: string | null
           efficiency_pct?: number
           gateway_device_id?: string | null
           id?: string
+          last_setpoint_at?: string | null
+          last_setpoint_error?: string | null
+          last_setpoint_kw?: number | null
           location_id?: string | null
           max_charge_kw?: number
           max_discharge_kw?: number
+          min_setpoint_kw?: number
           name: string
           power_meter_id?: string | null
+          setpoint_control_uuid?: string | null
+          setpoint_integration_id?: string | null
           soc_sensor_uuid?: string | null
           soc_updated_at?: string | null
           status?: string
@@ -5137,17 +5159,28 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allow_grid_discharge?: boolean
+          allow_self_discharge?: boolean
           capacity_kwh?: number
+          charge_point_id?: string | null
+          control_mode?: string
           created_at?: string
           current_soc_pct?: number | null
+          device_template?: string | null
           efficiency_pct?: number
           gateway_device_id?: string | null
           id?: string
+          last_setpoint_at?: string | null
+          last_setpoint_error?: string | null
+          last_setpoint_kw?: number | null
           location_id?: string | null
           max_charge_kw?: number
           max_discharge_kw?: number
+          min_setpoint_kw?: number
           name?: string
           power_meter_id?: string | null
+          setpoint_control_uuid?: string | null
+          setpoint_integration_id?: string | null
           soc_sensor_uuid?: string | null
           soc_updated_at?: string | null
           status?: string
@@ -5155,6 +5188,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "energy_storages_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "energy_storages_gateway_device_id_fkey"
             columns: ["gateway_device_id"]
@@ -5174,6 +5214,13 @@ export type Database = {
             columns: ["power_meter_id"]
             isOneToOne: false
             referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_storages_setpoint_integration_id_fkey"
+            columns: ["setpoint_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
             referencedColumns: ["id"]
           },
           {
@@ -13270,6 +13317,8 @@ export type Database = {
           priority_mode: string
           reference_meter_id: string | null
           safety_buffer_w: number
+          storage_id: string | null
+          storage_priority: string
           tenant_id: string
           updated_at: string
         }
@@ -13283,6 +13332,8 @@ export type Database = {
           priority_mode?: string
           reference_meter_id?: string | null
           safety_buffer_w?: number
+          storage_id?: string | null
+          storage_priority?: string
           tenant_id: string
           updated_at?: string
         }
@@ -13296,6 +13347,8 @@ export type Database = {
           priority_mode?: string
           reference_meter_id?: string | null
           safety_buffer_w?: number
+          storage_id?: string | null
+          storage_priority?: string
           tenant_id?: string
           updated_at?: string
         }
@@ -13319,6 +13372,13 @@ export type Database = {
             columns: ["reference_meter_id"]
             isOneToOne: false
             referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solar_charging_config_storage_id_fkey"
+            columns: ["storage_id"]
+            isOneToOne: false
+            referencedRelation: "energy_storages"
             referencedColumns: ["id"]
           },
           {

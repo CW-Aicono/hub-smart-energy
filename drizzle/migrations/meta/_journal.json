@@ -260,6 +260,13 @@
       "when": 1791929181122,
       "tag": "0036_power_series_fixed_step",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792495200608,
+      "tag": "0037_elmi_aio_storage_control",
+      "breakpoints": true
     }
   ]
 }

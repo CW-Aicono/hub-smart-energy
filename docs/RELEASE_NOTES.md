@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.12.0 – 20.10.2026
+- Neu: ELMI All-in-One (Schnellladestation mit Batteriespeicher) als Vorlage. Der Speicher lädt PV-Überschuss über den Loxone Miniserver; einstellbar, ob Auto oder Speicher zuerst lädt.
+- Entladen ins Netz ist gesperrt; Entladen für den eigenen Verbrauch kann freigegeben werden.
+- Handbuch: Schritt-für-Schritt-Anleitung für den Loxone Miniserver.
+
 ## v1.11.2 – 20.10.2026
 - Gas- und Wasserzähler mit Impulsgeber zeigen unter „Aktuelle Werte“ jetzt den echten mittleren Durchfluss statt springender Werte.
 - Zählerdialog weist darauf hin, wenn ein Gas-/Wasserzähler vermutlich ein Impulszähler ist und der Schalter noch fehlt.

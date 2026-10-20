@@ -2,6 +2,13 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.12.0 – 20.10.2026
+- ELMI All-in-One: Migration drizzle 0037 – energy_storages (device_template, charge_point_id, control_mode, allow_self_discharge, allow_grid_discharge [per Trigger fest false, vorbereitet für Peak-Shaving], min_setpoint_kw, setpoint_integration_id, setpoint_control_uuid, last_setpoint_*), solar_charging_config (storage_id, storage_priority), Seeds charger_models „ELMI Power All-in-One 180/360“ und wallbox_modbus_templates „ELMI Power / All-in-One“ (Protokoll v1.4).
+- _shared/elmiAio.ts: Register-Codierung (32 Bit Big-Endian, 0,1) und Sollwertregel (Netz → 0, < Mindestleistung = 0, Begrenzung, nie Netzentladung) + 10 Vitest-Tests.
+- solar-charging-scheduler: setzt Speicher-Sollwert minütlich über loxone-api executeCommand auf virtuellen Eingang; storage_first reduziert EV-Überschuss.
+- UI: StorageControlDialog (Energiehandel → Speicher), Speicherauswahl + Priorität in GroupSolarChargingConfig; Handbuch-Abschnitt mit Loxone-Anleitung (4 Sprachen).
+- Offen: Rückfrage an ELMI zu Kapitel 6.1 (Vorzeichen/Funktionscode beim Schreiben).
+
 ## v1.11.2 – 20.10.2026
 - Impulszähler-Rollout: LiveValues ignoriert für meters.is_pulse_meter den Broadcast-Momentanwert und zeigt den letzten 5-Min-Wert (aus Zählerstandsdifferenz, Worker v1.18) mit Label „Mittelwert (Impulszähler)“. EditMeterDialog: Hinweis-Badge „Impulszähler: bitte Zählerstand mappen“ bei Gas/Wasser mit Quelleinheit m³/h ohne Impulszähler-Schalter. Keine Schemaänderung.
 
