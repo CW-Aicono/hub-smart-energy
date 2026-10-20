@@ -4120,6 +4120,7 @@ export const translations = {
   "liveValues.month": { de: "Monat", en: "Month", es: "Mes", nl: "Maand" },
   "liveValues.year": { de: "Jahr", en: "Year", es: "Año", nl: "Jaar" },
   "liveValues.flow": { de: "Durchfluss", en: "Flow", es: "Caudal", nl: "Doorstroming" },
+  "liveValues.pulseAverage": { de: "Mittelwert (Impulszähler)", en: "Average (pulse meter)", es: "Promedio (contador de impulsos)", nl: "Gemiddelde (pulsmeter)" },
   "liveValues.reading": { de: "Stand", en: "Reading", es: "Lectura", nl: "Stand" },
   "liveValues.strom": { de: "Strom", en: "Electricity", es: "Electricidad", nl: "Elektriciteit" },
   "liveValues.gas": { de: "Gas", en: "Gas", es: "Gas", nl: "Gas" },
