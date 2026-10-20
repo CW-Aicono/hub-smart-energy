@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.11.2 – 20.10.2026
+- Gas- und Wasserzähler mit Impulsgeber zeigen unter „Aktuelle Werte“ jetzt den echten mittleren Durchfluss statt springender Werte.
+- Zählerdialog weist darauf hin, wenn ein Gas-/Wasserzähler vermutlich ein Impulszähler ist und der Schalter noch fehlt.
+
 ## v1.11.1 – 14.10.2026
 - Einladungs- und „Passwort vergessen“-Links funktionieren jetzt zuverlässig 7 Tage – auch wenn das Firmen-Postfach Links vorab automatisch prüft.
 - Neu: „Startpasswort vergeben“ (Schlüssel-Symbol) in den Benutzerlisten. Der Nutzer meldet sich damit an und muss danach ein eigenes Passwort festlegen.

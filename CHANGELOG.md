@@ -2,6 +2,9 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.11.2 – 20.10.2026
+- Impulszähler-Rollout: LiveValues ignoriert für meters.is_pulse_meter den Broadcast-Momentanwert und zeigt den letzten 5-Min-Wert (aus Zählerstandsdifferenz, Worker v1.18) mit Label „Mittelwert (Impulszähler)“. EditMeterDialog: Hinweis-Badge „Impulszähler: bitte Zählerstand mappen“ bei Gas/Wasser mit Quelleinheit m³/h ohne Impulszähler-Schalter. Keine Schemaänderung.
+
 ## v1.11.1 – 14.10.2026
 - Fix Einladung „Link abgelaufen“: invite-tenant-admin, invite-partner-admin, partner-invite-member und send-auth-email (password_reset) verschickten den einmaligen Recovery-Link direkt; Mail-Scanner (z. B. Defender) verbrauchten ihn vorab. Neu _shared/inviteLink.ts (createSafeInviteLink): Mail enthält nur /accept-invite?t=<invite_tokens.id>, Recovery-Link entsteht erst beim Klick (activate-invited-user getInviteLink, redirectFromStoredLink). Ältere offene Tokens derselben E-Mail werden gesperrt. Fallbacks auf hub-smart-energy.lovable.app entfernt, Ziel über safeAuthRedirect.
 - Neu Edge-Function admin-set-temp-password: Startpasswort + must_change_password; Rechte serverseitig (Portal-Admin alle; Kunden-Admin eigener Mandant; Partner-Admin/can_manage_members eigene Mitglieder; Partner-Admin Nutzer eigener Kunden; nie eigenes Konto; Portal-Admin-Ziel nur durch Portal-Admin). Sperrt offene invite_tokens, setzt user_invitations.accepted_at, schreibt audit_logs (action set_temp_password, ohne Passwort).

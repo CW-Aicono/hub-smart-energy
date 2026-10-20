@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
@@ -668,6 +669,14 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                 </div>
                 <Switch checked={isPulseMeter} onCheckedChange={setIsPulseMeter} />
               </div>
+              {!isPulseMeter && sourceUnit === "m³/h" && (
+                <div className="rounded-md border border-primary/40 bg-primary/10 p-2 text-xs">
+                  <Badge variant="outline" className="mb-1">Impulszähler: bitte Zählerstand mappen</Badge>
+                  <p className="text-muted-foreground">
+                    Liefert der Miniserver bei Gas/Wasser einen Durchfluss in m³/h über einen Reedkontakt, ist dieser Wert nur „Volumen ÷ Zeit seit letztem Impuls“ und erzeugt Nadeln im Verlauf. Am Miniserver den Zählerstand (m³) zuordnen und hier „Impulszähler“ einschalten.
+                  </p>
+                </div>
+              )}
               {isPulseMeter && (
                 <>
                   <div>
