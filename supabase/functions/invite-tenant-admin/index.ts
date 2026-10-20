@@ -4,6 +4,7 @@ import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
 import { checkInviteConflict } from "../_shared/invite-conflict.ts";
+import { createSafeInviteLink } from "../_shared/inviteLink.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -124,19 +125,9 @@ const handler = async (req: Request): Promise<Response> => {
     await supabase.from("user_roles").delete().eq("user_id", newUserId);
     await supabase.from("user_roles").insert({ user_id: newUserId, role: assignedRole });
 
-    // Generate password-reset link (user sets their own password)
-    const appUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: "recovery",
-      email: adminEmail,
-      options: { redirectTo: appUrl },
-    });
-
-    if (linkError || !linkData?.properties?.action_link) {
-      throw new Error("Passwort-Reset-Link konnte nicht generiert werden");
-    }
-
-    const actionLink = linkData.properties.action_link;
+    // Scanner-sicherer Link auf unsere eigene Seite; der einmalige Anmeldelink
+    // entsteht erst beim Klick auf „Passwort festlegen" (7 Tage gültig).
+    const actionLink = await createSafeInviteLink(supabase, adminEmail, redirectTo, req.headers.get("Origin"));
 
     // Send email via Resend
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");

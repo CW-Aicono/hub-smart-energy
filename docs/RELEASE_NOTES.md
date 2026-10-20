@@ -1,5 +1,18 @@
 # Versionshinweise
 
+## v1.12.0 – 20.10.2026
+- Neu: ELMI All-in-One (Schnellladestation mit Batteriespeicher) als Vorlage. Der Speicher lädt PV-Überschuss über den Loxone Miniserver; einstellbar, ob Auto oder Speicher zuerst lädt.
+- Entladen ins Netz ist gesperrt; Entladen für den eigenen Verbrauch kann freigegeben werden.
+- Handbuch: Schritt-für-Schritt-Anleitung für den Loxone Miniserver.
+
+## v1.11.2 – 20.10.2026
+- Gas- und Wasserzähler mit Impulsgeber zeigen unter „Aktuelle Werte“ jetzt den echten mittleren Durchfluss statt springender Werte.
+- Zählerdialog weist darauf hin, wenn ein Gas-/Wasserzähler vermutlich ein Impulszähler ist und der Schalter noch fehlt.
+
+## v1.11.1 – 14.10.2026
+- Einladungs- und „Passwort vergessen“-Links funktionieren jetzt zuverlässig 7 Tage – auch wenn das Firmen-Postfach Links vorab automatisch prüft.
+- Neu: „Startpasswort vergeben“ (Schlüssel-Symbol) in den Benutzerlisten. Der Nutzer meldet sich damit an und muss danach ein eigenes Passwort festlegen.
+
 ## v1.11.0 – 13.10.2026
 - Live-Leistungen (z. B. Shelly) im Dashboard werden bei geöffneter Seite alle 10 Sekunden aktualisiert.
 - Dashboard: neue Kachelbreiten 1/6, 1/4 und 3/4; neue Kachel „Ladestationen (Detail)“ mit Leistung, Status, Verbindung, Zählerstand und laufendem Ladevorgang je Ladepunkt.

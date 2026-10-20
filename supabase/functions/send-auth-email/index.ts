@@ -10,6 +10,7 @@ import { z } from "https://esm.sh/zod@3.23.8";
 import { resendFrom } from "../_shared/resend-from.ts";
 import { renderAuthEmail, type AuthEmailType } from "../_shared/email-templates.ts";
 import { safeAuthRedirect, safeAppRedirect } from "../_shared/appOrigin.ts";
+import { createSafeInviteLink } from "../_shared/inviteLink.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -172,7 +173,12 @@ Deno.serve(async (req) => {
     }
 
     const actionLink = linkData.properties.action_link;
-    const rendered = renderAuthEmail(type, actionLink, { recipientName, locale });
+    // Passwort-Reset: scanner-sicherer Link auf unsere Zwischenseite. Der echte
+    // einmalige Recovery-Link entsteht erst beim Klick auf „Neues Passwort festlegen".
+    const mailLink = type === "password_reset"
+      ? await createSafeInviteLink(admin, email, linkOpts.redirectTo as string, req.headers.get("Origin"), { mode: "reset" })
+      : actionLink;
+    const rendered = renderAuthEmail(type, mailLink, { recipientName, locale });
 
     const fromAddress = resendFrom("AICONO");
     const resendRes = await fetch("https://api.resend.com/emails", {

@@ -54,3 +54,20 @@
 ## ESB Übersicht 13.10.
 - [x] Live-Werte schneller (10 s), Ladestationen-Kachel, mehr Spaltenbreiten, 15-Min-Energieanalyse + Jahres-CSV, Sensor-Meldung entprellt (v1.11.0)
 - [ ] Idee: Inbetriebnahme- und Abnahme-Tool (Anlagen-, Abnahme-, Prüfprotokoll, Funktionsnachweis, Datenblätter)
+
+## Einladungen (14.10.)
+- [x] Einladungs-/Reset-Links scanner-sicher über Zwischenseite, echte 7 Tage (v1.11.1)
+- [x] Startpasswort vergeben mit Zwangswechsel bei erster Anmeldung (v1.11.1)
+- [ ] Live-Deploy v1.11.1 (wartet auf Nutzer); bis dahin Sofort-Befehl für Schmidt/Wigger
+- [ ] Idee: 2FA (Authenticator) für Portal- und Partner-Admins
+
+## Impulszähler (20.10.)
+- [x] Live-Kachel Mittelwert + Hinweis im Zählerdialog (v1.11.2)
+- [x] „Gaszähler Hausanschluss“ als Impulszähler markiert, Verlauf 22.09.–04.10. aus Zählerständen neu berechnet
+- [ ] Gaszähler Hausanschluss: seit 13.10. kein Zählerstand übertragen – Zählerstand im Miniserver/Worker zuordnen, dann 13.10.–heute neu berechnen (wartet auf Nutzer)
+
+## ELMI All-in-One (20.10.)
+- [x] Vorlage, Speichersteuerung über Loxone, PV-Überschuss mit Priorität, Netzentladung gesperrt, Loxone-Anleitung (v1.12.0)
+- [ ] Rückfrage an ELMI zu Kapitel 6.1 (Vorzeichen/Funktionscode) – wartet auf Hersteller
+- [ ] Inbetriebnahme vor Ort: Miniserver nach Anleitung einrichten, Sollwert-UUID eintragen (wartet auf Nutzer)
+- [ ] Peak-Shaving mit Netzentladung freischalten, sobald Netzbetreiber zustimmt

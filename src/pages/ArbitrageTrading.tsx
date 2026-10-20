@@ -15,6 +15,7 @@ import { TrendingUp, TrendingDown, Battery, Zap, Plus, Trash2, Pencil, BarChart3
 import { RowActions } from "@/components/ui/row-actions";
 import { useEnergyStorages } from "@/hooks/useEnergyStorages";
 import ArbitrageAiSuggestions from "@/components/charging/ArbitrageAiSuggestions";
+import StorageControlDialog from "@/components/storage/StorageControlDialog";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
 import { useArbitrageStrategies } from "@/hooks/useArbitrageStrategies";
 import { useArbitrageTrades } from "@/hooks/useArbitrageTrades";
@@ -275,6 +276,7 @@ function StoragesTab() {
   const [editId, setEditId] = useState<string | null>(null);
   const emptyForm = { name: "", location_id: "", capacity_kwh: 100, max_charge_kw: 50, max_discharge_kw: 50, efficiency_pct: 90 };
   const [form, setForm] = useState(emptyForm);
+  const [controlStorage, setControlStorage] = useState<any | null>(null);
 
   const openEdit = (s: any) => {
     setForm({ name: s.name, location_id: s.location_id || "", capacity_kwh: s.capacity_kwh, max_charge_kw: s.max_charge_kw, max_discharge_kw: s.max_discharge_kw, efficiency_pct: s.efficiency_pct });
@@ -341,6 +343,7 @@ function StoragesTab() {
               <TableCell>
                 <RowActions items={[
                   { label: t("common.edit" as any), icon: Pencil, onClick: () => openEdit(s) },
+                  { label: t("storageCtl.title" as any), icon: Sun, onClick: () => setControlStorage(s) },
                   { label: t("common.delete" as any), icon: Trash2, variant: "destructive", onClick: () => deleteStorage.mutate(s.id) },
                 ]} />
               </TableCell>
@@ -349,6 +352,7 @@ function StoragesTab() {
           {storages.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">{t("arbitrage.noStorages" as any)}</TableCell></TableRow>}
         </TableBody>
       </Table>
+      <StorageControlDialog storage={controlStorage} onOpenChange={(o) => { if (!o) setControlStorage(null); }} />
     </div>
   );
 }

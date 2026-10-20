@@ -2,6 +2,22 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.12.0 – 20.10.2026
+- ELMI All-in-One: Migration drizzle 0037 – energy_storages (device_template, charge_point_id, control_mode, allow_self_discharge, allow_grid_discharge [per Trigger fest false, vorbereitet für Peak-Shaving], min_setpoint_kw, setpoint_integration_id, setpoint_control_uuid, last_setpoint_*), solar_charging_config (storage_id, storage_priority), Seeds charger_models „ELMI Power All-in-One 180/360“ und wallbox_modbus_templates „ELMI Power / All-in-One“ (Protokoll v1.4).
+- _shared/elmiAio.ts: Register-Codierung (32 Bit Big-Endian, 0,1) und Sollwertregel (Netz → 0, < Mindestleistung = 0, Begrenzung, nie Netzentladung) + 10 Vitest-Tests.
+- solar-charging-scheduler: setzt Speicher-Sollwert minütlich über loxone-api executeCommand auf virtuellen Eingang; storage_first reduziert EV-Überschuss.
+- UI: StorageControlDialog (Energiehandel → Speicher), Speicherauswahl + Priorität in GroupSolarChargingConfig; Handbuch-Abschnitt mit Loxone-Anleitung (4 Sprachen).
+- Daten (Staging): Stadt Steinfurt „Gaszähler Hausanschluss“ is_pulse_meter=true; 5-Min-/Stundenwerte 22.09.–04.10. aus meter_cumulative_readings linear neu berechnet (Tagessummen = Loxone-Tageswerte). Ab 13.10. keine Zählerstände vorhanden → Tagessummen dort aus Momentanwerten zu hoch, Neuberechnung offen.
+- Offen: Rückfrage an ELMI zu Kapitel 6.1 (Vorzeichen/Funktionscode beim Schreiben).
+
+## v1.11.2 – 20.10.2026
+- Impulszähler-Rollout: LiveValues ignoriert für meters.is_pulse_meter den Broadcast-Momentanwert und zeigt den letzten 5-Min-Wert (aus Zählerstandsdifferenz, Worker v1.18) mit Label „Mittelwert (Impulszähler)“. EditMeterDialog: Hinweis-Badge „Impulszähler: bitte Zählerstand mappen“ bei Gas/Wasser mit Quelleinheit m³/h ohne Impulszähler-Schalter. Keine Schemaänderung.
+
+## v1.11.1 – 14.10.2026
+- Fix Einladung „Link abgelaufen“: invite-tenant-admin, invite-partner-admin, partner-invite-member und send-auth-email (password_reset) verschickten den einmaligen Recovery-Link direkt; Mail-Scanner (z. B. Defender) verbrauchten ihn vorab. Neu _shared/inviteLink.ts (createSafeInviteLink): Mail enthält nur /accept-invite?t=<invite_tokens.id>, Recovery-Link entsteht erst beim Klick (activate-invited-user getInviteLink, redirectFromStoredLink). Ältere offene Tokens derselben E-Mail werden gesperrt. Fallbacks auf hub-smart-energy.lovable.app entfernt, Ziel über safeAuthRedirect.
+- Neu Edge-Function admin-set-temp-password: Startpasswort + must_change_password; Rechte serverseitig (Portal-Admin alle; Kunden-Admin eigener Mandant; Partner-Admin/can_manage_members eigene Mitglieder; Partner-Admin Nutzer eigener Kunden; nie eigenes Konto; Portal-Admin-Ziel nur durch Portal-Admin). Sperrt offene invite_tokens, setzt user_invitations.accepted_at, schreibt audit_logs (action set_temp_password, ohne Passwort).
+- UI: SetTempPasswordDialog/Button in SuperAdminTenantDetail (Nutzer + Einladungen), UserManagement, SuperAdminUsers, PartnerMembers. AcceptInvite mit mode=reset. Reset-Mail-Text: 7 Tage statt 60 Minuten.
+
 ## v1.11.0 – 13.10.2026
 - Migration drizzle 0036: get_power_series_step(meter_ids, start, end, step 5/15/60/1440) – feste Auflösung, max. 400 Tage, gleiche Zugriffsprüfung wie get_power_series_auto.
 - Energieanalyse: Auflösung „15min“, Abfrage über fetchPowerSeriesStep (Chunks < 1000 Zeilen, 4 parallel) statt Server-Automatik.

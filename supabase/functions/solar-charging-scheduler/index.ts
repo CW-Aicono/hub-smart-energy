@@ -2,6 +2,62 @@ import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { fetchLatestMeterPowerKw } from "../_shared/meterPower.ts";
+import { computeStorageSetpointKw } from "../_shared/elmiAio.ts";
+
+/**
+ * Setzt den Speicher-Sollwert (kW, + laden / − entladen) auf einen virtuellen
+ * Eingang des Loxone Miniservers. Der Miniserver schreibt ihn per Modbus TCP
+ * in Register 1200 und erzeugt den Heartbeat (1204) lokal.
+ * Netzentladung ist ausgeschlossen (siehe computeStorageSetpointKw).
+ */
+async function dispatchStorageSetpoint(admin: any, config: any, gridKw: number) {
+  const { data: s } = await admin
+    .from("energy_storages")
+    .select("id, tenant_id, control_mode, allow_self_discharge, min_setpoint_kw, max_charge_kw, max_discharge_kw, current_soc_pct, last_setpoint_kw, setpoint_integration_id, setpoint_control_uuid")
+    .eq("id", config.storage_id)
+    .eq("tenant_id", config.tenant_id)
+    .maybeSingle();
+  if (!s || s.control_mode !== "pv_surplus" || !s.setpoint_integration_id || !s.setpoint_control_uuid) return null;
+
+  const current = Number(s.last_setpoint_kw ?? 0);
+  const target = computeStorageSetpointKw({
+    gridKw,
+    currentSetpointKw: current,
+    bufferKw: Number(config.safety_buffer_w ?? 0) / 1000,
+    minKw: Number(s.min_setpoint_kw ?? 5),
+    maxChargeKw: Number(s.max_charge_kw ?? 0),
+    maxDischargeKw: Number(s.max_discharge_kw ?? 0),
+    socPct: s.current_soc_pct != null ? Number(s.current_soc_pct) : null,
+    allowSelfDischarge: !!s.allow_self_discharge,
+  });
+
+  let error: string | null = null;
+  try {
+    // Jede Minute senden: der Miniserver setzt den Sollwert auf 0, wenn 5 min nichts kommt.
+    const resp = await fetch(`${supabaseUrl}/functions/v1/loxone-api`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "executeCommand",
+        locationIntegrationId: s.setpoint_integration_id,
+        controlUuid: s.setpoint_control_uuid,
+        commandValue: String(target),
+      }),
+    });
+    const body = await resp.json().catch(() => ({}));
+    if (!resp.ok || body?.success === false) error = body?.error || `HTTP ${resp.status}`;
+  } catch (e) {
+    error = (e as Error).message;
+  }
+
+  await admin.from("energy_storages").update({
+    last_setpoint_kw: error ? current : target,
+    last_setpoint_at: new Date().toISOString(),
+    last_setpoint_error: error,
+  }).eq("id", s.id);
+
+  return { targetKw: target, deltaKw: error ? 0 : target - current, error };
+}
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -56,7 +112,15 @@ Deno.serve(async (req) => {
         // Negative kW = feed-in = surplus
         const powerW = latestKw * 1000;
         const surplusW = powerW < 0 ? Math.abs(powerW) - config.safety_buffer_w : 0;
-        const availableSurplus = Math.max(0, surplusW);
+        let availableSurplus = Math.max(0, surplusW);
+
+        // ELMI AiO / Batteriespeicher: Sollwert über Loxone Miniserver setzen.
+        if (config.storage_id) {
+          const st = await dispatchStorageSetpoint(admin, config, latestKw);
+          if (st && config.storage_priority === "storage_first" && st.deltaKw > 0) {
+            availableSurplus = Math.max(0, availableSurplus - st.deltaKw * 1000);
+          }
+        }
 
         // Get charge points: either by group_id or single charge_point_id
         let chargePoints: { id: string }[] | null = null;

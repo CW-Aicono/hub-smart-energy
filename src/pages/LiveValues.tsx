@@ -636,9 +636,13 @@ const LiveValues = () => {
 
     if (meter.capture_type === "automatic" && (liveValues.has(meter.id) || bcPwr !== undefined || bcTotals)) {
       const live = liveValues.get(meter.id);
+      // Impulszähler: Momentanwert des Miniservers ist „Volumen ÷ Zeit seit
+      // letztem Impuls“ und springt — stattdessen den aus dem Zählerstand
+      // gebildeten Periodenmittelwert (letzter 5-Min-Wert) zeigen.
+      const isPulse = (meter as any).is_pulse_meter === true;
       return {
         // Broadcast schlägt den DB-Reconcile-Wert (echter Momentanwert)
-        value: bcPwr ?? live?.value ?? null,
+        value: (isPulse ? undefined : bcPwr) ?? live?.value ?? null,
         unit: live?.unit ?? powerUnitForMeter(meter as any),
         totalDay: bcTotals?.today ?? live?.totalDay ?? null,
         totalMonth: bcTotals?.month ?? live?.totalMonth ?? null,
@@ -858,7 +862,9 @@ const LiveValues = () => {
                                 <>
                                   {value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
                                   {isFlowType && (
-                                    <span className="text-sm font-normal text-muted-foreground ml-1">{t("liveValues.flow" as any)}</span>
+                                    <span className="text-sm font-normal text-muted-foreground ml-1">
+                                      {(meter as any).is_pulse_meter === true ? t("liveValues.pulseAverage" as any) : t("liveValues.flow" as any)}
+                                    </span>
                                   )}
                                 </>
                               ) : isBoolUnit ? (
@@ -887,7 +893,9 @@ const LiveValues = () => {
                                     return `${value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${meter.unit}`;
                                   })()}
                                   {isFlowType && (
-                                    <span className="text-sm font-normal text-muted-foreground ml-1">{t("liveValues.flow" as any)}</span>
+                                    <span className="text-sm font-normal text-muted-foreground ml-1">
+                                      {(meter as any).is_pulse_meter === true ? t("liveValues.pulseAverage" as any) : t("liveValues.flow" as any)}
+                                    </span>
                                   )}
                                 </>
                               )}

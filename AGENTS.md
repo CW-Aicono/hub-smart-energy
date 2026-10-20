@@ -17,3 +17,4 @@
 
 - Automatic invoices are created only as drafts with a unique `source_ref` per triggering event (`_shared/invoiceDrafts.ts`, `create_setup_invoice` trigger) and partner-addressed invoices carry `partner_id` — prevents double billing and keeps purchase prices hidden from end customers.
 - Charge points are mirrored as meters via the `sync_charge_point_meter` trigger and `meters.source_charge_point_id`, reusing the existing OCPP forwarding to `linked_meter_id` — one data path, all meter features apply.
+- Battery setpoints go through `_shared/elmiAio.ts` (computeStorageSetpointKw) and are delivered to the on-site controller (Loxone virtual input); `energy_storages.allow_grid_discharge` is forced false by trigger — grid discharge stays locked until the grid operator approves.
