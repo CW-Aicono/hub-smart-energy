@@ -42,7 +42,7 @@ PV-Überschuss am NVP (Referenzzähler)
 
 ## Offene Punkte (vor dem Bau zu klären)
 - Geklärt: Vor Ort steht ein Loxone Miniserver (kein AICONO-Gateway). Er liest und schreibt die AiO per Modbus TCP und erzeugt den Heartbeat selbst; die Cloud setzt den Sollwert über die bestehende Loxone-Anbindung. Dazu wird eine Schritt-für-Schritt-Anleitung (Modbus-Server, Register-Liste, Heartbeat-Baustein, virtuelle Eingänge für Sollwert) im Handbuch und als Loxone-Vorlage hinterlegt.
-- Soll die AiO auch ins Netz entladen dürfen (Peak-Shaving/Arbitrage) oder nur Eigenverbrauch?
+- Geklärt: Entladen ins Netz ist wegen Vorgaben des Netzbetreibers aktuell verboten – die Software sperrt das fest (nur Eigenverbrauch, Netzbezug nie unter 0). Für das Modul Peak-Shaving wird die Anbindung vorbereitet (Schalter „Netzentladung erlaubt" bleibt gesperrt, bis er freigegeben wird).
 - Im Herstellerbeispiel 6.1 steht „Entladen 10 kW" mit positivem Wert und Funktionscode 0x03 – widerspricht dem Text (negativ = Entladen, Schreiben = 0x10). Wird beim ersten Test vor Ort bestätigt; bis dahin gilt der Text.
 
 ## Technische Details
