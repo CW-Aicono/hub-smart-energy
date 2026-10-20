@@ -695,6 +695,24 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
           <section>
             <h4 className="font-semibold mb-2 flex items-center gap-2">
               <Battery className="h-4 w-4" />
+              {T("manual.elmi.title")}
+            </h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.elmi.intro")}</p>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
+              <li>{T("manual.elmi.step1")}</li>
+              <li>{T("manual.elmi.step2")}</li>
+              <li>{T("manual.elmi.step3")}</li>
+              <li>{T("manual.elmi.step4")}</li>
+              <li>{T("manual.elmi.step5")}</li>
+              <li>{T("manual.elmi.step6")}</li>
+              <li>{T("manual.elmi.step7")}</li>
+            </ol>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.elmi.safety")}</p>
+          </section>
+
+          <section>
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              <Battery className="h-4 w-4" />
               {T("manual.arb.storageTitle")}
             </h4>
             <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2 ml-4">
