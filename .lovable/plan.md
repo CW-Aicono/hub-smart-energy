@@ -21,7 +21,7 @@ PV-Überschuss am NVP (Referenzzähler)
  solar-charging-scheduler (Cloud, minütlich)
         |  Sollwert kW (+ laden / - entladen)
         v
- AICONO-Gateway vor Ort  --Modbus TCP-->  AiO Register 1200 (Sollwert)
+ Loxone Miniserver (oder AICONO-Gateway) vor Ort  --Modbus TCP-->  AiO Register 1200 (Sollwert)
    sendet Heartbeat alle 10 s            Register 1204 (Heartbeat)
    prüft Rückmeldung 1078                Register 1070/1072 (Ist-Leistung)
 ```
