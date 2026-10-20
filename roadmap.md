@@ -60,3 +60,7 @@
 - [x] Startpasswort vergeben mit Zwangswechsel bei erster Anmeldung (v1.11.1)
 - [ ] Live-Deploy v1.11.1 (wartet auf Nutzer); bis dahin Sofort-Befehl für Schmidt/Wigger
 - [ ] Idee: 2FA (Authenticator) für Portal- und Partner-Admins
+
+## Impulszähler (20.10.)
+- [x] Live-Kachel Mittelwert + Hinweis im Zählerdialog (v1.11.2)
+- [ ] „Gaszähler Hausanschluss“ als Impulszähler markieren + Altdaten neu berechnen (wartet auf Nutzer)
