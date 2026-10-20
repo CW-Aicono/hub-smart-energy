@@ -41,7 +41,7 @@ PV-Überschuss am NVP (Referenzzähler)
 8. Handbuch 4 Sprachen, Changelog, Release Notes, Version 1.12.0, Roadmap-Eintrag.
 
 ## Offene Punkte (vor dem Bau zu klären)
-- Ist vor Ort ein AICONO-Gateway im selben Netz wie die AiO? Ohne Gateway ist Modbus aus der Cloud nicht erreichbar.
+- Geklärt: Vor Ort steht ein Loxone Miniserver (kein AICONO-Gateway). Er liest und schreibt die AiO per Modbus TCP und erzeugt den Heartbeat selbst; die Cloud setzt den Sollwert über die bestehende Loxone-Anbindung. Dazu wird eine Schritt-für-Schritt-Anleitung (Modbus-Server, Register-Liste, Heartbeat-Baustein, virtuelle Eingänge für Sollwert) im Handbuch und als Loxone-Vorlage hinterlegt.
 - Soll die AiO auch ins Netz entladen dürfen (Peak-Shaving/Arbitrage) oder nur Eigenverbrauch?
 - Im Herstellerbeispiel 6.1 steht „Entladen 10 kW" mit positivem Wert und Funktionscode 0x03 – widerspricht dem Text (negativ = Entladen, Schreiben = 0x10). Wird beim ersten Test vor Ort bestätigt; bis dahin gilt der Text.
 
