@@ -267,7 +267,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   // Livewert für Tacho/KPI im Tagesmodus: jüngster Rohwert je Zähler alle 15 s
   // (statt bis zu 5 Min. alter 5-Min-Buckets). Nur bei sichtbarem Browser-Tab.
   const wantsLive = (activeChartType === "kpi" || activeChartType === "gauge")
-    && selectedPeriod === "day" && (!config.aggregation || config.aggregation === "sum");
+    && selectedPeriod === "day" && !["avg", "max", "min"].includes(config.aggregation as string);
   const { data: liveLatest } = useQuery({
     queryKey: ["custom-widget-live-latest", powerMeterIds],
     enabled: wantsLive && powerMeterIds.length > 0 && powerMeterIds.length === config.meter_ids.length,
@@ -647,7 +647,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       case "min": return Math.min(...allValues);
       default: return allValues.reduce((a, b) => a + b, 0);
     }
-  }, [chartData, config, activeChartType, selectedPeriod]);
+  }, [chartData, config, activeChartType, selectedPeriod, liveLatest, displayUnit]);
 
   return (
     <Card>
