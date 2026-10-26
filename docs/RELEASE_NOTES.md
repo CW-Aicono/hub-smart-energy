@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.12.1 – 26.10.2026
+- Behoben: Eigene Rollen wie „Endkunde“ sehen nur noch die freigegebenen Bereiche und können das Dashboard nur mit dem entsprechenden Recht anpassen.
+- Tacho- und Kennzahl-Kacheln im Dashboard aktualisieren sich jetzt alle 15 Sekunden.
+
 ## v1.12.0 – 20.10.2026
 - Neu: ELMI All-in-One (Schnellladestation mit Batteriespeicher) als Vorlage. Der Speicher lädt PV-Überschuss über den Loxone Miniserver; einstellbar, ob Auto oder Speicher zuerst lädt.
 - Entladen ins Netz ist gesperrt; Entladen für den eigenen Verbrauch kann freigegeben werden.
