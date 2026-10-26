@@ -2,7 +2,11 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
-## Unveröffentlicht – 26.10.2026
+## v1.12.1 – 26.10.2026
+- Fix Rechte eigener Rollen (Live-Befund Bolan/„Endkunde“): Rechte wurden nur gespeichert, nie geprüft. Migration drizzle 0038: get_my_permission_codes() (NULL = uneingeschränkt: Admin oder ohne custom_role_id) und has_custom_permission(); dashboard_widgets UPDATE/DELETE erfordern dashboard.customize. Neu useMyPermissions (ROUTE_PERMISSION_MAP), eingebunden in useModuleGuard (Menü + ModuleGuard); Menügruppen sichtbar, wenn ein Unterpunkt erlaubt ist; DashboardCustomizer nur mit dashboard.customize. 6 Vitest-Tests.
+- CustomWidget: Tacho/KPI im Tagesmodus nutzt jüngsten Rohwert aus meter_power_readings (≤15 Min alt), Abfrage alle 15 s, nicht im Hintergrund-Tab.
+- Offen: Energieanalyse leer auf Live (Ursache unbestätigt, Prüfbefehle an Nutzer), E-Mail-Adresse ändern, Inbetriebnahme-/Abnahmeprotokoll.
+
 - ELMI bestätigt Kapitel 6.1 (korrigiertes Protokoll v1.5): Entladen = negativer Sollwert, -10 kW = 0xFFFE7960, Schreiben mit FC 0x10, Skalierung 0,1 W. Implementierung in _shared/elmiAio.ts entsprach bereits dieser Fassung; keine Codeänderung, bestehende Tests decken die Werte ab.
 
 ## v1.12.0 – 20.10.2026

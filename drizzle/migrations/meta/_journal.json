@@ -267,6 +267,13 @@
       "when": 1792495200608,
       "tag": "0037_elmi_aio_storage_control",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793023589867,
+      "tag": "0038_custom_role_permission_enforcement",
+      "breakpoints": true
     }
   ]
 }

@@ -219,14 +219,15 @@ const DashboardSidebar = () => {
   // Filter nav items based on active modules
   const filteredNavItems = useMemo(() => {
     return navItems
-      .filter((item) => isNavItemVisible(item.to))
       .map((item) => {
         if (item.children) {
+          // Groups are visible when at least one child is permitted (module + role rights).
           const filteredChildren = item.children.filter((child) => isNavItemVisible(child.to));
           if (filteredChildren.length === 0) return null;
-          return { ...item, children: filteredChildren };
+          const to = isNavItemVisible(item.to) ? item.to : filteredChildren[0].to;
+          return { ...item, to, children: filteredChildren };
         }
-        return item;
+        return isNavItemVisible(item.to) ? item : null;
       })
       .filter(Boolean) as NavItem[];
   }, [navItems, isNavItemVisible]);

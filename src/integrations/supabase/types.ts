@@ -15961,6 +15961,7 @@ export type Database = {
           meter_id: string
         }[]
       }
+      get_my_permission_codes: { Args: never; Returns: string[] }
       get_partner_branding_for_tenant: {
         Args: { _tenant_id: string }
         Returns: Json
@@ -16098,6 +16099,10 @@ export type Database = {
       guarded_cleanup_sensor_readings_raw: { Args: never; Returns: undefined }
       guarded_rollup_meter_power_hourly: { Args: never; Returns: undefined }
       guarded_rollup_sensor_hourly: { Args: never; Returns: undefined }
+      has_custom_permission: {
+        Args: { _code: string; _user_id: string }
+        Returns: boolean
+      }
       has_location_access: {
         Args: { _location_id: string; _user_id: string }
         Returns: boolean

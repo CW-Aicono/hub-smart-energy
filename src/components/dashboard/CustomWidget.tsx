@@ -264,6 +264,29 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       return out;
     },
   });
+  // Livewert für Tacho/KPI im Tagesmodus: jüngster Rohwert je Zähler alle 15 s
+  // (statt bis zu 5 Min. alter 5-Min-Buckets). Nur bei sichtbarem Browser-Tab.
+  const wantsLive = (activeChartType === "kpi" || activeChartType === "gauge")
+    && selectedPeriod === "day" && !["avg", "max", "min"].includes(config.aggregation as string);
+  const { data: liveLatest } = useQuery({
+    queryKey: ["custom-widget-live-latest", powerMeterIds],
+    enabled: wantsLive && powerMeterIds.length > 0 && powerMeterIds.length === config.meter_ids.length,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    staleTime: 10_000,
+    queryFn: async () => {
+      const since = new Date(Date.now() - 15 * 60_000).toISOString();
+      const vals = await Promise.all(powerMeterIds.map(async (id) => {
+        const { data } = await supabase.from("meter_power_readings").select("power_value")
+          .eq("meter_id", id).gte("recorded_at", since)
+          .order("recorded_at", { ascending: false }).limit(1).maybeSingle();
+        return data ? Number((data as any).power_value) : null;
+      }));
+      if (vals.some((v) => v === null || !Number.isFinite(v))) return null;
+      return (vals as number[]).reduce((a, b) => a + b, 0);
+    },
+  });
+
   const staleMeters = powerMeterIds.filter((id) => {
     const at = (lastStored as Record<string, string | null>)[id];
     if (at === undefined) return false;
@@ -604,7 +627,13 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         case "avg": return flat.reduce((a, b) => a + b, 0) / flat.length;
         case "max": return Math.max(...flat);
         case "min": return Math.min(...flat);
-        default: return series.reduce((acc, s) => acc + (s.length ? s[s.length - 1] : 0), 0);
+        default: {
+          if (typeof liveLatest === "number") {
+            const scale = displayUnit === "W" ? 1000 : displayUnit === "MW" ? 0.001 : 1;
+            return liveLatest * scale;
+          }
+          return series.reduce((acc, s) => acc + (s.length ? s[s.length - 1] : 0), 0);
+        }
       }
     }
     const allValues = chartData.flatMap((d: any) =>
@@ -618,7 +647,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       case "min": return Math.min(...allValues);
       default: return allValues.reduce((a, b) => a + b, 0);
     }
-  }, [chartData, config, activeChartType, selectedPeriod]);
+  }, [chartData, config, activeChartType, selectedPeriod, liveLatest, displayUnit]);
 
   return (
     <Card>

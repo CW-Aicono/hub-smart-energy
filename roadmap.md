@@ -71,3 +71,10 @@
 - [x] Rückfrage an ELMI zu Kapitel 6.1 – vom Hersteller bestätigt (Protokoll v1.5): negativ = Entladen, 0xFFFE7960, FC 0x10, Skalierung 0,1 W
 - [ ] Inbetriebnahme vor Ort: Miniserver nach Anleitung einrichten, Sollwert-UUID eintragen (wartet auf Nutzer)
 - [ ] Peak-Shaving mit Netzentladung freischalten, sobald Netzbetreiber zustimmt
+
+## Offene Punkte Live (Übersicht 23.10.)
+- [x] Rechte eigener Rollen („Endkunde“) in Menü, Seiten, Dashboard-Anpassen durchsetzen (v1.12.1)
+- [x] Tacho-/Kennzahl-Kacheln alle 15 s (v1.12.1)
+- [ ] Energieanalyse leer auf Live – Prüfbefehle ausführen, dann Fix (wartet auf Nutzer)
+- [ ] E-Mail-Adresse ändern (Profil + Admin)
+- [ ] Inbetriebnahme-/Abnahmeprotokoll – Musterprotokolle/Mail benötigt (wartet auf Nutzer)
