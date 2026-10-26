@@ -213,7 +213,7 @@ const DashboardContent = () => {
               selectedLocationId={selectedLocationId}
               onLocationChange={setSelectedLocationId}
             />
-            <div className="hidden md:block">
+            {canCustomize && <div className="hidden md:block">
               <DashboardCustomizer
                 widgets={widgets}
                 onToggleVisibility={toggleWidgetVisibility}
@@ -235,7 +235,7 @@ const DashboardContent = () => {
                 }}
               />
 
-            </div>
+            </div>}
           </div>
         </header>
         <div className="p-3 md:p-6 relative">
