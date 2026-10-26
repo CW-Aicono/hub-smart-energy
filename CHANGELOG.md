@@ -2,6 +2,9 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## Unveröffentlicht – 26.10.2026
+- ELMI bestätigt Kapitel 6.1 (korrigiertes Protokoll v1.5): Entladen = negativer Sollwert, -10 kW = 0xFFFE7960, Schreiben mit FC 0x10, Skalierung 0,1 W. Implementierung in _shared/elmiAio.ts entsprach bereits dieser Fassung; keine Codeänderung, bestehende Tests decken die Werte ab.
+
 ## v1.12.0 – 20.10.2026
 - ELMI All-in-One: Migration drizzle 0037 – energy_storages (device_template, charge_point_id, control_mode, allow_self_discharge, allow_grid_discharge [per Trigger fest false, vorbereitet für Peak-Shaving], min_setpoint_kw, setpoint_integration_id, setpoint_control_uuid, last_setpoint_*), solar_charging_config (storage_id, storage_priority), Seeds charger_models „ELMI Power All-in-One 180/360“ und wallbox_modbus_templates „ELMI Power / All-in-One“ (Protokoll v1.4).
 - _shared/elmiAio.ts: Register-Codierung (32 Bit Big-Endian, 0,1) und Sollwertregel (Netz → 0, < Mindestleistung = 0, Begrenzung, nie Netzentladung) + 10 Vitest-Tests.
