@@ -68,6 +68,6 @@
 
 ## ELMI All-in-One (20.10.)
 - [x] Vorlage, Speichersteuerung über Loxone, PV-Überschuss mit Priorität, Netzentladung gesperrt, Loxone-Anleitung (v1.12.0)
-- [ ] Rückfrage an ELMI zu Kapitel 6.1 (Vorzeichen/Funktionscode) – wartet auf Hersteller
+- [x] Rückfrage an ELMI zu Kapitel 6.1 – vom Hersteller bestätigt (Protokoll v1.5): negativ = Entladen, 0xFFFE7960, FC 0x10, Skalierung 0,1 W
 - [ ] Inbetriebnahme vor Ort: Miniserver nach Anleitung einrichten, Sollwert-UUID eintragen (wartet auf Nutzer)
 - [ ] Peak-Shaving mit Netzentladung freischalten, sobald Netzbetreiber zustimmt
