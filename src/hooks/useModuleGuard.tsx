@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTenantModules } from "./useTenantModules";
 import { useDemoMode } from "@/contexts/DemoMode";
 import { useTenant } from "./useTenant";
+import { useMyPermissions } from "./useMyPermissions";
 
 /**
  * Maps route paths to module codes.
@@ -68,6 +69,8 @@ export function useModuleGuard() {
   // Strict mode: if the tenant has any module records, treat absence as "disabled" (opt-in).
   // Permissive mode: if no records exist at all, default to enabled (legacy/unconfigured tenants).
   const strictMode = modules.length > 0;
+  // Custom-role permissions narrow access within the booked modules.
+  const perms = useMyPermissions();
 
   const checkModule = (code: string): boolean => {
     if (isDemo) return true;
@@ -83,6 +86,7 @@ export function useModuleGuard() {
 
   const isRouteAllowed = (path: string): boolean => {
     if (isDemo) return true;
+    if (!perms.isPathPermitted(path)) return false;
     if (isLoading || !tenant) return true;
 
     const moduleCode = ROUTE_MODULE_MAP[path];
@@ -99,6 +103,7 @@ export function useModuleGuard() {
 
   const isNavItemVisible = (path: string): boolean => {
     if (isDemo) return true;
+    if (!perms.isPathPermitted(path)) return false;
     if (isLoading || !tenant) return true;
     const moduleCode = NAV_MODULE_MAP[path];
     if (!moduleCode) return true;
@@ -113,6 +118,6 @@ export function useModuleGuard() {
     return !strictMode;
   }, [modules, isLoading, tenant, strictMode]);
 
-  return { isRouteAllowed, isNavItemVisible, isLoading, isModuleEnabled: checkModule, locationsFullEnabled };
+  return { isRouteAllowed, isNavItemVisible, isLoading: isLoading || perms.loading, isModuleEnabled: checkModule, locationsFullEnabled };
 }
 
