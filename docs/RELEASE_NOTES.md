@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.12.2 – 28.10.2026
+- Behoben: Die Energieanalyse zeigt wieder Werte, auch wenn auf dem Server eine Auswertung fehlt.
+- Einladungs- und Passwort-Links (seit v1.11.1) werden beim Update zuverlässig aktiv.
+
 ## v1.12.1 – 26.10.2026
 - Behoben: Eigene Rollen wie „Endkunde“ sehen nur noch die freigegebenen Bereiche und können das Dashboard nur mit dem entsprechenden Recht anpassen.
 - Tacho- und Kennzahl-Kacheln im Dashboard aktualisieren sich jetzt alle 15 Sekunden.
