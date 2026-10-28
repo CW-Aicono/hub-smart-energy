@@ -40,7 +40,7 @@ docker tag "$IMAGE" hub-smart-energy-frontend:latest
 
 log "5/6 Container neu starten (frontend, functions)"
 cd "${REPO_ROOT}/supabase-docker"
-if ! docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d frontend functions; then
+if ! docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --force-recreate frontend functions; then
   log "FEHLER: docker compose up fehlgeschlagen. Starte Rollback."
   "${REPO_ROOT}/scripts/rollback.sh" "$TS" "$PREV_SHA"
   exit 1
