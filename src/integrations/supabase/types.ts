@@ -15623,6 +15623,12 @@ export type Database = {
       }
     }
     Functions: {
+      _can_restructure_location: { Args: { p_loc: string }; Returns: string }
+      _complex_of: { Args: { p_loc: string }; Returns: string }
+      _move_floor_to: {
+        Args: { p_floor: string; p_target: string }
+        Returns: undefined
+      }
       accept_own_invitations: { Args: never; Returns: number }
       admin_top_disk_readers: {
         Args: { limit_n?: number }
@@ -15794,6 +15800,14 @@ export type Database = {
       compute_daily_totals_from_5min: {
         Args: { p_day?: string }
         Returns: number
+      }
+      convert_building_to_floor: {
+        Args: { p_location_id: string; p_target_location_id: string }
+        Returns: undefined
+      }
+      convert_floor_to_building: {
+        Args: { p_floor_id: string }
+        Returns: string
       }
       cron_schedule_collisions: {
         Args: never
@@ -16158,6 +16172,10 @@ export type Database = {
           _master_id: string
         }
         Returns: Json
+      }
+      move_floor_to_building: {
+        Args: { p_floor_id: string; p_target_location_id: string }
+        Returns: undefined
       }
       next_adhoc_invoice_number: {
         Args: { _tenant_id: string }

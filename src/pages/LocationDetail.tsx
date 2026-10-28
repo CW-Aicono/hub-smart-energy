@@ -213,13 +213,13 @@ const LocationDetail = () => {
             </Card>
           )}
 
-          {location.type === "gebaeudekomplex" && <ComplexBuildingsCard complex={location} />}
+          {location.type === "gebaeudekomplex" && <ComplexBuildingsCard complex={location} floorsEnabled={isModuleEnabled("floor_plans")} onChanged={refetchFloors} />}
           {isModuleEnabled("floor_plans") && (() => {
             const kids = locations.filter((l) => l.parent_id === location.id);
             const buildings = [{ id: location.id, name: location.name }, ...kids.map((k) => ({ id: k.id, name: k.name }))];
             return <RoomCostAllocationCard locationId={location.id} buildings={buildings} />;
           })()}
-          {isModuleEnabled("floor_plans") && (
+          {isModuleEnabled("floor_plans") && (location.type !== "gebaeudekomplex" || floors.length > 0) && (
             <FloorsCollapsible locationId={location.id} isAdmin={isAdmin} floors={floors} floorsLoading={floorsLoading} refetchFloors={refetchFloors} t={t} />
           )}
           <MeterManagement locationId={location.id} />
