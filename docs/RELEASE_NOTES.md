@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.13.1 – 28.10.2026
+- Live und Staging angeglichen: Anleitungen für Mennekes AMTRON 4Business und ELMI All-in-One unter Ladeinfrastruktur → Einstellungen; bestehende Ladepunkte erscheinen als Zähler unter Messstellen.
+
 ## v1.13.0 – 28.10.2026
 - Gebäudekomplex: Gebäude direkt auf der Komplex-Seite hinzufügen, zuordnen oder lösen.
 - Neu: Kostenverteilung je Raum / Abteilung (eigener Zähler + Rest nach Fläche, gleichen Teilen oder ungeteilt), Summen je Ebene, Gebäude und Komplex, Export als CSV/PDF.

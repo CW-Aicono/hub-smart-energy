@@ -288,6 +288,13 @@
       "when": 1793219794714,
       "tag": "0040_room_cost_allocation",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793225371153,
+      "tag": "0041_seed_ocpp_guides_and_cp_meter_backfill",
+      "breakpoints": true
     }
   ]
 }
