@@ -64,9 +64,10 @@ type LocationFormData = z.infer<typeof locationSchema>;
 
 interface AddLocationDialogProps {
   parentId?: string;
+  triggerLabel?: string;
 }
 
-export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
+export function AddLocationDialog({ parentId, triggerLabel }: AddLocationDialogProps) {
   const [open, setOpen] = useState(false);
   const { locations, createLocation } = useLocations();
   const { saveBulk: saveEnergySources } = useLocationEnergySources(null);
@@ -155,7 +156,7 @@ export function AddLocationDialog({ parentId }: AddLocationDialogProps) {
       <DialogTrigger asChild>
         <Button>
           <Plus className="h-4 w-4 mr-2" />
-          {T("addLoc.button")}
+          {triggerLabel ?? T("addLoc.button")}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
