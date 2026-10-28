@@ -34,6 +34,13 @@ if ! "${REPO_ROOT}/scripts/apply-migrations.sh"; then
   exit 1
 fi
 
+log "Stammdaten-Pruefung (nur lesend)"
+docker exec -i "${DB_CONTAINER:-supabase-db}" psql -U "${DB_USER:-supabase_admin}" -d postgres -At <<'SQL' || log "WARNUNG: Stammdaten-Pruefung fehlgeschlagen"
+SELECT 'Anleitungen: ' || count(*) FROM public.ocpp_integration_guides;
+SELECT 'ELMI-Modelle: ' || count(*) FROM public.charger_models WHERE vendor = 'ELMI Power';
+SELECT 'Ladepunkte ohne Zaehler: ' || count(*) FROM public.charge_points WHERE location_id IS NOT NULL AND linked_meter_id IS NULL;
+SQL
+
 log "4/6 Frontend-Image pullen: $IMAGE"
 docker pull "$IMAGE"
 docker tag "$IMAGE" hub-smart-energy-frontend:latest
