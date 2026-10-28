@@ -5375,7 +5375,9 @@ export type Database = {
       }
       floor_rooms: {
         Row: {
+          area_m2: number | null
           color: string | null
+          cost_center: string | null
           created_at: string | null
           depth: number
           floor_id: string
@@ -5389,7 +5391,9 @@ export type Database = {
           width: number
         }
         Insert: {
+          area_m2?: number | null
           color?: string | null
+          cost_center?: string | null
           created_at?: string | null
           depth?: number
           floor_id: string
@@ -5403,7 +5407,9 @@ export type Database = {
           width?: number
         }
         Update: {
+          area_m2?: number | null
           color?: string | null
+          cost_center?: string | null
           created_at?: string | null
           depth?: number
           floor_id?: string
@@ -7135,6 +7141,7 @@ export type Database = {
       locations: {
         Row: {
           address: string | null
+          allocation_key: string
           city: string | null
           construction_year: number | null
           contact_email: string | null
@@ -7174,6 +7181,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          allocation_key?: string
           city?: string | null
           construction_year?: number | null
           contact_email?: string | null
@@ -7213,6 +7221,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          allocation_key?: string
           city?: string | null
           construction_year?: number | null
           contact_email?: string | null

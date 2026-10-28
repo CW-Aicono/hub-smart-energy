@@ -2,6 +2,11 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.13.0 – 28.10.2026
+- Migration drizzle 0040: floor_rooms.area_m2, floor_rooms.cost_center, locations.allocation_key (area|equal|none, Default area).
+- src/lib/roomCostAllocation.ts (+5 Tests): direkt je Raum, Rest = Hauptzähler − Raumzähler, Fehlbetrag nie verteilt.
+- RoomCostAllocationCard (Standortseite, bei Komplex inkl. Untergebäude; nutzt get_meter_period_sums_with_fallback + energy_prices), ComplexBuildingsCard (Gebäude hinzufügen/zuordnen/lösen), AddLocationDialog triggerLabel. Raum-Labels „Räume / Abteilungen“.
+
 ## v1.12.2 – 28.10.2026
 - Migration drizzle 0039: get_power_series_step idempotent neu angelegt (Live-Drift: Funktion fehlte), mit to_regclass-Fallback falls meter_power_readings_5min_bridge/_hourly fehlen.
 - fetchPowerSeriesStep: bei RPC-Fehler Fallback auf get_power_series_auto → Energieanalyse nie leer.

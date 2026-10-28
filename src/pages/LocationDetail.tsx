@@ -27,6 +27,8 @@ import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronD
 import { DocumentBadge } from "@/components/documents/DocumentBadge";
 import { DocumentsPanel } from "@/components/documents/DocumentsPanel";
 import { LoxoneTemplatesCard } from "@/components/locations/LoxoneTemplatesCard";
+import { ComplexBuildingsCard } from "@/components/locations/ComplexBuildingsCard";
+import { RoomCostAllocationCard } from "@/components/locations/RoomCostAllocationCard";
 
 const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors, t }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void; t: (key: any) => string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -211,6 +213,12 @@ const LocationDetail = () => {
             </Card>
           )}
 
+          {location.type === "gebaeudekomplex" && <ComplexBuildingsCard complex={location} />}
+          {isModuleEnabled("floor_plans") && (() => {
+            const kids = locations.filter((l) => l.parent_id === location.id);
+            const buildings = [{ id: location.id, name: location.name }, ...kids.map((k) => ({ id: k.id, name: k.name }))];
+            return <RoomCostAllocationCard locationId={location.id} buildings={buildings} />;
+          })()}
           {isModuleEnabled("floor_plans") && (
             <FloorsCollapsible locationId={location.id} isAdmin={isAdmin} floors={floors} floorsLoading={floorsLoading} refetchFloors={refetchFloors} t={t} />
           )}
