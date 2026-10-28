@@ -134,9 +134,9 @@ function BuildingRow({ building, siblings, floorsEnabled, onChanged }: {
           <AlertDialogHeader>
             <AlertDialogTitle>{T("complex.confirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {pending?.kind === "floorToBuilding" && `„${pending.label}" → ${T("complex.confirmFloorToBuilding")}`}
-              {pending?.kind === "moveFloor" && `„${pending.label}" → „${targetName(pending.target)}". ${T("complex.confirmMoves")}`}
-              {pending?.kind === "buildingToFloor" && `„${pending.label}" → ${T("complex.confirmBuildingToFloor")} „${targetName(pending.target)}". ${T("complex.confirmMoves")}`}
+              {pending?.kind === "floorToBuilding" && `„${pending.label}“ → ${T("complex.confirmFloorToBuilding")}`}
+              {pending?.kind === "moveFloor" && `„${pending.label}“ → „${targetName(pending.target)}“. ${T("complex.confirmMoves")}`}
+              {pending?.kind === "buildingToFloor" && `„${pending.label}“ → ${T("complex.confirmBuildingToFloor")} „${targetName(pending.target)}“. ${T("complex.confirmMoves")}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
