@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.13.0 – 28.10.2026
+- Gebäudekomplex: Gebäude direkt auf der Komplex-Seite hinzufügen, zuordnen oder lösen.
+- Neu: Kostenverteilung je Raum / Abteilung (eigener Zähler + Rest nach Fläche, gleichen Teilen oder ungeteilt), Summen je Ebene, Gebäude und Komplex, Export als CSV/PDF.
+
 ## v1.12.2 – 28.10.2026
 - Behoben: Die Energieanalyse zeigt wieder Werte, auch wenn auf dem Server eine Auswertung fehlt.
 - Einladungs- und Passwort-Links (seit v1.11.1) werden beim Update zuverlässig aktiv.
