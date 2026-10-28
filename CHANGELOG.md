@@ -2,6 +2,11 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.12.2 – 28.10.2026
+- Migration drizzle 0039: get_power_series_step idempotent neu angelegt (Live-Drift: Funktion fehlte), mit to_regclass-Fallback falls meter_power_readings_5min_bridge/_hourly fehlen.
+- fetchPowerSeriesStep: bei RPC-Fehler Fallback auf get_power_series_auto → Energieanalyse nie leer.
+- scripts/deploy.sh: `up -d --force-recreate frontend functions`, damit geänderte Edge Functions (u. a. Einladungs-/Reset-Fix v1.11.1) nach jedem Deploy sicher geladen werden.
+
 ## v1.12.1 – 26.10.2026
 - Fix Rechte eigener Rollen (Live-Befund Bolan/„Endkunde“): Rechte wurden nur gespeichert, nie geprüft. Migration drizzle 0038: get_my_permission_codes() (NULL = uneingeschränkt: Admin oder ohne custom_role_id) und has_custom_permission(); dashboard_widgets UPDATE/DELETE erfordern dashboard.customize. Neu useMyPermissions (ROUTE_PERMISSION_MAP), eingebunden in useModuleGuard (Menü + ModuleGuard); Menügruppen sichtbar, wenn ein Unterpunkt erlaubt ist; DashboardCustomizer nur mit dashboard.customize. 6 Vitest-Tests.
 - CustomWidget: Tacho/KPI im Tagesmodus nutzt jüngsten Rohwert aus meter_power_readings (≤15 Min alt), Abfrage alle 15 s, nicht im Hintergrund-Tab.

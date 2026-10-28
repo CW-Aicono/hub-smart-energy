@@ -108,6 +108,13 @@ export async function fetchPowerSeriesStep(
       }
     }
   };
-  await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, worker));
+  try {
+    await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, worker));
+  } catch (err) {
+    // Server-Drift (Funktion fehlt/fehlerhaft): Energieanalyse nie leer lassen.
+    console.warn("get_power_series_step failed, falling back to get_power_series_auto:", err);
+    const fallback = await fetchPowerSeriesAuto(meterIds, start, end, 2000);
+    return fallback.sort((a, b) => (a.bucket < b.bucket ? -1 : a.bucket > b.bucket ? 1 : 0));
+  }
   return out.sort((a, b) => (a.bucket < b.bucket ? -1 : a.bucket > b.bucket ? 1 : 0));
 }
