@@ -57,7 +57,7 @@ export function useFloorRooms(floorId: string | undefined): UseFloorRoomsReturn 
       if (fetchError) {
         setError(fetchError.message);
       } else {
-        setRooms((data as FloorRoom[]) || []);
+        setRooms((data as unknown as FloorRoom[]) || []);
       }
     } catch (err) {
       setError("Failed to fetch rooms");
