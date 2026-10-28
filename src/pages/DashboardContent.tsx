@@ -2,6 +2,7 @@ import { useState, useMemo, lazy, Suspense } from "react";
 import { useDashboardWidgets, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
+import { useMyPermissions } from "@/hooks/useMyPermissions";
 import { useCustomWidgetDefinitions } from "@/hooks/useCustomWidgetDefinitions";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ZoomIn } from "lucide-react";
@@ -139,6 +140,8 @@ const getLocationWidget = (_locationId: string | null): string => {
 };
 
 const DashboardContent = () => {
+  const { can } = useMyPermissions();
+  const canCustomize = can("dashboard.customize");
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateWidgetLayout, updateWidgetPeriod } = useDashboardWidgets();
   const scopeFor = (widgetType: string, children: JSX.Element, keySuffix = "") => {
     const w = widgets.find((x) => x.widget_type === widgetType);
@@ -213,7 +216,7 @@ const DashboardContent = () => {
               selectedLocationId={selectedLocationId}
               onLocationChange={setSelectedLocationId}
             />
-            <div className="hidden md:block">
+            {canCustomize && <div className="hidden md:block">
               <DashboardCustomizer
                 widgets={widgets}
                 onToggleVisibility={toggleWidgetVisibility}
@@ -235,7 +238,7 @@ const DashboardContent = () => {
                 }}
               />
 
-            </div>
+            </div>}
           </div>
         </header>
         <div className="p-3 md:p-6 relative">

@@ -267,6 +267,27 @@
       "when": 1792495200608,
       "tag": "0037_elmi_aio_storage_control",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793023589867,
+      "tag": "0038_custom_role_permission_enforcement",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793215455272,
+      "tag": "0039_ensure_power_series_step",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793219794714,
+      "tag": "0040_room_cost_allocation",
+      "breakpoints": true
     }
   ]
 }

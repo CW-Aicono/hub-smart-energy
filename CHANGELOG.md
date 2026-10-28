@@ -2,6 +2,23 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.13.0 – 28.10.2026
+- Migration drizzle 0040: floor_rooms.area_m2, floor_rooms.cost_center, locations.allocation_key (area|equal|none, Default area).
+- src/lib/roomCostAllocation.ts (+5 Tests): direkt je Raum, Rest = Hauptzähler − Raumzähler, Fehlbetrag nie verteilt.
+- RoomCostAllocationCard (Standortseite, bei Komplex inkl. Untergebäude; nutzt get_meter_period_sums_with_fallback + energy_prices), ComplexBuildingsCard (Gebäude hinzufügen/zuordnen/lösen), AddLocationDialog triggerLabel. Raum-Labels „Räume / Abteilungen“.
+
+## v1.12.2 – 28.10.2026
+- Migration drizzle 0039: get_power_series_step idempotent neu angelegt (Live-Drift: Funktion fehlte), mit to_regclass-Fallback falls meter_power_readings_5min_bridge/_hourly fehlen.
+- fetchPowerSeriesStep: bei RPC-Fehler Fallback auf get_power_series_auto → Energieanalyse nie leer.
+- scripts/deploy.sh: `up -d --force-recreate frontend functions`, damit geänderte Edge Functions (u. a. Einladungs-/Reset-Fix v1.11.1) nach jedem Deploy sicher geladen werden.
+
+## v1.12.1 – 26.10.2026
+- Fix Rechte eigener Rollen (Live-Befund Bolan/„Endkunde“): Rechte wurden nur gespeichert, nie geprüft. Migration drizzle 0038: get_my_permission_codes() (NULL = uneingeschränkt: Admin oder ohne custom_role_id) und has_custom_permission(); dashboard_widgets UPDATE/DELETE erfordern dashboard.customize. Neu useMyPermissions (ROUTE_PERMISSION_MAP), eingebunden in useModuleGuard (Menü + ModuleGuard); Menügruppen sichtbar, wenn ein Unterpunkt erlaubt ist; DashboardCustomizer nur mit dashboard.customize. 6 Vitest-Tests.
+- CustomWidget: Tacho/KPI im Tagesmodus nutzt jüngsten Rohwert aus meter_power_readings (≤15 Min alt), Abfrage alle 15 s, nicht im Hintergrund-Tab.
+- Offen: Energieanalyse leer auf Live (Ursache unbestätigt, Prüfbefehle an Nutzer), E-Mail-Adresse ändern, Inbetriebnahme-/Abnahmeprotokoll.
+
+- ELMI bestätigt Kapitel 6.1 (korrigiertes Protokoll v1.5): Entladen = negativer Sollwert, -10 kW = 0xFFFE7960, Schreiben mit FC 0x10, Skalierung 0,1 W. Implementierung in _shared/elmiAio.ts entsprach bereits dieser Fassung; keine Codeänderung, bestehende Tests decken die Werte ab.
+
 ## v1.12.0 – 20.10.2026
 - ELMI All-in-One: Migration drizzle 0037 – energy_storages (device_template, charge_point_id, control_mode, allow_self_discharge, allow_grid_discharge [per Trigger fest false, vorbereitet für Peak-Shaving], min_setpoint_kw, setpoint_integration_id, setpoint_control_uuid, last_setpoint_*), solar_charging_config (storage_id, storage_priority), Seeds charger_models „ELMI Power All-in-One 180/360“ und wallbox_modbus_templates „ELMI Power / All-in-One“ (Protokoll v1.4).
 - _shared/elmiAio.ts: Register-Codierung (32 Bit Big-Endian, 0,1) und Sollwertregel (Netz → 0, < Mindestleistung = 0, Begrenzung, nie Netzentladung) + 10 Vitest-Tests.

@@ -156,6 +156,8 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
           <section>
             <h4 className="font-semibold mb-2">{T("manual.loc.hierarchyTitle")}</h4>
             <p className="text-sm text-muted-foreground mb-2">{T("manual.loc.hierarchyText")}</p>
+            <h4 className="font-semibold mb-2 mt-3">{T("manual.costAlloc.title" as any)}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.costAlloc.body" as any)}</p>
             <div className="bg-muted/50 p-3 rounded-lg text-sm">
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
@@ -290,6 +292,8 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground">{T("manual.roles.v142Text")}</p>
             <h4 className="font-semibold mb-2 mt-4">{T("manual.roles.v160Title")}</h4>
             <p className="text-sm text-muted-foreground">{T("manual.roles.v160Text")}</p>
+            <h4 className="font-semibold mb-2 mt-4">{T("manual.roles.v1121Title" as any)}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.roles.v1121Text" as any)}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.roles.roadmapStaging")}</p>
             <h4 className="font-semibold mb-2 mt-4">{T("manual.billing.v150Title")}</h4>
             <p className="text-sm text-muted-foreground">{T("manual.billing.v150Text")}</p>

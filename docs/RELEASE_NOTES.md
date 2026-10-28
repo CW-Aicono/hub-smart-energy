@@ -1,5 +1,17 @@
 # Versionshinweise
 
+## v1.13.0 – 28.10.2026
+- Gebäudekomplex: Gebäude direkt auf der Komplex-Seite hinzufügen, zuordnen oder lösen.
+- Neu: Kostenverteilung je Raum / Abteilung (eigener Zähler + Rest nach Fläche, gleichen Teilen oder ungeteilt), Summen je Ebene, Gebäude und Komplex, Export als CSV/PDF.
+
+## v1.12.2 – 28.10.2026
+- Behoben: Die Energieanalyse zeigt wieder Werte, auch wenn auf dem Server eine Auswertung fehlt.
+- Einladungs- und Passwort-Links (seit v1.11.1) werden beim Update zuverlässig aktiv.
+
+## v1.12.1 – 26.10.2026
+- Behoben: Eigene Rollen wie „Endkunde“ sehen nur noch die freigegebenen Bereiche und können das Dashboard nur mit dem entsprechenden Recht anpassen.
+- Tacho- und Kennzahl-Kacheln im Dashboard aktualisieren sich jetzt alle 15 Sekunden.
+
 ## v1.12.0 – 20.10.2026
 - Neu: ELMI All-in-One (Schnellladestation mit Batteriespeicher) als Vorlage. Der Speicher lädt PV-Überschuss über den Loxone Miniserver; einstellbar, ob Auto oder Speicher zuerst lädt.
 - Entladen ins Netz ist gesperrt; Entladen für den eigenen Verbrauch kann freigegeben werden.
