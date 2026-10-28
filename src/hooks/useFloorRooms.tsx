@@ -85,7 +85,7 @@ export function useFloorRooms(floorId: string | undefined): UseFloorRoomsReturn 
       await fetchRooms();
     }
 
-    return { data: data as FloorRoom | null, error: insertError as Error | null };
+    return { data: data as unknown as FloorRoom | null, error: insertError as Error | null };
   };
 
   const updateRoom = async (id: string, updates: Partial<FloorRoom>) => {
