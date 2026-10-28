@@ -16,7 +16,7 @@ Etagen des Komplexes selbst (nur falls vorhanden, z. B. Außenanlage)
 - Jedes Gebäude in der Liste ist aufklappbar und zeigt seine Etagen mit derselben Etagenliste wie auf der Gebäudeseite (Grundriss hochladen, Räume, 3D usw.).
 - Knopf „Etage hinzufügen" direkt in der Gebäudezeile (nur Admins, wie bisher).
 - Anzahl der Etagen als kleine Angabe neben dem Gebäudenamen.
-- Die eigenständige Karte „Etagen & Grundrisse" wird beim Komplex ausgeblendet; nur wenn der Komplex selbst Etagen hat (Altbestand), erscheinen diese als eigener Unterpunkt „Etagen direkt am Komplex", damit nichts verloren geht.
+- Die eigenständige Karte „Etagen & Grundrisse" wird beim Komplex ausgeblendet; hat der Komplex selbst Etagen (Altbestand), werden diese per Migration automatisch in ein neues Platzhalter-Gebäude „Gebäude 1 (bitte umbenennen)" im Komplex verschoben – samt Grundrissen, Räumen und Zählerzuordnungen. Der Name lässt sich danach wie bei jedem Gebäude ändern; nichts geht verloren. Neue Komplexe erhalten beim Anlegen ebenfalls ein umbenennbares Platzhalter-Gebäude.
 - Normale Gebäude (kein Komplex) bleiben unverändert.
 - Gleiches Modul-Recht wie bisher („Grundrisse"-Modul); ohne Modul nur Gebäudeliste.
 
