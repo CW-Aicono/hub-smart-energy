@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.13.2 – 29.10.2026
+- Gebäudekomplex: Etagen und Grundrisse direkt unter jedem Gebäude aufklappbar.
+- Bisherige Komplex-Etagen liegen im umbenennbaren Platzhalter „Gebäude 1 (bitte umbenennen)“; neue Komplexe erhalten ihn automatisch.
+- Neu „Umbauen / Korrigieren“: Etage in Gebäude umwandeln, Etage verschieben, Gebäude in Etage umwandeln – Grundrisse, Räume und Zähler wandern mit.
+
 ## v1.13.1 – 28.10.2026
 - Live und Staging angeglichen: Anleitungen für Mennekes AMTRON 4Business und ELMI All-in-One unter Ladeinfrastruktur → Einstellungen; bestehende Ladepunkte erscheinen als Zähler unter Messstellen.
 

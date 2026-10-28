@@ -184,14 +184,7 @@ export function ComplexBuildingsCard({ complex, floorsEnabled = true, onChanged 
         ) : (
           <ul className="divide-y rounded-md border">
             {children.map((c) => (
-              <div key={c.id} className="relative">
-                <BuildingRow building={c} siblings={children.filter((s) => s.id !== c.id)} floorsEnabled={floorsEnabled} onChanged={changed} />
-                {isAdmin && (
-                  <Button variant="ghost" size="sm" className="absolute right-3 top-3 hidden" onClick={() => setParent(c.id, null)}>
-                    <Unlink className="h-4 w-4 mr-1" />{T("complex.detach")}
-                  </Button>
-                )}
-              </div>
+              <BuildingRow key={c.id} building={c} siblings={children.filter((s) => s.id !== c.id)} floorsEnabled={floorsEnabled} onChanged={changed} />
             ))}
           </ul>
         )}

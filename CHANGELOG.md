@@ -2,6 +2,10 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.13.2 – 29.10.2026
+- Migration drizzle 0042: Komplex-Etagen idempotent in Platzhalter-Gebäude „Gebäude 1 (bitte umbenennen)“ verschoben (inkl. meters.location_id); Trigger legt Platzhalter bei neuen Komplexen an; RPCs move_floor_to_building, convert_floor_to_building, convert_building_to_floor (SECURITY DEFINER, Admin + gleicher Mandant + gleicher Komplex, atomar).
+- ComplexBuildingsCard: Gebäude aufklappbar mit FloorList/AddFloorDialog und Umbau-Bereich; LocationDetail blendet Etagenkarte beim Komplex aus, solange dort keine Etagen hängen.
+
 ## v1.13.1 – 28.10.2026
 - Migration drizzle 0041: Staging-only Stammdaten idempotent nachgezogen (OCPP-Anleitung Mennekes AMTRON 4Business, neue ELMI-All-in-One-Anleitungen, ELMI-Modelle), Ladepunkt-Zähler-Nachlauf wiederholt.
 - deploy-prod.yml: Node 24, checkout/setup-node v5, build-push v6, runs-on ubuntu-24.04. deploy.sh: lesende Stammdaten-Prüfung im Log.
