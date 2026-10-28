@@ -2,6 +2,11 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## v1.13.1 – 28.10.2026
+- Migration drizzle 0041: Staging-only Stammdaten idempotent nachgezogen (OCPP-Anleitung Mennekes AMTRON 4Business, neue ELMI-All-in-One-Anleitungen, ELMI-Modelle), Ladepunkt-Zähler-Nachlauf wiederholt.
+- deploy-prod.yml: Node 24, checkout/setup-node v5, build-push v6, runs-on ubuntu-24.04. deploy.sh: lesende Stammdaten-Prüfung im Log.
+- AGENTS.md: Stammdaten niemals direkt in DB schreiben.
+
 ## v1.13.0 – 28.10.2026
 - Migration drizzle 0040: floor_rooms.area_m2, floor_rooms.cost_center, locations.allocation_key (area|equal|none, Default area).
 - src/lib/roomCostAllocation.ts (+5 Tests): direkt je Raum, Rest = Hauptzähler − Raumzähler, Fehlbetrag nie verteilt.
