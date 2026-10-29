@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, FileDown, Loader2, Mail, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { buildAiconoInvoicePdf, type AiconoBillingSettings, type InvoiceRecipient } from "@/lib/aiconoInvoicePdf";
+import { ALL_MODULES } from "@/hooks/useTenantModules";
 
 const db = supabase as any;
 
@@ -179,6 +180,24 @@ export function ManualInvoiceDialog() {
     queryFn: async () => (await db.from("partners").select("id, name").order("name")).data ?? [],
   });
 
+  const { data: pkgs = [] } = useQuery({
+    queryKey: ["manual-invoice-packages"], enabled: open,
+    queryFn: async () => (await db.from("pricing_packages").select("code, name, uvp, ek, active, sort").eq("active", true).order("sort")).data ?? [],
+  });
+  const { data: modPrices = [] } = useQuery({
+    queryKey: ["manual-invoice-module-prices"], enabled: open,
+    queryFn: async () => (await db.from("module_prices").select("module_code, price_monthly, partner_price_monthly")).data ?? [],
+  });
+  // Prefill only: price is the partner purchase price (EK) for partner invoices, otherwise the customer price; always editable.
+  const isPartner = target === "partner";
+  const catalog = [
+    ...(pkgs as any[]).map((p) => ({ key: `pkg:${p.code}`, group: "Paket", label: p.name, price: Number(isPartner ? p.ek : p.uvp) || 0 })),
+    ...ALL_MODULES.map((m) => {
+      const mp = (modPrices as any[]).find((x) => x.module_code === m.code);
+      return { key: `mod:${m.code}`, group: "Modul", label: m.label, price: Number(isPartner ? mp?.partner_price_monthly : mp?.price_monthly) || 0 };
+    }),
+  ];
+
   const partnerTenants = (tenants as any[]).filter((t) => t.partner_id === partnerId);
   const net = lines.reduce((s, l) => s + Math.round(num(l.quantity) * num(l.unit_price) * 100) / 100, 0);
 
@@ -238,6 +257,12 @@ export function ManualInvoiceDialog() {
               <Label>Positionen</Label>
               {lines.map((l, i) => (
                 <div key={i} className="flex gap-2">
+                  <Select value="" onValueChange={(v) => { const o = catalog.find((c) => c.key === v); if (o) setLines((ls) => ls.map((x, j) => j === i ? { ...x, label: o.label, unit_price: o.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }) } : x)); }}>
+                    <SelectTrigger className="w-40"><SelectValue placeholder="Modul/Paket" /></SelectTrigger>
+                    <SelectContent>
+                      {catalog.map((c) => <SelectItem key={c.key} value={c.key}>{c.group}: {c.label} ({c.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €)</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                   <Input className="flex-1" placeholder="Bezeichnung" value={l.label} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
                   <Input className="w-20" placeholder="Menge" value={l.quantity} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, quantity: e.target.value } : x))} />
                   <Input className="w-28" placeholder="Preis €" value={l.unit_price} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, unit_price: e.target.value } : x))} />
