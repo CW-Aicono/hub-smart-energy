@@ -2,6 +2,9 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## Unreleased
+- Rechnungs-PDF: Logo mittig, Leistungszeitraum überlappt nicht mehr.
+
 ## [Unreleased]
 - Fix: Rechnungs-PDF-Download aus „Abrechnung" robust gegen blockierte Downloads (zusätzlicher Button „Herunterladen" im Hinweis).
 
