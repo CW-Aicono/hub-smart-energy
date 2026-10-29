@@ -2,6 +2,9 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## [Unreleased]
+- Fix: Rechnungs-PDF-Download aus „Abrechnung" robust gegen blockierte Downloads (zusätzlicher Button „Herunterladen" im Hinweis).
+
 ## v1.14.0 – 29.10.2026
 - Freie Rechnung: Auswahlfeld „Modul/Paket“ je Position füllt Bezeichnung und Preis vor (Kunde: UVP/Standardpreis, Partner: EK/Partnerpreis); Werte bleiben editierbar, keine Schema-/Logikänderung.
 - Migration drizzle 0043: aicono_billing_settings (Singleton, Seed AICONO GmbH), aicono_invoice_counter, tenant_invoices.issued_at/due_date/vat_rate/issued_by/emailed_at/emailed_to; Trigger sperren Inhalt/Löschen festgeschriebener Rechnungen; RPCs issue_aicono_invoice (fortlaufend PREFIX-JJJJ-NNNNN) und create_manual_aicono_invoice (nur can_portal_write commercial).
