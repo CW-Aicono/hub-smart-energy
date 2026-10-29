@@ -260,6 +260,96 @@ export type Database = {
           },
         ]
       }
+      aicono_billing_settings: {
+        Row: {
+          bank_name: string | null
+          bic: string | null
+          city: string | null
+          company_name: string
+          country: string | null
+          email: string | null
+          footer_note: string | null
+          iban: string | null
+          id: boolean
+          managing_director: string | null
+          number_prefix: string
+          payment_terms_days: number
+          phone: string | null
+          postal_code: string | null
+          register_court: string | null
+          register_number: string | null
+          street: string | null
+          tax_number: string | null
+          updated_at: string
+          vat_id: string | null
+          vat_rate: number
+          website: string | null
+        }
+        Insert: {
+          bank_name?: string | null
+          bic?: string | null
+          city?: string | null
+          company_name?: string
+          country?: string | null
+          email?: string | null
+          footer_note?: string | null
+          iban?: string | null
+          id?: boolean
+          managing_director?: string | null
+          number_prefix?: string
+          payment_terms_days?: number
+          phone?: string | null
+          postal_code?: string | null
+          register_court?: string | null
+          register_number?: string | null
+          street?: string | null
+          tax_number?: string | null
+          updated_at?: string
+          vat_id?: string | null
+          vat_rate?: number
+          website?: string | null
+        }
+        Update: {
+          bank_name?: string | null
+          bic?: string | null
+          city?: string | null
+          company_name?: string
+          country?: string | null
+          email?: string | null
+          footer_note?: string | null
+          iban?: string | null
+          id?: boolean
+          managing_director?: string | null
+          number_prefix?: string
+          payment_terms_days?: number
+          phone?: string | null
+          postal_code?: string | null
+          register_court?: string | null
+          register_number?: string | null
+          street?: string | null
+          tax_number?: string | null
+          updated_at?: string
+          vat_id?: string | null
+          vat_rate?: number
+          website?: string | null
+        }
+        Relationships: []
+      }
+      aicono_invoice_counter: {
+        Row: {
+          last_number: number
+          year: number
+        }
+        Insert: {
+          last_number?: number
+          year: number
+        }
+        Update: {
+          last_number?: number
+          year?: number
+        }
+        Relationships: []
+      }
       alert_rules: {
         Row: {
           created_at: string
@@ -14337,9 +14427,14 @@ export type Database = {
           amount: number
           created_at: string
           document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
           id: string
           invoice_kind: string
           invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
           lexware_invoice_id: string | null
           line_items: Json | null
           module_total: number
@@ -14352,14 +14447,20 @@ export type Database = {
           support_total: number
           tenant_id: string
           updated_at: string
+          vat_rate: number | null
         }
         Insert: {
           amount?: number
           created_at?: string
           document_type?: string
+          due_date?: string | null
+          emailed_at?: string | null
+          emailed_to?: string | null
           id?: string
           invoice_kind?: string
           invoice_number: string
+          issued_at?: string | null
+          issued_by?: string | null
           lexware_invoice_id?: string | null
           line_items?: Json | null
           module_total?: number
@@ -14372,14 +14473,20 @@ export type Database = {
           support_total?: number
           tenant_id: string
           updated_at?: string
+          vat_rate?: number | null
         }
         Update: {
           amount?: number
           created_at?: string
           document_type?: string
+          due_date?: string | null
+          emailed_at?: string | null
+          emailed_to?: string | null
           id?: string
           invoice_kind?: string
           invoice_number?: string
+          issued_at?: string | null
+          issued_by?: string | null
           lexware_invoice_id?: string | null
           line_items?: Json | null
           module_total?: number
@@ -14392,6 +14499,7 @@ export type Database = {
           support_total?: number
           tenant_id?: string
           updated_at?: string
+          vat_rate?: number | null
         }
         Relationships: [
           {
@@ -15809,6 +15917,16 @@ export type Database = {
         Args: { p_floor_id: string }
         Returns: string
       }
+      create_manual_aicono_invoice: {
+        Args: {
+          p_lines: Json
+          p_partner_id: string
+          p_period_end: string
+          p_period_start: string
+          p_tenant_id: string
+        }
+        Returns: string
+      }
       cron_schedule_collisions: {
         Args: never
         Returns: {
@@ -16156,6 +16274,41 @@ export type Database = {
       is_tenant_member: {
         Args: { _tenant_id: string; _user_id: string }
         Returns: boolean
+      }
+      issue_aicono_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: {
+          amount: number
+          created_at: string
+          document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
+          id: string
+          invoice_kind: string
+          invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
+          lexware_invoice_id: string | null
+          line_items: Json | null
+          module_total: number
+          partner_id: string | null
+          pdf_url: string | null
+          period_end: string
+          period_start: string
+          source_ref: string | null
+          status: string
+          support_total: number
+          tenant_id: string
+          updated_at: string
+          vat_rate: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tenant_invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       latest_meter_cumulative: {
         Args: { _meter_ids: string[] }
