@@ -147,17 +147,23 @@ Deno.serve(async (req) => {
     // Match by month: any invoice whose period overlaps this billing month
     const { data: existingInvoices } = await supabase
       .from("tenant_invoices")
-      .select("id, tenant_id, partner_id, invoice_kind, source_ref, line_items, module_total, support_total, amount, period_start, period_end, status, lexware_invoice_id")
+      .select("id, tenant_id, partner_id, invoice_kind, source_ref, line_items, module_total, support_total, amount, period_start, period_end, status, lexware_invoice_id, issued_at")
       .gte("period_start", fmt(lastMonthStart))
       .lte("period_start", fmt(lastMonthEnd))
       .neq("status", "voided");
     // Group by tenant – only merge invoices not yet sent to Lexware
     const existingByTenant: Record<string, any> = {};
     const duplicatesToDelete: string[] = [];
+    const lockedTenants = new Set<string>();
     for (const inv of existingInvoices ?? []) {
       // Never merge into or delete Lexware-synced invoices
       // Einmalrechnungen und an Partner adressierte Rechnungen nie zusammenführen
       if (inv.invoice_kind === "one_time" || inv.partner_id) continue;
+      if (inv.issued_at) {
+        // In AICONO festgeschriebene Rechnung: Monat gilt als abgerechnet, nie ändern
+        lockedTenants.add(inv.tenant_id);
+        continue;
+      }
       if (inv.lexware_invoice_id) {
         // Keep Lexware-synced invoices as-is, don't use as merge target
         continue;
@@ -187,6 +193,7 @@ Deno.serve(async (req) => {
     let invoiceCounter = 0;
 
     for (const tenant of tenants ?? []) {
+      if (lockedTenants.has(tenant.id)) continue;
       const tenantModules = (allModules ?? []).filter(
         (m: any) => m.tenant_id === tenant.id && m.is_enabled
       );
