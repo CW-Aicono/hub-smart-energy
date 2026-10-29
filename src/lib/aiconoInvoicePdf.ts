@@ -63,8 +63,8 @@ export async function buildAiconoInvoicePdf(opts: {
   const brand: [number, number, number] = [16, 64, 112];
 
   const logo = await loadLogo();
-  if (logo) { const h = 14; doc.addImage(logo.data, "PNG", mr - (logo.w / logo.h) * h, 14, (logo.w / logo.h) * h, h); }
-  else { doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(...brand); doc.text(s.company_name, mr, 22, { align: "right" }); }
+  if (logo) { const h = 14; const w = (logo.w / logo.h) * h; doc.addImage(logo.data, "PNG", 105 - w / 2, 14, (logo.w / logo.h) * h, h); }
+  else { doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(...brand); doc.text(s.company_name, 105, 22, { align: "center" }); }
 
   const sender = [s.company_name, s.street, [s.postal_code, s.city].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
   doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(110);
@@ -83,7 +83,7 @@ export async function buildAiconoInvoicePdf(opts: {
   ];
   if (opts.customerNumber) info.splice(1, 0, ["Kundennr.", opts.customerNumber]);
   doc.setFontSize(9);
-  info.forEach(([k, v], i) => { doc.setTextColor(110); doc.text(k, 130, 55 + i * 5); doc.setTextColor(0); doc.text(v, mr, 55 + i * 5, { align: "right" }); });
+  info.forEach(([k, v], i) => { doc.setTextColor(110); doc.text(k, 118, 55 + i * 5); doc.setTextColor(0); doc.text(v, mr, 55 + i * 5, { align: "right" }); });
 
   let y = 92;
   doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(...brand);
