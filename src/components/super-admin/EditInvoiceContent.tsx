@@ -29,7 +29,9 @@ interface Props {
 
 export default function EditInvoiceContent({ invoice, editStatus, setEditStatus, onSave, onCancel, isPending }: Props) {
   const { t } = useSATranslation();
-  const isLocked = !!invoice.lexware_invoice_id;
+  const isIssued = !!invoice.issued_at;
+  const isLocked = !!invoice.lexware_invoice_id || isIssued;
+  const canVoid = !invoice.lexware_invoice_id;
 
   const initialItems: LineItem[] = Array.isArray(invoice.line_items) ? invoice.line_items.map((item: any) => {
     let label = item.label ?? item.description ?? item.reason ?? item.code ?? "";
@@ -65,6 +67,8 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
   const addItem = () => setItems(prev => [...prev, { code: "", label: "", amount: 0, type: "module", quantity: 1 }]);
 
   const handleSave = () => {
+    // Festgeschriebene Rechnung: nur Status ändern, Inhalt bleibt unveränderlich
+    if (isIssued) { onSave({} as any); return; }
     onSave({
       line_items: items,
       module_total: totals.module,
@@ -85,7 +89,7 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
             <SelectItem value="sent">Gesendet</SelectItem>
             <SelectItem value="paid">Bezahlt</SelectItem>
             <SelectItem value="overdue">Überfällig</SelectItem>
-            {!isLocked && <SelectItem value="voided">Storniert</SelectItem>}
+            {canVoid && <SelectItem value="voided">Storniert</SelectItem>}
           </SelectContent>
         </Select>
       </div>
@@ -95,7 +99,9 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
         <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
           <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
           <p className="text-muted-foreground">
-            Dieser Beleg wurde bereits an Lexware übermittelt. Änderungen an den Positionen müssen direkt in Lexware vorgenommen werden.
+            {invoice.lexware_invoice_id
+              ? "Dieser Beleg wurde bereits an Lexware übermittelt. Änderungen an den Positionen müssen direkt in Lexware vorgenommen werden."
+              : `Rechnung ${invoice.invoice_number} ist festgeschrieben. Positionen und Beträge sind unveränderlich – Korrektur nur per Storno und neuer Rechnung.`}
           </p>
         </div>
       )}
@@ -166,7 +172,7 @@ export default function EditInvoiceContent({ invoice, editStatus, setEditStatus,
       </div>
 
       <DialogFooter className="flex-col sm:flex-row gap-2">
-        {!isLocked && editStatus !== "voided" && (
+        {canVoid && editStatus !== "voided" && (
           <Button variant="destructive" className="mr-auto" onClick={() => setEditStatus("voided")}>
             <Ban className="h-4 w-4 mr-1" /> Stornieren
           </Button>
