@@ -94,7 +94,19 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
       const cur = await ensureIssued(inv);
       if (!cur) return;
       const { doc } = await makePdf(cur, settings);
-      doc.save(`Rechnung_${cur.invoice_number}.pdf`);
+      const blob = doc.output("blob") as Blob;
+      const name = `Rechnung_${cur.invoice_number}.pdf`;
+      const download = () => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      };
+      // Browser blockieren Downloads nach längerer Wartezeit (Bestätigung + PDF-Erstellung).
+      // Daher zusätzlich ein Button im Hinweis, der den Download per frischem Klick auslöst.
+      download();
+      toast.success(`${name} erstellt`, { duration: 15000, action: { label: "Herunterladen", onClick: download } });
       refresh();
     } catch (e: any) { toast.error(e.message); } finally { setBusy(null); }
   };
