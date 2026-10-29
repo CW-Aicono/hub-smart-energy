@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.14.0 – 29.10.2026
+- Rechnungen im AICONO-GmbH-Branding: PDF mit allen Pflichtangaben, fortlaufender Rechnungsnummer und ausgewiesener Umsatzsteuer, Versand per E-Mail direkt aus dem Portal.
+- Neu: freie Rechnungen mit eigenen Positionen an Kunden oder Partner; Absenderdaten unter „Rechnungsabsender“ pflegbar.
+- Festgeschriebene Rechnungen sind unveränderlich, Korrektur nur per Storno. Lexware-Übertragung nur noch auf Wunsch je Rechnung.
+
 ## v1.13.2 – 29.10.2026
 - Gebäudekomplex: Etagen und Grundrisse direkt unter jedem Gebäude aufklappbar.
 - Bisherige Komplex-Etagen liegen im umbenennbaren Platzhalter „Gebäude 1 (bitte umbenennen)“; neue Komplexe erhalten ihn automatisch.
