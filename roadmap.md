@@ -1,7 +1,8 @@
 # Roadmap
 
 ## Partnerabrechnung und Ratierlichkeit (30.10.)
-- [ ] In Arbeit: einmalige/monatliche/quartalsweise/halbjährliche Abrechnung je Modul/Lizenz, Partner-Endkundenrechnungen und automatische zeitanteilige AICONO-EK-Entwürfe; bestehende Rechnungen und Altverträge unverändert.
+- [x] v1.15.0: Intervalle je Lizenz, getrennte Endkunden-/EK-Entwürfe, zeitanteilige Ergänzungen, täglicher Nachlauf, Partnerabsender/Freigabe/PDF/E-Mail/SEPA. Angemeldete Testverkäufe, zwei Kunden, Retry und Sperre unvollständiger Absender geprüft; Testdaten entfernt.
+- [ ] Wartet auf Nutzer: Partner-Rechnungsabsender vervollständigen, anschließend Freigabe/PDF-Ende-zu-Ende prüfen; Live-Deploy und Live-Prüfung offen. Versand und Bankabbuchung nicht ausgeführt.
 
 - [x] Portal-Navigation: eigene Symbole, Module & Bundles gemeinsam mit zwei Reitern (v1.8.1; angemeldeter Menü- und Reiterwechsel geprüft)
 

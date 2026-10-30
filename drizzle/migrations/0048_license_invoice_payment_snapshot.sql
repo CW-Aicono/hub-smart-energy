@@ -1,0 +1,7 @@
+ALTER TABLE public.tenant_invoices ADD COLUMN IF NOT EXISTS license_payment_method text;
+CREATE OR REPLACE FUNCTION public.snapshot_license_invoice_payment() RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $$ DECLARE sale uuid; BEGIN IF NEW.source_ref LIKE 'license:%' THEN sale:=((NEW.line_items->0)->>'sale_id')::uuid; SELECT payment_method INTO NEW.license_payment_method FROM license_sales WHERE id=sale; END IF; RETURN NEW; END $$;
+DROP TRIGGER IF EXISTS snapshot_license_invoice_payment ON public.tenant_invoices;
+CREATE TRIGGER snapshot_license_invoice_payment BEFORE INSERT ON public.tenant_invoices FOR EACH ROW EXECUTE FUNCTION public.snapshot_license_invoice_payment();
+CREATE OR REPLACE FUNCTION public.lock_license_invoice_payment() RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $$ BEGIN IF OLD.issued_at IS NOT NULL AND NEW.license_payment_method IS DISTINCT FROM OLD.license_payment_method THEN RAISE EXCEPTION 'Zahlungsart festgeschrieben'; END IF; RETURN NEW; END $$;
+DROP TRIGGER IF EXISTS lock_license_invoice_payment ON public.tenant_invoices;
+CREATE TRIGGER lock_license_invoice_payment BEFORE UPDATE ON public.tenant_invoices FOR EACH ROW EXECUTE FUNCTION public.lock_license_invoice_payment();

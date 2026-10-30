@@ -330,6 +330,20 @@
       "when": 1793363991083,
       "tag": "0046_license_sale_retry_validation",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793364178283,
+      "tag": "0047_license_finalize_and_sender_validation",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793364446700,
+      "tag": "0048_license_invoice_payment_snapshot",
+      "breakpoints": true
     }
   ]
 }

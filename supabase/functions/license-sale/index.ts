@@ -18,7 +18,10 @@ Deno.serve(async req => {
     const {data:portal}=await client.rpc("can_portal_write",{_uid:user.id,_area:"commercial"});
     const {data:partner}=t.partner_id ? await client.rpc("can_manage_partner_billing",{p_partner:t.partner_id}):{data:false};
     if(!portal&&!partner) return json({error:"Keine Berechtigung"},403);
-    const {data:exists}=await client.from("license_sales").select("id").eq("request_id",p.request_id).maybeSingle(); if(exists) return json({id:exists.id});
+    const args={p_tenant:p.tenant_id,p_kind:p.product_kind,p_code:p.product_code,p_quantity:p.quantity,p_cadence:p.cadence,p_price:p.sale_price,p_start:p.starts_on,p_payment:p.payment_method,p_request:p.request_id};
+    const {data:existing,error:preflightError}=await client.rpc("preflight_license_sale",args);
+    if(preflightError)return json({error:preflightError.message},400);
+    if(existing)return json({id:existing});
     let modules:string[]=[];
     if(p.product_kind==="package") {
       const {data:def}=await admin.from("pricing_packages").select("requires_package,requires_any_other").eq("code",p.product_code).eq("active",true).eq("always_active",false).single(); if(!def) return json({error:"Paket nicht buchbar"},400);
@@ -29,13 +32,19 @@ Deno.serve(async req => {
       if(def.requires_any_other&&active.size===0) return json({error:"Mindestens ein weiteres Paket erforderlich"},400);
       const {data:mods,error}=await admin.from("pricing_package_modules").select("module_code").eq("package_code",p.product_code); if(error) throw error; modules=(mods||[]).map(x=>x.module_code);
     } else modules=[p.product_kind==="unit" ? p.product_code==="charge_point"?"ev_charging":"locations" : p.product_code];
+    const {data:oldModules,error:oldError}=await admin.from("tenant_modules").select("module_code,is_enabled").eq("tenant_id",p.tenant_id).in("module_code",modules);
+    if(oldError)throw oldError;
+    const granted:string[]=[];
+    const rollback=async()=>{for(const code of granted){const fn=portal?"portal-set-tenant-module":"partner-set-tenant-module";const body=portal?{tenant_id:p.tenant_id,module_code:code,enabled:false}:{tenantId:p.tenant_id,moduleCode:code,enabled:false};await fetch(`${url}/functions/v1/${fn}`,{method:"POST",headers:{Authorization:authorization,apikey:key,"Content-Type":"application/json"},body:JSON.stringify(body)});}};
     for(const code of modules) {
+      if((oldModules||[]).some(m=>m.module_code===code&&m.is_enabled))continue;
       const fn=portal?"portal-set-tenant-module":"partner-set-tenant-module";
       const body=portal?{tenant_id:p.tenant_id,module_code:code,enabled:true}:{tenantId:p.tenant_id,moduleCode:code,enabled:true};
       const response=await fetch(`${url}/functions/v1/${fn}`,{method:"POST",headers:{Authorization:authorization,apikey:key,"Content-Type":"application/json"},body:JSON.stringify(body)});
-      const result=await response.json(); if(!response.ok||result.error||result.success===false) return json({error:result.error||"Freigabe fehlgeschlagen"},400);
+      const result=await response.json(); if(!response.ok||result.error||result.success===false){await rollback();return json({error:result.error||"Freigabe fehlgeschlagen"},400);}
+      granted.push(code);
     }
-    const {data,error}=await client.rpc("create_license_sale",{p_tenant:p.tenant_id,p_kind:p.product_kind,p_code:p.product_code,p_quantity:p.quantity,p_cadence:p.cadence,p_price:p.sale_price,p_start:p.starts_on,p_payment:p.payment_method,p_request:p.request_id});
-    if(error) return json({error:error.message},400); return json({id:data});
+    const {data,error}=await client.rpc("finalize_license_sale",args);
+    if(error){await rollback();return json({error:error.message},400);} return json({id:data});
   } catch(e) { return json({error:(e as Error).message},500); }
 });
