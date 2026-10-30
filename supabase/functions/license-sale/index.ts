@@ -32,13 +32,19 @@ Deno.serve(async req => {
       if(def.requires_any_other&&active.size===0) return json({error:"Mindestens ein weiteres Paket erforderlich"},400);
       const {data:mods,error}=await admin.from("pricing_package_modules").select("module_code").eq("package_code",p.product_code); if(error) throw error; modules=(mods||[]).map(x=>x.module_code);
     } else modules=[p.product_kind==="unit" ? p.product_code==="charge_point"?"ev_charging":"locations" : p.product_code];
+    const {data:oldModules,error:oldError}=await admin.from("tenant_modules").select("module_code,is_enabled").eq("tenant_id",p.tenant_id).in("module_code",modules);
+    if(oldError)throw oldError;
+    const granted:string[]=[];
+    const rollback=async()=>{for(const code of granted){const fn=portal?"portal-set-tenant-module":"partner-set-tenant-module";const body=portal?{tenant_id:p.tenant_id,module_code:code,enabled:false}:{tenantId:p.tenant_id,moduleCode:code,enabled:false};await fetch(`${url}/functions/v1/${fn}`,{method:"POST",headers:{Authorization:authorization,apikey:key,"Content-Type":"application/json"},body:JSON.stringify(body)});}};
     for(const code of modules) {
+      if((oldModules||[]).some(m=>m.module_code===code&&m.is_enabled))continue;
       const fn=portal?"portal-set-tenant-module":"partner-set-tenant-module";
       const body=portal?{tenant_id:p.tenant_id,module_code:code,enabled:true}:{tenantId:p.tenant_id,moduleCode:code,enabled:true};
       const response=await fetch(`${url}/functions/v1/${fn}`,{method:"POST",headers:{Authorization:authorization,apikey:key,"Content-Type":"application/json"},body:JSON.stringify(body)});
-      const result=await response.json(); if(!response.ok||result.error||result.success===false) return json({error:result.error||"Freigabe fehlgeschlagen"},400);
+      const result=await response.json(); if(!response.ok||result.error||result.success===false){await rollback();return json({error:result.error||"Freigabe fehlgeschlagen"},400);}
+      granted.push(code);
     }
     const {data,error}=await client.rpc("finalize_license_sale",args);
-    if(error) return json({error:error.message},400); return json({id:data});
+    if(error){await rollback();return json({error:error.message},400);} return json({id:data});
   } catch(e) { return json({error:(e as Error).message},500); }
 });
