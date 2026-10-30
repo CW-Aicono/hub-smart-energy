@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.21.3 – 30.10.2026
+- Partnerportal → Tenant: eigene Karte „Ladeinfrastruktur“ (Freischaltung ev_charging + Ladepunktzahl), da sie je Ladepunkt abgerechnet wird und nicht im Paket-Dropdown steht.
+
 ## v1.21.2 – 30.10.2026
 - Partnerportal → Tenant → Module & Lizenzen: oben Pakete und Paketbuchung; alte Einzelmodule und Lizenzen nur noch als eingeklappter Bereich „Altvertrag“ bei Tenants ohne Paketabrechnung.
 
