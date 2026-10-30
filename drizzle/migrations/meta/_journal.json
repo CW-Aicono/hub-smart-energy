@@ -309,6 +309,13 @@
       "when": 1793269125390,
       "tag": "0043_aicono_branded_invoices",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793363446454,
+      "tag": "0044_license_sales_partner_invoice_cycles",
+      "breakpoints": true
     }
   ]
 }
