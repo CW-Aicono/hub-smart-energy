@@ -1,3 +1,5 @@
+import { loadUsage, prevMonth } from "../_shared/packageUsageLoader.ts";
+import { backCharge, monthDelta } from "../_shared/packageUsage.ts";
 import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -30,7 +32,7 @@ Deno.serve(async (req) => {
     // 1. Get all tenants
     const { data: tenants, error: tErr } = await supabase
       .from("tenants")
-      .select("id, name, partner_id, support_price_per_15min, is_aicono_member, is_kommune, package_billing, package_billing_from");
+      .select("id, name, partner_id, support_price_per_15min, is_aicono_member, is_kommune, package_billing, package_billing_from, created_at").is("deleted_at", null);
     if (tErr) throw tErr;
 
     // 2. Get all tenant_modules (active)
@@ -131,6 +133,19 @@ Deno.serve(async (req) => {
     const monthKey = fmt(lastMonthStart).slice(0, 7);
     const partnerDrafts: any[] = [];
 
+    // 3f. Auf Paketabrechnung umgestellte Mandanten: Mengen automatisch aus den Zähldaten
+    const isSwitched = (t: any) => !!t.package_billing && !!t.package_billing_from && t.package_billing_from <= fmt(lastMonthStart);
+    const switchedList = (tenants ?? []).filter(isSwitched);
+    const prevKey = prevMonth(monthKey);
+    const usage = switchedList.length ? await loadUsage(supabase, switchedList, monthKey) : null;
+    const usagePrev = switchedList.length ? await loadUsage(supabase, switchedList, prevKey) : null;
+    const prevInvoices: Record<string, any> = {};
+    if (switchedList.length) {
+      const { data: pi } = await supabase.from("tenant_invoices").select("tenant_id, source_ref, line_items")
+        .in("source_ref", switchedList.flatMap((t: any) => [`monthly:partner:${t.id}:${prevKey}`, `monthly:tenant:${t.id}:${prevKey}`])).neq("status", "voided");
+      for (const i of pi ?? []) prevInvoices[i.tenant_id] = i;
+    }
+
     // 4. Get support sessions from last month for all tenants
     const { data: supportSessions, error: sErr } = await supabase
       .from("support_sessions")
@@ -197,6 +212,30 @@ Deno.serve(async (req) => {
 
     for (const tenant of tenants ?? []) {
       if (lockedTenants.has(tenant.id)) continue;
+      if (isSwitched(tenant) && usage) {
+        const u = usage.results[tenant.id];
+        const toPartner = !!tenant.partner_id;
+        const pick = (x: { uvp: number; ek: number }) => (toPartner ? x.ek : x.uvp);
+        const lines: any[] = u.lines.filter((l) => !l.viaContract).map((l) => ({ type: l.type, code: l.code, label: l.label, quantity: l.quantity, unit_price: l.quantity ? Math.round(pick(l) / l.quantity * 100) / 100 : pick(l), amount: l.review ? 0 : pick(l), review: l.review || undefined, session_id: l.session_id }));
+        // Nachberechnung: nachträglich erfasste Mengen des Vormonats (nur wenn der Vormonat bereits nach Paketen lief)
+        const prevInv = prevInvoices[tenant.id];
+        if (prevInv && usagePrev) {
+          const billedQty: Record<string, number> = {};
+          for (const li of (prevInv.line_items ?? []) as any[]) if (li.code && (li.type === "package_unit" || li.type === "back_charge")) billedQty[li.code] = (billedQty[li.code] ?? 0) + Number(li.quantity ?? 0);
+          for (const l of backCharge(usagePrev.results[tenant.id], billedQty, usage.units, prevKey)) lines.push({ type: l.type, code: l.code, label: l.label, quantity: l.quantity, unit_price: Math.round(pick(l) / l.quantity * 100) / 100, amount: pick(l) });
+        }
+        const delta = monthDelta(u, tenant.package_billing_from < fmt(lastMonthStart) && usagePrev ? usagePrev.results[tenant.id] : null);
+        const sum = Math.round(lines.reduce((x, l) => x + Number(l.amount || 0), 0) * 100) / 100;
+        if (!lines.length) continue;
+        const deltaText = delta.text ? `${delta.text}, ${(toPartner ? delta.ek : delta.uvp) >= 0 ? "+" : ""}${(toPartner ? delta.ek : delta.uvp).toLocaleString("de-DE", { minimumFractionDigits: 2 })} €` : null;
+        partnerDrafts.push({ tenant_id: tenant.id, partner_id: tenant.partner_id ?? null, invoice_kind: "recurring",
+          source_ref: `monthly:${toPartner ? "partner" : "tenant"}:${tenant.id}:${monthKey}`, invoice_number: sum > 0 ? "DRAFT" : "ABO-BELEG",
+          document_type: sum > 0 ? "invoice" : "subscription_notice", status: "draft",
+          period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), amount: sum, module_total: sum, support_total: 0,
+          usage_review: delta.plausibility || u.review, usage_delta: deltaText,
+          line_items: lines.map((l) => (toPartner ? { ...l, label: `${l.label} – ${tenant.name}` } : l)) });
+        continue;
+      }
       const tenantModules = (allModules ?? []).filter(
         (m: any) => m.tenant_id === tenant.id && m.is_enabled
       );
@@ -245,9 +284,7 @@ Deno.serve(async (req) => {
           moduleTotal += sum;
         }
       }
-      // Auf Paketabrechnung umgestellt (ab Folgemonat): Modulpreise werden nur noch angezeigt, nicht berechnet.
-      const switchedToPackages = !!(tenant as any).package_billing && !!(tenant as any).package_billing_from && (tenant as any).package_billing_from <= fmt(lastMonthStart);
-      for (const tm of isPkg || switchedToPackages ? [] : tenantModules) {
+      for (const tm of isPkg ? [] : tenantModules) {
         if (tm.module_code === "dashboard") continue;
         if (covered(tenant.id, "module", tm.module_code) || (["ev_charging", "adhoc_payment"].includes(tm.module_code) && covered(tenant.id, "unit", "charge_point"))) continue;
         const packageCovered = (contractSales ?? []).some((s: any) => s.tenant_id === tenant.id && s.product_kind === "package" && s.starts_on <= fmt(lastMonthEnd));
@@ -472,7 +509,7 @@ Deno.serve(async (req) => {
         .eq("source_ref", pd.source_ref).neq("status", "voided").maybeSingle();
       if (ex?.lexware_invoice_id || ex?.issued_at) continue;
       if (ex) {
-        const { error } = await supabase.from("tenant_invoices").update({ line_items: pd.line_items, amount: pd.amount, module_total: pd.module_total, document_type: pd.document_type }).eq("id", ex.id);
+        const { error } = await supabase.from("tenant_invoices").update({ line_items: pd.line_items, amount: pd.amount, module_total: pd.module_total, document_type: pd.document_type, invoice_number: pd.invoice_number, usage_review: pd.usage_review ?? false, usage_delta: pd.usage_delta ?? null }).eq("id", ex.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("tenant_invoices").insert(pd);
