@@ -65,6 +65,7 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
                 <TableCell className="text-xs">{p.requires_package ? catalog.packages.find((x) => x.code === p.requires_package)?.name : p.requires_any_other ? "mind. ein anderes Paket" : "–"}</TableCell>
                 <TableCell className="text-right">{p.always_active ? eur(0) : cell("pricing_packages", p.code, p.uvp, p.ek, "uvp")}</TableCell>
                 <TableCell className="text-right">{p.always_active ? eur(0) : cell("pricing_packages", p.code, p.uvp, p.ek, "ek")}</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{p.valid_from ? new Date(p.valid_from + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
                 <TableCell className="text-right">{p.always_active ? "–" : (
                   <Input className="h-8 w-24 ml-auto text-right" disabled={!canEdit}
                     defaultValue={p.partner_unlock_fee.toLocaleString("de-DE", { minimumFractionDigits: 2 })}
@@ -80,13 +81,14 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
           </TableBody>
         </Table>
         <Table>
-          <TableHeader><TableRow><TableHead>Mengen- und Servicepreise</TableHead><TableHead>Einheit</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Mengen- und Servicepreise</TableHead><TableHead>Einheit</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right">Gültig ab</TableHead></TableRow></TableHeader>
           <TableBody>
             {catalog.units.map((u) => (
               <TableRow key={u.code}>
                 <TableCell>{u.name}</TableCell><TableCell className="text-xs">{u.unit}</TableCell>
                 <TableCell className="text-right">{eur(u.new_sale_uvp ?? u.uvp)}</TableCell>
                 <TableCell className="text-right">{u.partner_available === false ? "–" : cell("pricing_unit_prices", u.code, u.uvp, u.ek, "ek")}</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{u.valid_from ? new Date(u.valid_from + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
