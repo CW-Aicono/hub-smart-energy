@@ -351,6 +351,13 @@
       "when": 1793365197068,
       "tag": "0049_package_only_new_sales",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793365240524,
+      "tag": "0050_package_sale_catalog_validation",
+      "breakpoints": true
     }
   ]
 }

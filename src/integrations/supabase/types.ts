@@ -16810,6 +16810,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      validate_package_sale_input: {
+        Args: {
+          p_code: string
+          p_kind: string
+          p_quantity: number
+          p_tenant: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       adhoc_payment_state:
