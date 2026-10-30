@@ -14679,6 +14679,7 @@ export type Database = {
           issued_at: string | null
           issued_by: string | null
           lexware_invoice_id: string | null
+          license_payment_method: string | null
           line_items: Json | null
           module_total: number
           partner_id: string | null
@@ -14705,6 +14706,7 @@ export type Database = {
           issued_at?: string | null
           issued_by?: string | null
           lexware_invoice_id?: string | null
+          license_payment_method?: string | null
           line_items?: Json | null
           module_total?: number
           partner_id?: string | null
@@ -14731,6 +14733,7 @@ export type Database = {
           issued_at?: string | null
           issued_by?: string | null
           lexware_invoice_id?: string | null
+          license_payment_method?: string | null
           line_items?: Json | null
           module_total?: number
           partner_id?: string | null
@@ -16572,6 +16575,7 @@ export type Database = {
           issued_at: string | null
           issued_by: string | null
           lexware_invoice_id: string | null
+          license_payment_method: string | null
           line_items: Json | null
           module_total: number
           partner_id: string | null
