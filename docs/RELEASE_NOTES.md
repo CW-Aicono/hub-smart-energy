@@ -1,5 +1,12 @@
 # Versionshinweise
 
+## v1.20.0 – 30.10.2026
+- Partner-Portal → Abrechnung: Die Preisliste zeigt jetzt Pakete und Mengenpreise mit Einkauf (EK), empfohlenem Verkaufspreis (UVP), eigenem Verkaufspreis und Marge, getrennt für Kommunen und Industrie. Die alte Modulpreisliste erscheint nur noch für Kunden mit Altvertrag.
+- „Rabatt bei AICONO anfragen“: Auswahl von Paketen, Mengenpreisen und Remote-Support-Flatrate statt Einzelmodulen. Freigegebene Rabatte mindern den EK der gewählten Positionen.
+- Margen je Tenant werden für Paketkunden aus der Monatsübersicht berechnet (inkl. Rabatte, eigene Verkaufspreise je Segment).
+- Provisions-Partner sehen die erwartete Provision je Tenant und ihre Provisionsgutschriften.
+- Übersicht: Die Kachel „Offene Abrechnung“ zeigt die Summe der offenen AICONO-Einkaufsrechnungen.
+
 ## v1.19.0 – 30.10.2026
 - Rechnungsflüsse nach Partnermodell: Direktkunden zur UVP; Wiederverkaufs-Partner erhalten eine Sammelrechnung je Monat zum EK, gegliedert nach Kunde (inkl. Einrichtung im Aktivierungsmonat); Provisions-Partner erhalten eine monatliche Provisionsgutschrift, der Kunde wird zur UVP abgerechnet.
 - Partner erhalten je Kunde automatisch einen Endkunden-Entwurf mit eigenen Preisen und können eigene Positionen ergänzen; AICONO sieht diese Rechnungen nicht.

@@ -143,15 +143,19 @@ Deno.serve(async (req) => {
     // Partnermodell (Wiederverkauf / Provision) und Partner-Verkaufspreise
     const partnerMap: Record<string, FlowPartner> = {};
     const partnerPrices: Record<string, Record<string, number>> = {};
+    const partnerPricesIndustry: Record<string, Record<string, number>> = {}; // Industrie-Segment
     {
       const [{ data: ps, error: pErr }, { data: pp, error: ppErr }] = await Promise.all([
         supabase.from("partners").select("id, name, billing_mode, commission_pct"),
-        supabase.from("partner_module_prices").select("partner_id, module_code, sale_price_monthly"),
+        supabase.from("partner_module_prices").select("partner_id, module_code, sale_price_monthly, sale_price_industry_monthly"),
       ]);
       if (pErr) throw pErr;
       if (ppErr) throw ppErr;
       for (const p of ps ?? []) partnerMap[p.id] = { id: p.id, name: p.name, billing_mode: p.billing_mode, commission_pct: Number(p.commission_pct ?? 0) };
-      for (const p of pp ?? []) if (p.sale_price_monthly != null) (partnerPrices[p.partner_id] ??= {})[p.module_code] = Number(p.sale_price_monthly);
+      for (const p of pp ?? []) {
+        if (p.sale_price_monthly != null) (partnerPrices[p.partner_id] ??= {})[p.module_code] = Number(p.sale_price_monthly);
+        if (p.sale_price_industry_monthly != null) (partnerPricesIndustry[p.partner_id] ??= {})[p.module_code] = Number(p.sale_price_industry_monthly);
+      }
     }
     // Bereits berechnete Mengen des Vormonats je Kunde (Einzel- oder Sammelrechnung)
     const prevBilled: Record<string, any[]> = {};
@@ -256,7 +260,7 @@ Deno.serve(async (req) => {
           (collectives[partner!.id] ??= []).push({ tenant, lines: flowLines });
           if (delta.plausibility || u.review) reviewByPartner[partner!.id] = true;
           if (!(tenant as any).partner_self_customer) {
-            const pl = partnerCustomerLines(flowLines, partnerPrices[partner!.id] ?? {});
+            const pl = partnerCustomerLines(flowLines, (tenant as any).is_kommune === false ? (partnerPricesIndustry[partner!.id] ?? {}) : (partnerPrices[partner!.id] ?? {}));
             customerDrafts.push({ partner_id: partner!.id, tenant_id: tenant.id, source_ref: `monthly:pci:${tenant.id}:${monthKey}`,
               period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), lines: pl });
           }

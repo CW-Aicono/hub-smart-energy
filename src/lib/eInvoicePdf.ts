@@ -33,7 +33,7 @@ export async function buildEInvoicePdf(opts: Parameters<typeof buildAiconoInvoic
   const doc = await buildAiconoInvoicePdf(opts);
   const xml = eInvoiceXml(opts.settings as any, opts.recipient, opts.invoice);
   const bytes = await embedZugferd(doc.output("arraybuffer") as ArrayBuffer, xml, documentTitle(opts.invoice));
-  const blob = new Blob([bytes], { type: "application/pdf" });
+  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: "application/pdf" });
   let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return { bytes, blob, base64: btoa(bin), xml };
 }

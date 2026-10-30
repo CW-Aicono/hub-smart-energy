@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BadgePercent, Check, X } from "lucide-react";
 import { toast } from "sonner";
+import { catalogLabel, discountOptions } from "@/lib/partnerPriceList";
 
 export interface DiscountRequest {
   id: string; partner_id: string; tenant_id: string | null; module_codes: string[]; approved_module_codes: string[] | null;
@@ -21,7 +22,27 @@ export interface DiscountRequest {
   created_at: string; decided_at: string | null;
 }
 
-const modLabel = (c: string) => ALL_MODULES.find((m) => m.code === c)?.label ?? c;
+let catalogNames: { code: string; name: string }[] = [];
+const modLabel = (c: string) => catalogLabel(c, catalogNames) ?? ALL_MODULES.find((m) => m.code === c)?.label ?? c;
+
+/** Pakete und Mengenpreise für Auswahl und Beschriftung. */
+function useDiscountCatalog() {
+  return useQuery({
+    queryKey: ["discount-catalog"],
+    queryFn: async () => {
+      const db = supabase as any;
+      const [pk, un, pm] = await Promise.all([
+        db.from("pricing_packages").select("code,name,uvp,ek,always_active,active,sort"),
+        db.from("pricing_unit_prices").select("code,name,uvp,ek,new_sale_uvp,partner_available"),
+        db.from("pricing_package_modules").select("package_code,module_code"),
+      ]);
+      if (pk.error) throw pk.error;
+      if (un.error) throw un.error;
+      catalogNames = pk.data ?? [];
+      return { packages: pk.data ?? [], units: un.data ?? [], packageModules: (pm.data ?? []) as { package_code: string; module_code: string }[] };
+    },
+  });
+}
 const fmtValue = (r: DiscountRequest) =>
   r.discount_type === "percent"
     ? `${Number(r.value).toLocaleString("de-DE", { maximumFractionDigits: 2 })} %`
@@ -82,13 +103,20 @@ export function PartnerDiscountRequestsCard({ partnerId, canRequest }: { partner
       return data as DiscountRequest[];
     },
   });
+  const { data: catalog } = useDiscountCatalog();
   const tenantName = (id: string | null) => (id ? tenants.find((t) => t.id === id)?.name ?? "–" : "Alle meine Kunden");
-  const options = ALL_MODULES.filter((m) => !("alwaysOn" in m) && portfolio.includes(m.code));
+  // Pakete 1–6 (nur mit Modulen aus dem eigenen Portfolio), Mengenpreise und Remote-Support-Flatrate
+  const options = catalog
+    ? discountOptions(catalog.packages, catalog.units).filter((o) => {
+        const mods = catalog.packageModules.filter((m) => m.package_code === o.code).map((m) => m.module_code);
+        return !mods.length || mods.some((m) => portfolio.includes(m));
+      })
+    : [];
 
   const submit = async () => {
     const v = parseFloat(value.replace(",", "."));
     const m = months ? parseInt(months, 10) : null;
-    if (!mods.length) return toast.error("Bitte mindestens ein Modul wählen");
+    if (!mods.length) return toast.error("Bitte mindestens ein Paket oder einen Mengenpreis wählen");
     if (!(v > 0) || (type === "percent" && v > 100)) return toast.error(type === "percent" ? "Prozent zwischen 0 und 100 eingeben" : "Betrag größer 0 eingeben");
     if (m !== null && !(m >= 1 && m <= 120)) return toast.error("Laufzeit 1 bis 120 Monate");
     setBusy(true);
@@ -117,7 +145,7 @@ export function PartnerDiscountRequestsCard({ partnerId, canRequest }: { partner
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><BadgePercent className="h-5 w-5" />Rabatt bei AICONO anfragen</CardTitle>
         <CardDescription>
-          Ihre Anfrage geht an AICONO. Nach der Freigabe gilt der Rabatt für die freigegebenen Module – für einen Kunden oder für alle Ihre Kunden.
+          Ihre Anfrage geht an AICONO. Nach der Freigabe mindert der Rabatt Ihren Einkaufspreis (EK) für die freigegebenen Pakete und Mengenpreise – für einen Kunden oder für alle Ihre Kunden.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -158,9 +186,9 @@ export function PartnerDiscountRequestsCard({ partnerId, canRequest }: { partner
               </div>
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label>Module ({mods.length} gewählt)</Label>
+              <Label>Pakete und Mengenpreise ({mods.length} gewählt)</Label>
               {options.length === 0 ? (
-                <p className="text-sm text-muted-foreground">In Ihrem Partner-Portfolio sind noch keine Module freigegeben.</p>
+                <p className="text-sm text-muted-foreground">In Ihrem Partner-Portfolio sind noch keine Pakete freigegeben.</p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {options.map((m) => (
@@ -183,7 +211,7 @@ export function PartnerDiscountRequestsCard({ partnerId, canRequest }: { partner
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Datum</TableHead><TableHead>Kunde</TableHead><TableHead>Module</TableHead>
+              <TableHead>Datum</TableHead><TableHead>Kunde</TableHead><TableHead>Pakete / Preise</TableHead>
               <TableHead>Rabatt</TableHead><TableHead>Status</TableHead><TableHead />
             </TableRow>
           </TableHeader>
@@ -212,6 +240,7 @@ export function PartnerDiscountRequestsCard({ partnerId, canRequest }: { partner
 /** AICONO Portal: Rabatt-Anfragen der Partner freigeben (ganz oder für einzelne Module) oder ablehnen. */
 export function PortalDiscountRequestsCard() {
   const qc = useQueryClient();
+  useDiscountCatalog();
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -238,7 +267,7 @@ export function PortalDiscountRequestsCard() {
 
   const decide = async (r: DiscountRequest, decision: "approve" | "reject") => {
     const moduleCodes = selected[r.id] ?? r.module_codes;
-    if (decision === "approve" && !moduleCodes.length) return toast.error("Mindestens ein Modul freigeben oder ablehnen");
+    if (decision === "approve" && !moduleCodes.length) return toast.error("Mindestens eine Position freigeben oder ablehnen");
     setBusyId(r.id);
     try {
       const { data: res, error } = await supabase.functions.invoke("portal-decide-discount-request", {
@@ -254,7 +283,7 @@ export function PortalDiscountRequestsCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><BadgePercent className="h-5 w-5" />Rabatt-Anfragen von Partnern ({pending.length} offen)</CardTitle>
-        <CardDescription>Freigabe ganz oder nur für einzelne Module. Bei Freigabe werden die Rabatte automatisch beim Kunden hinterlegt und in der Abrechnung berücksichtigt.</CardDescription>
+        <CardDescription>Freigabe ganz oder nur für einzelne Positionen. Freigegebene Rabatte mindern den Partner-EK der gewählten Pakete und Mengenpreise in der Paketabrechnung; ältere Modul-Anfragen werden wie bisher beim Kunden hinterlegt.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && <p className="text-sm text-destructive">Anfragen konnten nicht geladen werden: {(error as Error).message}</p>}
@@ -283,7 +312,7 @@ export function PortalDiscountRequestsCard() {
               <Input placeholder="Notiz an den Partner (optional)" value={notes[r.id] ?? ""} onChange={(e) => setNotes((p) => ({ ...p, [r.id]: e.target.value }))} maxLength={500} />
               <div className="flex gap-2">
                 <Button size="sm" disabled={busyId === r.id || !sel.length} onClick={() => decide(r, "approve")}>
-                  <Check className="mr-1 h-4 w-4" />{sel.length === r.module_codes.length ? "Freigeben" : `${sel.length} von ${r.module_codes.length} Modulen freigeben`}
+                  <Check className="mr-1 h-4 w-4" />{sel.length === r.module_codes.length ? "Freigeben" : `${sel.length} von ${r.module_codes.length} Positionen freigeben`}
                 </Button>
                 <Button size="sm" variant="outline" disabled={busyId === r.id} onClick={() => decide(r, "reject")}><X className="mr-1 h-4 w-4" />Ablehnen</Button>
               </div>
@@ -292,7 +321,7 @@ export function PortalDiscountRequestsCard() {
         })}
         {done.length > 0 && (
           <Table>
-            <TableHeader><TableRow><TableHead>Entschieden</TableHead><TableHead>Partner / Kunde</TableHead><TableHead>Module</TableHead><TableHead>Rabatt</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Entschieden</TableHead><TableHead>Partner / Kunde</TableHead><TableHead>Pakete / Preise</TableHead><TableHead>Rabatt</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>
               {done.map((r) => (
                 <TableRow key={r.id}>

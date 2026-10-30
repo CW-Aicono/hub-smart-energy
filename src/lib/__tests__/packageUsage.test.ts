@@ -19,6 +19,9 @@ describe("package usage billing", () => {
   it("support billed per started 15 minutes", () => expect(ek({ supportSessions: [{ id: "c", started_at: "2026-11-02T10:00:00Z", ended_at: null, duration_minutes: 16 }] })).toBe(74 + 50));
   it("support is free with remote-support flatrate", () => { const r = computeTenantMonth({ ...base, remoteSupport: [{ code: "remote_support", start: "2026-01-01", end: null, viaContract: true }], supportSessions: [{ id: "d", started_at: "2026-11-02T10:00:00Z", ended_at: null, duration_minutes: 30 }] }); expect(r.billableEk).toBe(74); });
   it("approved 10 % partner discount reduces EK", () => expect(ek({ discounts: [{ type: "percent", value: 10, modules: ["energy_monitoring"] }] })).toBe(66.6));
+  it("discount on package code P1 reduces only P1 EK", () => expect(ek({ chargePoints: 6, discounts: [{ type: "percent", value: 10, modules: ["p1_monitoring"] }] })).toBe(66.6 + 36));
+  it("discount on charge point price reduces charge point EK", () => expect(ek({ chargePoints: 10, discounts: [{ type: "fixed", value: 5, modules: ["charge_point"] }] })).toBe(74 + 55));
+  it("discount never exceeds the discounted position", () => expect(ek({ locations: 2, discounts: [{ type: "fixed", value: 100, modules: ["extra_location"] }] })).toBe(74));
   it("flags quantity change above 50 %", () => expect(monthDelta(computeTenantMonth({ ...base, chargePoints: 8 }), computeTenantMonth({ ...base, chargePoints: 5 })).plausibility).toBe(true));
   it("does not flag 5 → 6 charge points", () => { const d = monthDelta(computeTenantMonth({ ...base, chargePoints: 6 }), computeTenantMonth({ ...base, chargePoints: 5 })); expect(d.plausibility).toBe(false); expect(d.ek).toBe(6); });
   it("back-charges a retroactively activated charge point", () => expect(backCharge(computeTenantMonth({ ...base, chargePoints: 6 }), { charge_point: 5 }, units, "2026-10")[0].ek).toBe(6));

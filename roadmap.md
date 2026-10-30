@@ -11,7 +11,7 @@
 - [x] Offen aus Schritt 3: Endkunden-Entwurf des Partners mit Partnerpreisen (v1.19.0).
 - [x] Schritt 4 (v1.19.0): Sammelrechnung Wiederverkauf, Provisionsgutschrift, Endkunden-Entwürfe mit eigenen Positionen, Warnung Direktrechnung, Eigenbedarf „An Partner“, Storno-Rechnung, ZUGFeRD in allen PDFs, Leitweg-ID, Lexware weiter als Entwurf.
 - [ ] Wartet auf Nutzer: eine erzeugte Rechnung mit einem ZUGFeRD-Prüfwerkzeug validieren (PDF/A-3-Container nicht zertifiziert); Lexware-Einstellung E-Rechnung prüfen
-- [ ] Schritt 5: Partner-Portal angleichen (Paket-Preisliste, Margen, Provisionsanzeige)
+- [x] Schritt 5 (v1.20.0): Paket-Preisliste mit EK/UVP/eigenem Preis/Marge je Segment, Rabattanfrage auf Pakete/Mengenpreise, Margen auf Paketbasis, Provision + Gutschriften, Kachel „Offene Abrechnung“.
 - [ ] Schritt 6: Kunden-Ebene „Paket & Rechnungen“, Abnahmetests A–C
 
 ## Paketumstellung (30.10.)
