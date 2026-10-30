@@ -102,6 +102,7 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.21.0", date: "2026-10-30", changes: [{ type: "feature", textKey: "manual.billing.tenantPackageView" }] },
     { version: "1.20.0", date: "2026-10-30", changes: [{ type: "feature", textKey: "manual.billing.partnerPortalPackages" }] },
     { version: "1.19.0", date: "2026-10-30", changes: [{ type: "feature", textKey: "manual.billing.invoiceFlows" }] },
     { version: "1.18.0", date: "2026-10-30", changes: [{ type: "feature", textKey: "manual.billing.packageUsage" }] },

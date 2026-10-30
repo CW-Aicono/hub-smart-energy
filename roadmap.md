@@ -12,7 +12,9 @@
 - [x] Schritt 4 (v1.19.0): Sammelrechnung Wiederverkauf, Provisionsgutschrift, Endkunden-Entwürfe mit eigenen Positionen, Warnung Direktrechnung, Eigenbedarf „An Partner“, Storno-Rechnung, ZUGFeRD in allen PDFs, Leitweg-ID, Lexware weiter als Entwurf.
 - [ ] Wartet auf Nutzer: eine erzeugte Rechnung mit einem ZUGFeRD-Prüfwerkzeug validieren (PDF/A-3-Container nicht zertifiziert); Lexware-Einstellung E-Rechnung prüfen
 - [x] Schritt 5 (v1.20.0): Paket-Preisliste mit EK/UVP/eigenem Preis/Marge je Segment, Rabattanfrage auf Pakete/Mengenpreise, Margen auf Paketbasis, Provision + Gutschriften, Kachel „Offene Abrechnung“.
-- [ ] Schritt 6: Kunden-Ebene „Paket & Rechnungen“, Abnahmetests A–C
+- [x] Schritt 6 (v1.21.0): Kunden-Ebene „Paket & Rechnungen“, Abnahmetests als automatische Tests.
+- [ ] Wartet auf Nutzer: Entscheidung, ob Einkaufspreise im Preiskatalog für Kunden-Logins gesperrt werden sollen
+- [ ] Wartet auf Nutzer: Lexware-Übertragung und SEPA-Export einer echten Paketrechnung auf Staging prüfen
 
 ## Paketumstellung (30.10.)
 - [x] v1.16.0: Neue Buchungen und Rechnungsauswahl nur Pakete/Zusatzleistungen; monatliche Nettopreise, 8 € je Ladepunkt; Bestandsverträge unverändert. 39 Tests, angemeldete Portal-/Partnerauswahl und Vertrag mit anteiligem Entwurf (6,39 €) geprüft; Prüfdaten entfernt. Vorhandener Ladepunkt-Partner-EK 5,25 € unverändert, da kein neuer genannt.
