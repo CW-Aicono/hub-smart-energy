@@ -66,7 +66,15 @@ Deno.serve(async (req) => {
       validUntil = d.toISOString().slice(0, 10);
     }
 
-    const rows = tenantIds.flatMap((tid) => approved.map((code) => ({
+    // Paket- und Mengencodes wirken über die Paketabrechnung (partner_discount_requests);
+    // nur alte Modulcodes werden zusätzlich als Kundenrabatt für die Modulabrechnung hinterlegt.
+    const [{ data: pk }, { data: un }] = await Promise.all([
+      admin.from("pricing_packages").select("code"),
+      admin.from("pricing_unit_prices").select("code"),
+    ]);
+    const catalogCodes = new Set([...(pk ?? []), ...(un ?? [])].map((x: { code: string }) => x.code));
+    const moduleCodes = approved.filter((c) => !catalogCodes.has(c));
+    const rows = tenantIds.flatMap((tid) => moduleCodes.map((code) => ({
       tenant_id: tid, module_code: code, discount_type: r.discount_type, value: r.value,
       valid_from: r.valid_from, valid_until: validUntil,
       duration_value: r.duration_months, duration_unit: r.duration_months ? "month" : null,
