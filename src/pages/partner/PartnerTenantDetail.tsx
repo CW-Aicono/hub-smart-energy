@@ -236,6 +236,12 @@ export default function PartnerTenantDetail() {
 
         <TabsContent value="modules" className="space-y-4">
           {tenantId && <PackageBookingCard tenantId={tenantId} />}
+          {tenantId && partnerId && <LicenseSales tenantId={tenantId} partnerId={partnerId} canEdit={isPartnerAdmin} />}
+          {!(tenant as any)?.package_billing && (
+          <details className="rounded-md border p-3">
+            <summary className="cursor-pointer text-sm font-medium">Altvertrag: Einzelmodule & alte Lizenzen</summary>
+            <p className="mt-2 text-xs text-muted-foreground">Nur für bestehende Verträge nach Modulpreisen. Neue Buchungen erfolgen über Pakete.</p>
+            <div className="mt-3 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Module ({modules.length} aktiv)</CardTitle>
@@ -314,7 +320,9 @@ export default function PartnerTenantDetail() {
               )}
             </CardContent>
           </Card>
-          {tenantId && partnerId && <LicenseSales tenantId={tenantId} partnerId={partnerId} canEdit={isPartnerAdmin} />}
+            </div>
+          </details>
+          )}
         </TabsContent>
 
         {modules.some((m) => m.module_code === "gain_sharing") && (

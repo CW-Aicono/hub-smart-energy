@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.21.2 – 30.10.2026
+- Partnerportal: Unter „Module & Lizenzen“ stehen jetzt die Pakete im Vordergrund; alte Einzelmodule erscheinen nur noch bei Altverträgen in einem einklappbaren Bereich.
+
 ## v1.21.0 – 30.10.2026
 - Einstellungen → „Paket & Rechnungen“ für Kunden-Admins: gebuchte Pakete mit enthaltenen Funktionen (ohne Preise), nicht freigeschaltete Funktionen mit Hinweis „Im Paket X enthalten – Anfrage an Partner/AICONO“ und alle ausgestellten Rechnungen an den Kunden (von AICONO oder vom Partner) als PDF mit E-Rechnung. Normale Benutzer sehen den Bereich nicht.
 - Abnahmetests der Paketabrechnung (Fälle A, B, C, Flatrate, Neukunde, anteilig, Mengenänderung, Support-Prüfung, Paket 6) als automatische Tests hinterlegt.
