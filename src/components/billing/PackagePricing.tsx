@@ -195,7 +195,7 @@ export function PackageBookingCard({ tenantId }: { tenantId: string }) {
   );
 }
 
-/** Monatsübersicht je Endkunde und Partner (nur Anzeige). */
+/** Monatsübersicht je Endkunde und Partner. Für umgestellte Kunden Grundlage der Monatsrechnung. */
 export function PackageBillingOverviewCard({ partnerId }: { partnerId?: string }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const { data, isLoading, error } = useQuery({
@@ -206,47 +206,93 @@ export function PackageBillingOverviewCard({ partnerId }: { partnerId?: string }
       return data as { rows: any[]; partners: any[] };
     },
   });
+  const anySwitched = (data?.rows ?? []).some((r) => r.packageBilling);
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <div>
           <CardTitle className="text-base">Monatsübersicht nach Paketen</CardTitle>
-          <CardDescription>Grundlage für die Rechnung AICONO → Partner. Nur Anzeige, die Monatsrechnung bleibt unverändert.</CardDescription>
+          <CardDescription>{anySwitched ? "Kunden mit „Abrechnung nach Paketen“: Grundlage der Monatsrechnung. Übrige Kunden: nur Anzeige." : "Grundlage für die Rechnung AICONO → Partner. Nur Anzeige, die Monatsrechnung bleibt unverändert."}</CardDescription>
         </div>
         <Input type="month" className="w-40" value={month} onChange={(e) => setMonth(e.target.value)} />
       </CardHeader>
       <CardContent>
         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : error ? <p className="text-sm text-destructive">Übersicht konnte nicht geladen werden.</p> : (
           <div className="space-y-4">
-            <Table>
+            <div className="overflow-x-auto"><Table>
               <TableHeader><TableRow>
                 <TableHead>Endkunde</TableHead><TableHead>Pakete</TableHead><TableHead className="text-right">Liegenschaften</TableHead>
                 <TableHead className="text-right">Ladepunkte</TableHead><TableHead className="text-right">Abgerechnet</TableHead><TableHead className="text-right">Intern</TableHead>
+                <TableHead>Änderung zum Vormonat</TableHead>
                 <TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {(data?.rows ?? []).map((r) => (
-                  <TableRow key={r.tenant_id}>
-                    <TableCell>{r.tenant_name}</TableCell>
+                  <TableRow key={r.tenant_id} className={r.delta?.plausibility || r.review ? "bg-warning/10" : undefined}>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1">{r.tenant_name}
+                        {r.packageBilling && <Badge variant="outline" className="text-xs">Grundlage der Monatsrechnung</Badge>}
+                        {(r.delta?.plausibility || r.review) && <Badge className="text-xs bg-warning text-warning-foreground hover:bg-warning">Prüfen</Badge>}
+                      </div>
+                      {r.lines?.length > 0 && (
+                        <details className="text-xs text-muted-foreground mt-1"><summary className="cursor-pointer">Positionen</summary>
+                          <ul className="mt-1 space-y-0.5">{r.lines.map((l: any, i: number) => (
+                            <li key={i} className="flex justify-between gap-4"><span>{l.label}{l.viaContract ? " (Vertrag)" : ""}{l.review ? " – nicht automatisch berechnet" : ""}</span><span className="whitespace-nowrap">UVP {eur(l.uvp)} · EK {eur(l.ek)}</span></li>
+                          ))}</ul>
+                        </details>
+                      )}
+                    </TableCell>
                     <TableCell className="text-xs">{r.legacy ? <Badge variant="secondary">Altpreis</Badge> : r.packages.join(", ")}</TableCell>
                     <TableCell className="text-right">{r.locations.toLocaleString("de-DE")}</TableCell>
                     <TableCell className="text-right">{r.chargePoints.toLocaleString("de-DE")}</TableCell>
                     <TableCell className="text-right">{r.billedSessions.toLocaleString("de-DE")}</TableCell>
                     <TableCell className="text-right">{r.internalSessions.toLocaleString("de-DE")}</TableCell>
+                    <TableCell className="text-xs">{r.delta?.text ? `${r.delta.text}, ${r.delta.ek >= 0 ? "+" : ""}${eur(r.delta.ek)} EK` : "–"}</TableCell>
                     <TableCell className="text-right">{r.legacy ? "–" : eur(r.uvp)}</TableCell>
                     <TableCell className="text-right">{r.legacy ? "–" : eur(r.ek)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </Table></div>
             <div className="text-sm space-y-1">
               {(data?.partners ?? []).map((p) => (
-                <div key={p.partner_id} className="flex justify-between font-medium"><span>Summe {p.partner_name} ({p.tenants} Kunden)</span><span>UVP {eur(p.uvp)} · EK {eur(p.ek)}</span></div>
+                <div key={p.partner_id} className="flex flex-wrap justify-between gap-2 font-medium"><span>Summe {p.partner_name} ({p.tenants} Kunden)</span><span>UVP {eur(p.uvp)} · EK {eur(p.ek)}</span></div>
               ))}
             </div>
           </div>
         )}
       </CardContent>
+    </Card>
+  );
+}
+
+/** Mengenänderungen der eigenen Kunden (einmal täglich gesammelt). */
+export function PartnerUsageNoticesCard({ partnerId }: { partnerId: string }) {
+  const qc = useQueryClient();
+  const { data = [] } = useQuery({
+    queryKey: ["partner-usage-notices", partnerId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("partner_usage_notices").select("id,message,day,read_at").eq("partner_id", partnerId).order("day", { ascending: false }).limit(30);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  if (!data.length) return null;
+  const markRead = async () => {
+    await (supabase as any).from("partner_usage_notices").update({ read_at: new Date().toISOString() }).eq("partner_id", partnerId).is("read_at", null);
+    qc.invalidateQueries({ queryKey: ["partner-usage-notices", partnerId] });
+  };
+  const unread = data.filter((n: any) => !n.read_at).length;
+  return (
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+        <div><CardTitle className="text-base">Mengenänderungen {unread > 0 && <Badge className="ml-2">{unread} neu</Badge>}</CardTitle>
+          <CardDescription>Automatisch gezählt – wirkt auf die nächste Monatsrechnung.</CardDescription></div>
+        {unread > 0 && <Button variant="outline" size="sm" onClick={markRead}>Als gelesen markieren</Button>}
+      </CardHeader>
+      <CardContent><ul className="space-y-1 text-sm">{data.map((n: any) => (
+        <li key={n.id} className={n.read_at ? "text-muted-foreground" : "font-medium"}>{new Date(n.day + "T00:00:00").toLocaleDateString("de-DE")}: {n.message}</li>
+      ))}</ul></CardContent>
     </Card>
   );
 }

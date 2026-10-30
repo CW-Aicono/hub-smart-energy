@@ -1,6 +1,8 @@
 // Nur lesend: Monatsübersicht nach Paketlogik je Endkunde und Partner.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { loadUsage, prevMonth } from "../_shared/packageUsageLoader.ts";
+import { monthDelta } from "../_shared/packageUsage.ts";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -30,7 +32,7 @@ Deno.serve(async (req) => {
       partnerFilter = pm.partner_id;
     }
 
-    let tq = admin.from("tenants").select("id,name,partner_id").is("deleted_at", null);
+    let tq = admin.from("tenants").select("id,name,partner_id,created_at,package_billing,package_billing_from").is("deleted_at", null);
     if (partnerFilter) tq = tq.eq("partner_id", partnerFilter);
     const { data: tenants } = await tq;
     const ids = (tenants ?? []).map((t) => t.id);
@@ -50,7 +52,20 @@ Deno.serve(async (req) => {
     const unit = (c: string) => (un.data ?? []).find((u) => u.code === c) ?? { uvp: 0, ek: 0 };
     const count = (rows: any[] | null, id: string) => (rows ?? []).filter((r) => r.tenant_id === id).length;
 
-    const rows = (tenants ?? []).map((t) => {
+    // Auf Paketabrechnung umgestellte Mandanten: Grundlage der Monatsrechnung
+    const switched = (tenants ?? []).filter((t: any) => t.package_billing && t.package_billing_from && t.package_billing_from <= `${month}-31`);
+    const pm = prevMonth(month);
+    const [cur, prev] = switched.length ? await Promise.all([loadUsage(admin, switched, month), loadUsage(admin, switched, pm)]) : [null, null];
+    const rows = (tenants ?? []).map((t: any) => {
+      const u = cur?.results[t.id];
+      if (u) {
+        const prevActive = t.package_billing_from < `${month}-01`;
+        const delta = monthDelta(u, prevActive ? prev!.results[t.id] : null);
+        return { tenant_id: t.id, tenant_name: t.name, partner_id: t.partner_id, packages: [...new Set(u.lines.filter((l) => l.type === "package").map((l) => l.code))],
+          locations: u.quantities.locations, chargePoints: u.quantities.chargePoints, billedSessions: u.quantities.billedSessions,
+          internalSessions: Math.max(0, count(cs.data, t.id) - u.quantities.billedSessions), legacy: false, packageBilling: true,
+          lines: u.lines, review: u.review, delta, uvp: u.uvp, ek: u.ek };
+      }
       const booked = (bk.data ?? []).filter((b) => b.tenant_id === t.id && (!b.cancelled_at || b.cancelled_at >= from)).map((b) => b.package_code);
       const locations = (loc.data ?? []).filter((l) => l.tenant_id === t.id && !l.is_archived).length;
       const chargePoints = count(cp.data, t.id);
@@ -66,7 +81,7 @@ Deno.serve(async (req) => {
         uvp += extra * Number(unit("extra_location").uvp) + chargePoints * Number(unit("charge_point").uvp) + billedSessions * Number(unit("charging_session").uvp);
         ek += extra * Number(unit("extra_location").ek) + chargePoints * Number(unit("charge_point").ek) + billedSessions * Number(unit("charging_session").ek);
       }
-      return { tenant_id: t.id, tenant_name: t.name, partner_id: t.partner_id, packages: booked, locations, chargePoints, billedSessions, internalSessions, legacy, uvp: r2(uvp), ek: r2(ek) };
+      return { tenant_id: t.id, tenant_name: t.name, partner_id: t.partner_id, packages: booked, locations, chargePoints, billedSessions, internalSessions, legacy, packageBilling: false, uvp: r2(uvp), ek: r2(ek) };
     });
 
     const byPartner = new Map<string, { partner_id: string; partner_name: string; uvp: number; ek: number; tenants: number }>();

@@ -10331,6 +10331,51 @@ export type Database = {
           },
         ]
       }
+      partner_usage_notices: {
+        Row: {
+          created_at: string
+          day: string
+          id: string
+          message: string
+          partner_id: string
+          read_at: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          id?: string
+          message: string
+          partner_id: string
+          read_at?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          id?: string
+          message?: string
+          partner_id?: string
+          read_at?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_usage_notices_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_usage_notices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partners: {
         Row: {
           accent_color: string | null
@@ -14748,6 +14793,8 @@ export type Database = {
           support_total: number
           tenant_id: string
           updated_at: string
+          usage_delta: string | null
+          usage_review: boolean
           vat_rate: number | null
         }
         Insert: {
@@ -14775,6 +14822,8 @@ export type Database = {
           support_total?: number
           tenant_id: string
           updated_at?: string
+          usage_delta?: string | null
+          usage_review?: boolean
           vat_rate?: number | null
         }
         Update: {
@@ -14802,6 +14851,8 @@ export type Database = {
           support_total?: number
           tenant_id?: string
           updated_at?: string
+          usage_delta?: string | null
+          usage_review?: boolean
           vat_rate?: number | null
         }
         Relationships: [
@@ -15353,6 +15404,41 @@ export type Database = {
             foreignKeyName: "tenant_support_users_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_usage_daily: {
+        Row: {
+          active_charge_point_ids: string[]
+          charge_points: number
+          created_at: string
+          day: string
+          locations: number
+          tenant_id: string
+        }
+        Insert: {
+          active_charge_point_ids?: string[]
+          charge_points?: number
+          created_at?: string
+          day: string
+          locations?: number
+          tenant_id: string
+        }
+        Update: {
+          active_charge_point_ids?: string[]
+          charge_points?: number
+          created_at?: string
+          day?: string
+          locations?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_usage_daily_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
@@ -16659,6 +16745,8 @@ export type Database = {
           support_total: number
           tenant_id: string
           updated_at: string
+          usage_delta: string | null
+          usage_review: boolean
           vat_rate: number | null
         }
         SetofOptions: {
@@ -16868,6 +16956,7 @@ export type Database = {
         Returns: string
       }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
+      snapshot_tenant_usage: { Args: { p_day?: string }; Returns: number }
       touch_location_integration_sync: {
         Args: { _id: string; _min_interval_seconds?: number; _status: string }
         Returns: undefined
