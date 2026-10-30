@@ -9,6 +9,7 @@ export interface AiconoBillingSettings {
   bank_name?: string | null; iban?: string | null; bic?: string | null;
   email?: string | null; phone?: string | null; website?: string | null;
   payment_terms_days?: number | null; vat_rate?: number | null; footer_note?: string | null;
+  logo_url?: string | null;
 }
 
 export interface InvoiceRecipient { name: string; contact?: string | null; street?: string | null; postalCity?: string | null; country?: string | null }
@@ -39,14 +40,17 @@ export function invoiceTotals(net: number, vatRate: number) {
   return { net: n, vat, gross: Math.round((n + vat) * 100) / 100 };
 }
 
-async function loadLogo(): Promise<{ data: string; w: number; h: number } | null> {
+async function loadLogo(source: string): Promise<{ data: string; w: number; h: number } | null> {
   try {
     const img = new Image();
-    img.src = aiconoLogo;
+    img.crossOrigin = "anonymous";
+    img.src = source;
     await img.decode();
     const c = document.createElement("canvas");
     c.width = img.naturalWidth; c.height = img.naturalHeight;
-    c.getContext("2d")!.drawImage(img, 0, 0);
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0);
     return { data: c.toDataURL("image/png"), w: img.naturalWidth, h: img.naturalHeight };
   } catch { return null; }
 }
@@ -56,13 +60,14 @@ export async function buildAiconoInvoicePdf(opts: {
   recipient: InvoiceRecipient;
   invoice: { invoice_number: string; issued_at: string | null; due_date: string | null; period_start: string | null; period_end: string | null; amount: number; vat_rate: number | null; line_items: unknown; status?: string };
   customerNumber?: string;
+  partnerBranding?: boolean;
 }): Promise<jsPDF> {
   const { settings: s, recipient: r, invoice: inv } = opts;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const ml = 20, mr = 190;
   const brand: [number, number, number] = [16, 64, 112];
 
-  const logo = await loadLogo();
+  const logo = opts.partnerBranding && !s.logo_url ? null : await loadLogo(opts.partnerBranding ? s.logo_url || "" : aiconoLogo);
   if (logo) { const h = 14; const w = (logo.w / logo.h) * h; doc.addImage(logo.data, "PNG", 105 - w / 2, 14, (logo.w / logo.h) * h, h); }
   else { doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(...brand); doc.text(s.company_name, 105, 22, { align: "center" }); }
 

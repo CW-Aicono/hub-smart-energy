@@ -309,6 +309,27 @@
       "when": 1793269125390,
       "tag": "0043_aicono_branded_invoices",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793363446454,
+      "tag": "0044_license_sales_partner_invoice_cycles",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793363644555,
+      "tag": "0045_license_sale_security_and_calendar_job",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793363991083,
+      "tag": "0046_license_sale_retry_validation",
+      "breakpoints": true
     }
   ]
 }

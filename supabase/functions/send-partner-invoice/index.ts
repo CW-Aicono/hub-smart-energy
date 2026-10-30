@@ -1,0 +1,15 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { z } from "npm:zod@3";
+import { Resend } from "npm:resend@2.0.0";
+import { resendFrom } from "../_shared/resend-from.ts";
+const schema=z.object({invoice_id:z.string().uuid(),to:z.string().email().max(254),pdf_base64:z.string().min(1).max(8000000)});
+const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]||c));
+Deno.serve(async req=>{
+ const json=(b:unknown,status=200)=>new Response(JSON.stringify(b),{status,headers:{...corsHeaders,"Content-Type":"application/json"}});
+ if(req.method==="OPTIONS")return new Response("ok",{headers:corsHeaders});if(req.method!=="POST")return json({error:"Method not allowed"},405);
+ try{const url=Deno.env.get("SUPABASE_URL"),key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),mailKey=Deno.env.get("RESEND_API_KEY");if(!url||!key||!mailKey)throw new Error("Versand nicht eingerichtet");const admin=createClient(url,key);const token=(req.headers.get("Authorization")||"").replace("Bearer ","");const {data:{user}}=await admin.auth.getUser(token);if(!user)return json({error:"Nicht angemeldet"},401);const parsed=schema.safeParse(await req.json());if(!parsed.success)return json({error:"Ungültige Versanddaten"},400);const p=parsed.data;
+ const {data:i,error}=await admin.from("partner_customer_invoices").select("*").eq("id",p.invoice_id).single();if(error||!i)return json({error:"Rechnung fehlt"},404);const {data:member}=await admin.from("partner_members").select("id").eq("partner_id",i.partner_id).eq("user_id",user.id).eq("partner_role","partner_admin").maybeSingle();if(!member)return json({error:"Keine Berechtigung"},403);if(!i.issued_at||i.status==="voided")return json({error:"Rechnung nicht freigegeben"},400);const sender=i.sender_snapshot as Record<string,string>;const reply=z.string().email().safeParse(sender.email);if(!reply.success)return json({error:"Antwortadresse im Rechnungsabsender fehlt"},400);
+ const {error:sendError}=await new Resend(mailKey).emails.send({from:resendFrom(sender.company_name),reply_to:reply.data,to:[p.to],subject:`Rechnung ${i.invoice_number} – ${sender.company_name}`,html:`<p>Guten Tag,</p><p>anbei erhalten Sie die Rechnung ${esc(i.invoice_number)}.</p><p>${esc(sender.company_name)}</p>`,attachments:[{filename:`Rechnung_${i.invoice_number}.pdf`,content:p.pdf_base64}]});if(sendError)throw sendError;const {error:updateError}=await admin.from("partner_customer_invoices").update({emailed_at:new Date().toISOString(),emailed_to:p.to,status:i.status==="paid"?"paid":"sent"}).eq("id",i.id).eq("partner_id",i.partner_id);if(updateError)throw updateError;return json({success:true});
+ }catch(e){return json({error:(e as Error).message},500);}
+});

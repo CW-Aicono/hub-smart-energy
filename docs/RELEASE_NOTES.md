@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.15.0 – 30.10.2026
+- Lizenzverkauf: Abrechnung je Modul/Paket oder Mengenlizenz einmalig, monatlich, quartalsweise oder halbjährlich; neue Verkäufe zeitanteilig als Entwurf.
+- Partner-Endkundenrechnungen mit eigenen Absenderdaten, Nummernkreis, PDF, bewusster E-Mail-Freigabe und SEPA-Export. AICONO-Einkaufsentwürfe bleiben getrennt.
+- Täglicher Abrechnungslauf holt fällige Zeiträume nach; bestehende Verträge werden nicht automatisch umgestellt.
+
 ## v1.14.0 – 29.10.2026
 - Rechnungen im AICONO-GmbH-Branding: PDF mit allen Pflichtangaben, fortlaufender Rechnungsnummer und ausgewiesener Umsatzsteuer, Versand per E-Mail direkt aus dem Portal.
 - Neu: freie Rechnungen mit eigenen Positionen an Kunden oder Partner; Absenderdaten unter „Rechnungsabsender“ pflegbar.

@@ -15,6 +15,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "@/hooks/use-toast";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { PartnerDiscountRequestsCard } from "@/components/billing/DiscountRequests";
+import { LicenseSales } from "@/components/billing/LicenseSales";
+import { PartnerCustomerInvoices } from "@/components/billing/PartnerCustomerInvoices";
 
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
 const fmtEur = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -217,6 +219,8 @@ export default function PartnerBilling() {
 
       {partnerId && <PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} />}
       {partnerId && <PackageBillingOverviewCard partnerId={partnerId} />}
+      {!isCommission && <LicenseSales partnerId={partnerId} canEdit={isPartnerAdmin} />}
+      {!isCommission && <PartnerCustomerInvoices partnerId={partnerId} canEdit={isPartnerAdmin} />}
 
       {isCommission ? (
         <Card>

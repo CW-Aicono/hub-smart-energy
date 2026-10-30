@@ -3,6 +3,7 @@
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## Unreleased
+- v1.15.0: Explicit license sales with once/monthly/quarterly/halfyearly cadence, catalog purchase snapshots, daily due draft generation and transactional billing-event idempotency. Separate partner customer invoices/settings/counters, partner-scoped issuance with immutable snapshots, PDF/email and approved-only SEPA export. Legacy monthly billing excludes explicitly sold positions; issued partner wholesale invoices are no longer overwritten. Existing bookings remain unchanged.
 - Rechnungs-PDF: Logo mittig, Leistungszeitraum überlappt nicht mehr.
 
 ## [Unreleased]
