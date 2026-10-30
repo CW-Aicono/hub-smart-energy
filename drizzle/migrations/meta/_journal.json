@@ -400,6 +400,13 @@
       "when": 1793386132115,
       "tag": "0056_invoice_flows_step4",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1793389179699,
+      "tag": "0057_tenant_package_summary_step6",
+      "breakpoints": true
     }
   ]
 }
