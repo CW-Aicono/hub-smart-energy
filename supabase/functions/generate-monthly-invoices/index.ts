@@ -544,6 +544,11 @@ Deno.serve(async (req) => {
     for (const [pid, entries] of Object.entries(collectives)) {
       const c = buildCollective(entries);
       if (!c.lines.length) continue;
+      // Frühere Einzelentwürfe je Kunde (vor der Sammelrechnung) durch die Sammelrechnung ersetzen
+      const oldRefs = entries.map((e) => `monthly:partner:${e.tenant.id}:${monthKey}`);
+      const { error: delErr } = await supabase.from("tenant_invoices").delete().in("source_ref", oldRefs)
+        .is("issued_at", null).is("lexware_invoice_id", null).eq("status", "draft");
+      if (delErr) throw delErr;
       const first = [...entries].sort((a, b) => a.tenant.name.localeCompare(b.tenant.name, "de"))[0].tenant;
       partnerDrafts.push({ tenant_id: first.id, partner_id: pid, invoice_kind: "recurring",
         source_ref: `monthly:partner-sum:${pid}:${monthKey}`, invoice_number: c.amount > 0 ? "DRAFT" : "ABO-BELEG",
