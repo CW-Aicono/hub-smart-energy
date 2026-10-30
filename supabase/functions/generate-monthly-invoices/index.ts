@@ -554,7 +554,7 @@ Deno.serve(async (req) => {
         source_ref: `monthly:partner-sum:${pid}:${monthKey}`, invoice_number: c.amount > 0 ? "DRAFT" : "ABO-BELEG",
         document_type: c.amount > 0 ? "invoice" : "subscription_notice", status: "draft",
         period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), amount: c.amount, module_total: c.amount, support_total: 0,
-        usage_review: !!reviewByPartner[pid], usage_delta: `Sammelrechnung ${entries.length} Kunde(n)`, line_items: c.lines });
+        usage_review: !!reviewByPartner[pid], usage_delta: null, line_items: c.lines });
     }
     // Provision: monatliche Gutschrift an den Partner
     for (const [pid, entries] of Object.entries(commissions)) {
