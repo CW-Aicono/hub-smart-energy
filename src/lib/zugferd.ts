@@ -79,7 +79,7 @@ const xmp = (title: string) => `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTc
 export async function embedZugferd(pdfBytes: ArrayBuffer | Uint8Array, xml: string, title: string): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(pdfBytes);
   const ctx = pdf.context;
-  const data = new TextEncoder().encode(xml);
+  const data = new Uint8Array(new TextEncoder().encode(xml));
   const now = new Date();
   const file = ctx.flateStream(data, { Type: "EmbeddedFile", Subtype: "text/xml", Params: { ModDate: PDFString.fromDate(now), Size: data.length } });
   const fileRef = ctx.register(file);
@@ -88,7 +88,7 @@ export async function embedZugferd(pdfBytes: ArrayBuffer | Uint8Array, xml: stri
   const catalog = pdf.catalog;
   catalog.set(PDFName.of("AF"), ctx.obj([specRef]));
   catalog.set(PDFName.of("Names"), ctx.obj({ EmbeddedFiles: { Names: [PDFHexString.fromText("factur-x.xml"), specRef] } }));
-  const meta = ctx.stream(new TextEncoder().encode(xmp(title)), { Type: "Metadata", Subtype: "XML" });
+  const meta = ctx.stream(new Uint8Array(new TextEncoder().encode(xmp(title))), { Type: "Metadata", Subtype: "XML" });
   catalog.set(PDFName.of("Metadata"), ctx.register(meta));
   pdf.setTitle(title);
   pdf.setProducer("AICONO EMS");
