@@ -147,7 +147,7 @@ const OcppLogViewer = ({ chargePointId, ocppId, showCpColumn = false }: OcppLogV
     try {
       const raw = JSON.stringify(log.raw_message);
       const match = raw.match(/"vendorErrorCode"\s*:\s*"([^"]+)"/);
-      if (match && match[1] && match[1] !== "" && match[1] !== "0" && match[1] !== "0x00000000") {
+      if (match && match[1] && !BENIGN_VENDOR_CODES.has(match[1])) {
         return match[1];
       }
     } catch {}
