@@ -584,6 +584,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
 
           <section>
             <h4 className="font-semibold mb-2">{T("manual.ev.statusTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-3">{T("manual.ev.ocppStates")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
               <li><span className="text-green-600 font-medium">{T("manual.ev.statusAvailable")}</span></li>
               <li><span className="text-blue-600 font-medium">{T("manual.ev.statusCharging")}</span></li>

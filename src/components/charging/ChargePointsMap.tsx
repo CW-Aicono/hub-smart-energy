@@ -1,3 +1,4 @@
+import { getChargePointStatusMeta } from "@/lib/chargePointStatusPresentation";
 import "leaflet/dist/leaflet.css";
 import { useMemo, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Circle } from "react-leaflet";
@@ -224,13 +225,14 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         {validPoints.map((cp) => {
           const s = normalizeConnectorStatus(cp.status, (cp as any).ws_connected !== false);
           const statusKey = `chargePointStatus.${s}` as any;
-          const statusLabel = s === "charging" ? t("chargingStats.occupied" as any) : (t(statusKey) || s);
-          const cfgVariant = statusVariantMap[s] || statusVariantMap.offline;
+          const meta = getChargePointStatusMeta(s);
+          const statusLabel = t(meta.labelKey);
+          const cfgVariant = meta.variant;
           return (
             <Marker
               key={cp.id}
               position={[cp.latitude!, cp.longitude!]}
-              icon={createColoredIcon(statusColors[s] || statusColors.offline)}
+              icon={createColoredIcon(`hsl(${getComputedStyle(document.documentElement).getPropertyValue(`--${meta.token}`).trim()})`)}
               draggable={editMode}
               eventHandlers={{
                 click: () => { if (!editMode) onChargePointClick?.(cp); },

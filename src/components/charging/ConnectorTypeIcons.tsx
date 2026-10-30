@@ -1,3 +1,5 @@
+import { getChargePointStatusMeta } from "@/lib/chargePointStatusPresentation";
+import { useTranslation } from "@/hooks/useTranslation";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const CONNECTOR_ICONS: Record<string, { label: string; path: string; color: string }> = {
@@ -24,14 +26,7 @@ const CONNECTOR_ICONS: Record<string, { label: string; path: string; color: stri
 };
 
 // Status-Punkte (kleiner Indikator oben rechts am Stecker-Icon)
-const STATUS_DOT: Record<string, { color: string; label: string }> = {
-  available: { color: "bg-green-500", label: "Verfügbar" },
-  charging: { color: "bg-blue-500", label: "Belegt" },
-  faulted: { color: "bg-red-500", label: "Fehler" },
-  offline: { color: "bg-orange-500", label: "Offline" },
-  unavailable: { color: "bg-yellow-500", label: "Nicht verfügbar" },
-  unconfigured: { color: "bg-purple-500", label: "Nicht konfiguriert" },
-};
+
 
 interface ConnectorStatusInfo {
   connectorId: number;
@@ -46,6 +41,7 @@ interface Props {
 }
 
 export default function ConnectorTypeIcons({ connectorType, connectorCount, connectorStatuses }: Props) {
+  const { t } = useTranslation();
   const types = connectorType ? connectorType.split(",").filter(Boolean) : ["Other"];
 
   // Build list of icons to render
@@ -84,7 +80,7 @@ export default function ConnectorTypeIcons({ connectorType, connectorCount, conn
     ? connectorStatuses
         .slice()
         .sort((a, b) => a.connectorId - b.connectorId)
-        .map((s) => `Stecker ${s.connectorId}: ${STATUS_DOT[s.status]?.label ?? s.status}`)
+        .map((s) => `Stecker ${s.connectorId}: ${t(getChargePointStatusMeta(s.status).labelKey)}`)
         .join(" · ")
     : null;
 
@@ -95,7 +91,7 @@ export default function ConnectorTypeIcons({ connectorType, connectorCount, conn
           <div className="flex items-center gap-1">
             {icons.map((icon, i) => {
               const status = statusById.get(icon.connectorId ?? i + 1);
-              const dot = status ? STATUS_DOT[status] : null;
+              const dot = status ? getChargePointStatusMeta(status) : null;
               return (
                 <div key={i} className="relative inline-flex">
                   <svg
@@ -107,8 +103,8 @@ export default function ConnectorTypeIcons({ connectorType, connectorCount, conn
                   </svg>
                   {dot && (
                     <span
-                      className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-background ${dot.color}`}
-                      aria-label={dot.label}
+                      className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-background ${dot.dotColor}`}
+                      aria-label={t(dot.labelKey)}
                     />
                   )}
                 </div>

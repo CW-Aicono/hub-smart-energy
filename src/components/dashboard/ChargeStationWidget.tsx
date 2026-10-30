@@ -1,3 +1,5 @@
+import { getChargePointStatusMeta } from "@/lib/chargePointStatusPresentation";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,13 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { normalizeConnectorStatus } from "@/lib/formatCharging";
 
-const STATUS_LABEL: Record<string, string> = {
-  available: "Verfügbar",
-  charging: "Lädt",
-  offline: "Offline",
-  faulted: "Fehler",
-  unavailable: "Nicht verfügbar",
-};
+
 
 const nf = (v: number, d = 1) => v.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtPower = (w: number | null) => (w == null ? "–" : w >= 1000 ? `${nf(w / 1000, 2)} kW` : `${nf(w, 0)} W`);
@@ -29,6 +25,7 @@ type Sample = { charge_point_id: string | null; measurand: string | null; value:
  * (Leistung, Status, Verbindung, Zählerstand, laufender Ladevorgang).
  */
 export default function ChargeStationWidget() {
+  const { t } = useTranslation();
   const { tenant } = useTenant();
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-charge-station", tenant?.id],
@@ -125,7 +122,7 @@ export default function ChargeStationWidget() {
                 </div>
                 <div className="flex items-end justify-between gap-2">
                   <Badge variant={cp.status === "charging" ? "default" : cp.status === "faulted" ? "destructive" : "secondary"}>
-                    {STATUS_LABEL[cp.status] ?? cp.status}
+                    {t(getChargePointStatusMeta(cp.status).labelKey)}
                   </Badge>
                   <div className="text-right">
                     <p className="text-xl font-bold tabular-nums leading-none">{fmtPower(cp.powerW)}</p>
