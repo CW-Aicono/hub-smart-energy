@@ -22,6 +22,7 @@ Deno.serve(async req => {
     const {data:existing,error:preflightError}=await client.rpc("preflight_license_sale",args);
     if(preflightError)return json({error:preflightError.message},400);
     if(existing)return json({id:existing});
+    if(p.product_kind==="module") return json({error:"Neue Verkäufe nur als Paket"},400);
     let modules:string[]=[];
     if(p.product_kind==="package") {
       const {data:def}=await admin.from("pricing_packages").select("requires_package,requires_any_other").eq("code",p.product_code).eq("active",true).eq("always_active",false).single(); if(!def) return json({error:"Paket nicht buchbar"},400);
@@ -31,7 +32,7 @@ Deno.serve(async req => {
       if(def.requires_package&&!active.has(def.requires_package)) return json({error:"Benötigtes Paket zuerst buchen"},400);
       if(def.requires_any_other&&active.size===0) return json({error:"Mindestens ein weiteres Paket erforderlich"},400);
       const {data:mods,error}=await admin.from("pricing_package_modules").select("module_code").eq("package_code",p.product_code); if(error) throw error; modules=(mods||[]).map(x=>x.module_code);
-    } else modules=[p.product_kind==="unit" ? p.product_code==="charge_point"?"ev_charging":"locations" : p.product_code];
+    } else modules=p.product_code==="charge_point"?["ev_charging","adhoc_payment"]:p.product_code==="extra_location"?["locations"]:[];
     const {data:oldModules,error:oldError}=await admin.from("tenant_modules").select("module_code,is_enabled").eq("tenant_id",p.tenant_id).in("module_code",modules);
     if(oldError)throw oldError;
     const granted:string[]=[];

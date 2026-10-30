@@ -344,6 +344,27 @@
       "when": 1793364446700,
       "tag": "0048_license_invoice_payment_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1793365197068,
+      "tag": "0049_package_only_new_sales",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793365240524,
+      "tag": "0050_package_sale_catalog_validation",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1793365282584,
+      "tag": "0051_package_sales_and_support",
+      "breakpoints": true
     }
   ]
 }

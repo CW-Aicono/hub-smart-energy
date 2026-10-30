@@ -11772,6 +11772,8 @@ export type Database = {
           code: string
           ek: number
           name: string
+          new_sale_uvp: number | null
+          partner_available: boolean
           unit: string
           updated_at: string
           uvp: number
@@ -11780,6 +11782,8 @@ export type Database = {
           code: string
           ek?: number
           name: string
+          new_sale_uvp?: number | null
+          partner_available?: boolean
           unit: string
           updated_at?: string
           uvp?: number
@@ -11788,6 +11792,8 @@ export type Database = {
           code?: string
           ek?: number
           name?: string
+          new_sale_uvp?: number | null
+          partner_available?: boolean
           unit?: string
           updated_at?: string
           uvp?: number
@@ -16803,6 +16809,15 @@ export type Database = {
           p_ttl_seconds?: number
         }
         Returns: boolean
+      }
+      validate_package_sale_input: {
+        Args: {
+          p_code: string
+          p_kind: string
+          p_quantity: number
+          p_tenant: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

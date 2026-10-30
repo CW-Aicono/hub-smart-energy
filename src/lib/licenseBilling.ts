@@ -1,7 +1,7 @@
 import { z } from "zod";
 export const cadenceMonths = { once: 0, monthly: 1, quarterly: 3, halfyearly: 6 } as const;
 export type BillingCadence = keyof typeof cadenceMonths;
-export const saleSchema = z.object({ tenant: z.string().uuid(), kind: z.enum(["module", "package", "unit"]), code: z.string().min(2).max(64), quantity: z.number().int().min(1).max(100000), cadence: z.enum(["once", "monthly", "quarterly", "halfyearly"]), price: z.number().finite().min(0).max(1000000), payment: z.enum(["invoice", "sepa"]) });
+export const saleSchema = z.object({ tenant: z.string().uuid(), kind: z.enum(["package", "unit"]), code: z.string().min(2).max(64), quantity: z.number().int().min(1).max(100000), cadence: z.enum(["once", "monthly", "quarterly", "halfyearly"]), price: z.number().finite().min(0).max(1000000), payment: z.enum(["invoice", "sepa"]) }).refine(p => p.kind === "package" ? p.code !== "p4_charging" && p.quantity === 1 : ["charge_point", "extra_location", "remote_support"].includes(p.code));
 export function licensePeriodEnd(day: string, cadence: BillingCadence) {
   if (cadence === "once") return day;
   const d = new Date(`${day}T00:00:00Z`), months = cadenceMonths[cadence];

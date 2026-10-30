@@ -13,8 +13,10 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
-    const url = Deno.env.get("SUPABASE_URL")!;
-    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const url = Deno.env.get("SUPABASE_URL");
+    const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !service) throw new Error("Konfiguration fehlt");
+    const admin = createClient(url, service, { auth: { persistSession: false } });
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "");
     if (!token) return json({ error: "Nicht angemeldet." }, 401);
@@ -37,6 +39,7 @@ Deno.serve(async (req) => {
 
     const { data: activeRows } = await admin.from("tenant_package_bookings").select("package_code").eq("tenant_id", tenantId).is("cancelled_at", null);
     const active = new Set((activeRows ?? []).map((r) => r.package_code));
+    if (book && !active.has(pkg)) return json({ error: "Neue Pakete unter Verträge & Paketbuchungen buchen." }, 400);
     const next = new Set(active);
     if (book) next.add(pkg); else next.delete(pkg);
 
@@ -55,7 +58,7 @@ Deno.serve(async (req) => {
     const { data: explicitSales, error: salesError } = await admin.from("license_sales").select("product_kind,product_code").eq("tenant_id", tenantId).is("ended_on", null);
     if (salesError) throw salesError;
     if ((explicitSales ?? []).some((s) => s.product_kind === "package" && s.product_code === pkg || s.product_kind === "module" && modsOf(pkg).includes(s.product_code))) {
-      return json({ error: "Dieses Paket berührt einen neuen Lizenzvertrag. Bitte über Verträge & Lizenzverkäufe verwalten." }, 400);
+      return json({ error: "Dieses Paket berührt einen Paketvertrag. Bitte über Verträge & Paketbuchungen verwalten." }, 400);
     }
     const basis = new Set((defs ?? []).filter((d) => d.always_active).flatMap((d) => modsOf(d.code)));
     let targets: string[];

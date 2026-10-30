@@ -303,6 +303,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground">{T("manual.billing.v150Text")}</p>
             <h4 className="font-semibold mb-2 mt-4">{T("license.contracts")}</h4>
             <p className="text-sm text-muted-foreground">{T("manual.billing.licenseSales")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.packageCatalog")}</p>
           </section>
           <section>
             <h4 className="font-semibold mb-2">{T("manual.energy.widgetTitle")}</h4>

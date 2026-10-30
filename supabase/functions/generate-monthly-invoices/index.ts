@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
       }
       for (const tm of isPkg ? [] : tenantModules) {
         if (tm.module_code === "dashboard") continue;
-        if (covered(tenant.id, "module", tm.module_code)) continue;
+        if (covered(tenant.id, "module", tm.module_code) || (["ev_charging", "adhoc_payment"].includes(tm.module_code) && covered(tenant.id, "unit", "charge_point"))) continue;
         const packageCovered = (contractSales ?? []).some((s: any) => s.tenant_id === tenant.id && s.product_kind === "package" && s.starts_on <= fmt(lastMonthEnd));
         if (packageCovered) {
           const { data: maps, error: mapErr } = await supabase.from("pricing_package_modules").select("package_code").eq("module_code", tm.module_code);
