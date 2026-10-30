@@ -1,5 +1,8 @@
 # Roadmap
 
+## Ladestatus (30.10.)
+- [x] v1.16.1: Alle OCPP-Zustände getrennt anzeigen; Stationsmeldungen nicht durch offene Sitzungen überschreiben. 23 Tests erfolgreich, angemeldete ELMI-Detailansicht und neun Zustände in öffentlicher Prüfansicht verifiziert; vier Sprachen gepflegt. Keine Stationskonfiguration oder Fernbefehle geändert.
+
 ## Paketumstellung (30.10.)
 - [x] v1.16.0: Neue Buchungen und Rechnungsauswahl nur Pakete/Zusatzleistungen; monatliche Nettopreise, 8 € je Ladepunkt; Bestandsverträge unverändert. 39 Tests, angemeldete Portal-/Partnerauswahl und Vertrag mit anteiligem Entwurf (6,39 €) geprüft; Prüfdaten entfernt. Vorhandener Ladepunkt-Partner-EK 5,25 € unverändert, da kein neuer genannt.
 

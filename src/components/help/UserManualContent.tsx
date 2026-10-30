@@ -584,12 +584,11 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
 
           <section>
             <h4 className="font-semibold mb-2">{T("manual.ev.statusTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-3">{T("manual.ev.ocppStates")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><span className="text-green-600 font-medium">{T("manual.ev.statusAvailable")}</span></li>
-              <li><span className="text-blue-600 font-medium">{T("manual.ev.statusCharging")}</span></li>
-              <li><span className="text-red-600 font-medium">{T("manual.ev.statusError")}</span></li>
-              <li><span className="text-yellow-600 font-medium">{T("manual.ev.statusUnavailable")}</span></li>
-              <li><span className="text-orange-600 font-medium">{T("manual.ev.statusOffline")}</span></li>
+              {["available", "preparing", "charging", "suspended_ev", "suspended_evse", "finishing", "reserved", "occupied", "unavailable", "faulted", "offline", "unconfigured", "unknown"].map((state) => (
+                <li key={state}>{T(`chargePointStatus.${state}`)}</li>
+              ))}
             </ul>
           </section>
         </div>

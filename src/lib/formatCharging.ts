@@ -50,7 +50,9 @@ export function normalizeConnectorStatus(
 }
 
 export function isOccupiedChargingStatus(raw: string | null | undefined): boolean {
-  return normalizeChargePointStatus({ rawStatus: raw, wsConnected: true }) === "charging";
+  return ["preparing", "charging", "suspended_ev", "suspended_evse", "finishing", "reserved", "occupied"].includes(
+    normalizeChargePointStatus({ rawStatus: raw, wsConnected: true }),
+  );
 }
 
 /**

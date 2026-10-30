@@ -19,3 +19,5 @@
 - New package and additional-service contracts reuse transactional `license_sales`/`license_billing_events`; separate modules are rejected for new sales, historical contracts remain billable, and current unit recommendations use `new_sale_uvp` without repricing legacy catalog consumers — preserves customer contracts and separates resale from wholesale.
 - Charge points are mirrored as meters via the `sync_charge_point_meter` trigger and `meters.source_charge_point_id`, reusing the existing OCPP forwarding to `linked_meter_id` — one data path, all meter features apply.
 - Battery setpoints go through `_shared/elmiAio.ts` (computeStorageSetpointKw) and are delivered to the on-site controller (Loxone virtual input); `energy_storages.allow_grid_discharge` is forced false by trigger — grid discharge stays locked until the grid operator approves.
+
+- OCPP display states remain distinct through chargePointStatus and shared chargePointStatusPresentation; open billing sessions never override reported connector states — preserves physical station truth across all charging views.

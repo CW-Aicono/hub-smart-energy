@@ -1,3 +1,4 @@
+import { CHARGE_POINT_STATUS_META } from "@/lib/chargePointStatusPresentation";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
@@ -66,13 +67,7 @@ import { ShieldCheck } from "lucide-react";
 import { downloadSecureStorageObject } from "@/lib/secureStorage";
 
 
-const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
-  available: { labelKey: "cpd.available", color: "hsl(var(--primary))", variant: "default", icon: Zap },
-  charging: { labelKey: "cpd.charging", color: "hsl(var(--secondary))", variant: "secondary", icon: PlugZap },
-  faulted: { labelKey: "cpd.faulted", color: "hsl(var(--destructive))", variant: "destructive", icon: AlertTriangle },
-  unavailable: { labelKey: "cpd.unavailable", color: "hsl(var(--muted-foreground))", variant: "outline", icon: ZapOff },
-  offline: { labelKey: "cpd.offline", color: "hsl(var(--muted-foreground))", variant: "outline", icon: WifiOff },
-};
+const STATUS_KEYS = CHARGE_POINT_STATUS_META;
 
 const ChargePointDetail = () => {
   const { t } = useTranslation();
@@ -360,8 +355,9 @@ const ChargePointDetail = () => {
 
   // Status-Lookup case-insensitiv (DB liefert "Available" mit Großbuchstabe direkt von OCPP)
   const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
-  const normalizedStatus = normalizeConnectorStatus(cp.status, cpOnline);
-  const cfg = STATUS_KEYS[normalizedStatus] || STATUS_KEYS.offline;
+  const selectedConnector = connectors.find((connector) => connector.connector_id === selectedConnectorId);
+  const normalizedStatus = normalizeConnectorStatus(selectedConnector?.status ?? cp.status, cpOnline);
+  const cfg = STATUS_KEYS[normalizedStatus as keyof typeof STATUS_KEYS] || STATUS_KEYS.offline;
   const StatusIcon = cfg.icon;
 
   // Warnings

@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.16.1 – 30.10.2026
+- Alle OCPP-Ladestatus getrennt dargestellt, insbesondere Vorbereitung, Fahrzeug-/Stationspause, Beendet und Reserviert. Offene Sitzungen überschreiben gemeldete Zustände nicht; Statusanzeige in Listen, Details, Karten, Widgets und Lade-App vereinheitlicht.
+
 ## v1.16.0 – 30.10.2026
 - Neue Buchungen und Rechnungsauswahl bieten Pakete und Zusatzleistungen statt einzelner Module/Lizenzen.
 - Ladeinfrastruktur: 8 € netto pro Ladepunkt und Monat für neue Verkäufe; bestehende Verträge und Preise bleiben unverändert.

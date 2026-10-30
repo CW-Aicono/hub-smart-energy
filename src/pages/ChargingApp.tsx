@@ -1,3 +1,6 @@
+import { CHARGE_POINT_STATUS_META, getChargePointStatusMeta } from "@/lib/chargePointStatusPresentation";
+import { normalizeConnectorStatus } from "@/lib/formatCharging";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useState, useEffect, useRef, useCallback, lazy, Suspense, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -379,7 +382,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
       .then(({ data }) => {
         if (data && data.length > 0) {
           // Normalize OCPP status casing (DB stores "Available", code expects "available")
-          const normalized = data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() }));
+          const normalized = data.map((c) => ({ ...c, status: normalizeConnectorStatus(c.status) }));
           setDrawerConnectors(normalized);
           // Auto-select initial connector if valid
           if (drawerConnectorId && normalized.some(c => c.connector_id === drawerConnectorId)) {
@@ -394,8 +397,9 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
   }, [selectedCp?.id, selectedCp?.connector_count]);
 
 
+  const { t } = useTranslation();
   const statusLabel: Record<string, string> = {
-    available: "Verfügbar", charging: "Belegt", faulted: "Gestört", unavailable: "Nicht verfügbar", offline: "Offline",
+    ...Object.fromEntries(Object.entries(CHARGE_POINT_STATUS_META).map(([key, meta]) => [key, t(meta.labelKey)])),
   };
 
   const openNavigation = (cp: AppChargePoint) => {
@@ -583,7 +587,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                         <p className="text-xs text-muted-foreground">{fmtKw(cp.max_power_kw)} · {cp.connector_type.split(",").map(t => t === "Type2" ? "Typ 2" : t === "Other" ? "Sonstige" : t).join(", ")}</p>
                       </div>
                       <Badge variant={isAvailable ? "default" : "secondary"} className="shrink-0">
-                        {statusLabel[cp.status] || cp.status}
+                        {t(getChargePointStatusMeta(normalizeConnectorStatus(cp.status)).labelKey)}
                       </Badge>
                       <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                     </button>
@@ -617,7 +621,7 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                     )}
                   </div>
                   <Badge variant={selectedCp.status === "available" ? "default" : "secondary"}>
-                    {statusLabel[selectedCp.status] || selectedCp.status}
+                    {t(getChargePointStatusMeta(normalizeConnectorStatus(selectedCp.status)).labelKey)}
                   </Badge>
                 </div>
               </DrawerHeader>
@@ -664,16 +668,12 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                           `}
                         >
                           <div className="flex items-center justify-center gap-1.5 mb-0.5">
-                            <span className={`h-2 w-2 rounded-full ${
-                              c.status === "available" ? "bg-emerald-500" :
-                              c.status === "charging" ? "bg-blue-500" :
-                              c.status === "faulted" ? "bg-destructive" : "bg-muted-foreground"
-                            }`} />
+                            <span className={`h-2 w-2 rounded-full ${getChargePointStatusMeta(c.status).dotColor}`} />
                             {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
                           </div>
                           <p className="text-xs font-medium">{c.name || `Anschluss ${c.connector_id}`}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {c.status === "available" ? "Frei" : c.status === "charging" ? "Lädt" : c.status === "faulted" ? "Gestört" : c.status}
+                            {t(getChargePointStatusMeta(c.status).labelKey)}
                           </p>
                         </button>
                       );
@@ -719,8 +719,9 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
 
 // ---- Station Detail ----
 function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: AppChargePoint; onBack: () => void; onStartCharge: (cpId: string, connectorId?: number) => void; initialConnector?: number | null }) {
+  const { t } = useTranslation();
   const statusLabel: Record<string, string> = {
-    available: "Verfügbar", charging: "Belegt", faulted: "Gestört", unavailable: "Nicht verfügbar", offline: "Offline",
+    ...Object.fromEntries(Object.entries(CHARGE_POINT_STATUS_META).map(([key, meta]) => [key, t(meta.labelKey)])),
   };
   const canCharge = cp.status === "available";
   const [selectedConnector, setSelectedConnector] = useState<number>(initialConnector || 1);
@@ -735,7 +736,7 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
       .order("display_order")
       .then(({ data }) => {
         if (data && data.length > 0) {
-          setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
+          setConnectors(data.map((c) => ({ ...c, status: normalizeConnectorStatus(c.status) })));
         }
       });
   }, [cp.id, cp.connector_count]);
@@ -752,7 +753,7 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
           .eq("charge_point_id", cp.id)
           .order("display_order")
           .then(({ data }) => {
-            if (data) setConnectors(data.map((c) => ({ ...c, status: (c.status || "").toLowerCase() })));
+            if (data) setConnectors(data.map((c) => ({ ...c, status: normalizeConnectorStatus(c.status) })));
           });
       })
       .subscribe();
@@ -790,7 +791,7 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
       </div>
       <div className="flex-1 overflow-auto p-4 space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Status</p><Badge variant={canCharge ? "default" : "secondary"} className="mt-1">{statusLabel[cp.status] || cp.status}</Badge></CardContent></Card>
+          <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Status</p><Badge variant={canCharge ? "default" : "secondary"} className="mt-1">{t(getChargePointStatusMeta(normalizeConnectorStatus(cp.status)).labelKey)}</Badge></CardContent></Card>
           <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Leistung</p><p className="text-lg font-bold mt-1">{fmtKw(cp.max_power_kw)}</p></CardContent></Card>
           <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Stecker</p><p className="text-sm font-medium mt-1">{cp.connector_type}</p></CardContent></Card>
           <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Anschlüsse</p><p className="text-lg font-bold mt-1">{cp.connector_count}</p></CardContent></Card>
@@ -817,11 +818,11 @@ function StationDetail({ cp, onBack, onStartCharge, initialConnector }: { cp: Ap
                     `}
                   >
                     <div className="flex items-center justify-center gap-1.5 mb-1">
-                      <span className={`h-2.5 w-2.5 rounded-full ${connectorStatusColor[c.status] || "bg-muted-foreground"}`} />
+                      <span className={`h-2.5 w-2.5 rounded-full ${getChargePointStatusMeta(c.status).dotColor}`} />
                       {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
                     </div>
                     <p className="text-xs font-medium">{c.name || `Anschluss ${c.connector_id}`}</p>
-                    <p className="text-[10px] text-muted-foreground">{connectorStatusLabel[c.status] || c.status}</p>
+                    <p className="text-[10px] text-muted-foreground">{t(getChargePointStatusMeta(c.status).labelKey)}</p>
                   </button>
                 );
               })}

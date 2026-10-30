@@ -1,3 +1,4 @@
+import { CHARGE_POINT_STATUS_META } from "@/lib/chargePointStatusPresentation";
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router-dom";
@@ -87,14 +88,7 @@ const ChargingPoints = () => {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient, tenant?.id]);
 
-  const statusConfig: Record<string, { labelKey: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap; color: string }> = {
-    available: { labelKey: "charging.statusAvailable", variant: "default", icon: Zap, color: "text-green-500" },
-    charging: { labelKey: "chargingStats.occupied", variant: "secondary", icon: PlugZap, color: "text-blue-500" },
-    faulted: { labelKey: "charging.statusFaulted", variant: "destructive", icon: AlertTriangle, color: "text-red-500" },
-    unavailable: { labelKey: "charging.statusUnavailable", variant: "outline", icon: ZapOff, color: "text-yellow-500" },
-    offline: { labelKey: "charging.statusOffline", variant: "outline", icon: WifiOff, color: "text-orange-500" },
-    unconfigured: { labelKey: "charging.statusUnconfigured", variant: "outline", icon: Settings, color: "text-purple-500" },
-  };
+  const statusConfig = CHARGE_POINT_STATUS_META;
 
 
   const [addOpen, setAddOpen] = useState(false);
@@ -154,16 +148,6 @@ const ChargingPoints = () => {
   const getConnectorStatuses = (cp: ChargePoint): { connectorId: number; status: string }[] => {
     const wsOnline = cp.ws_connected !== false;
     const connectors = connectorsByChargePoint.get(cp.id) ?? [];
-    const activeConnectorIds = new Set(
-      activeSessions
-        .filter((s) => s.charge_point_id === cp.id)
-        .map((s) => s.connector_id)
-        .filter((id) => typeof id === "number" && id > 0),
-    );
-    // Fallback: aktive Session ohne (oder mit 0) connector_id -> belegt den ersten Stecker
-    const hasUnassignedActive = activeSessions.some(
-      (s) => s.charge_point_id === cp.id && (!s.connector_id || s.connector_id <= 0),
-    );
 
     if (connectors.length > 0) {
       return connectors
@@ -175,13 +159,12 @@ const ChargingPoints = () => {
           if (!wsOnline) {
             return { connectorId: c.connector_id, status: "offline" };
           }
-          const isActive = activeConnectorIds.has(c.connector_id) || (hasUnassignedActive && idx === 0 && activeConnectorIds.size === 0);
           const reported = normalizeConnectorStatus(c.status, wsOnline);
           // Meldung der Wallbox ist maßgeblich: meldet sie "frei", zählt ein
           // offener (hängender) Ladevorgang nicht als belegt.
           return {
             connectorId: c.connector_id,
-            status: isActive && reported !== "available" ? "charging" : reported,
+            status: reported,
           };
         });
     }
@@ -192,10 +175,9 @@ const ChargingPoints = () => {
       if (!wsOnline) {
         return { connectorId, status: "offline" };
       }
-      const isActive = activeConnectorIds.has(connectorId) || (hasUnassignedActive && i === 0 && activeConnectorIds.size === 0);
       return {
         connectorId,
-        status: (() => { const r = normalizeConnectorStatus(cp.status, wsOnline); return isActive && r !== "available" ? "charging" : r; })(),
+        status: normalizeConnectorStatus(cp.status, wsOnline),
       };
     });
   };
@@ -231,7 +213,7 @@ const ChargingPoints = () => {
 
   const filteredChargePoints = useMemo(() => {
     const base = statusFilter
-      ? chargePoints.filter((cp) => getEffectiveStatus(cp) === statusFilter)
+      ? chargePoints.filter((cp) => getConnectorStatuses(cp).some((c) => c.status === statusFilter))
       : chargePoints;
     const dir = sortDir === "asc" ? 1 : -1;
     const getVal = (cp: ChargePoint): string | number => {
@@ -591,7 +573,7 @@ const ChargingPoints = () => {
                 <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <CardTitle>
-                      {statusFilter ? `${t("charging.chargePointsFiltered" as any)} ${t(statusConfig[statusFilter]?.labelKey as any)}` : t("charging.allChargePoints" as any)}
+                      {statusFilter ? `${t("charging.chargePointsFiltered" as any)} ${t(statusConfig[statusFilter as keyof typeof statusConfig]?.labelKey as any)}` : t("charging.allChargePoints" as any)}
                     </CardTitle>
                     <div className="flex items-center gap-2 flex-wrap">
                       {isAdmin && (
@@ -706,7 +688,7 @@ const ChargingPoints = () => {
                       <TableBody>
                         {filteredChargePoints.map((cp) => {
                           const effectiveStatus = getEffectiveStatus(cp);
-                          const cfg = statusConfig[effectiveStatus] || statusConfig.offline;
+                          const cfg = statusConfig[effectiveStatus as keyof typeof statusConfig] || statusConfig.offline;
                           const activeSession = getActiveSession(cp.id);
                           const perConnectorStatuses = getConnectorStatuses(cp);
                           const occupiedCount = perConnectorStatuses.filter((c) => c.status === "charging").length;

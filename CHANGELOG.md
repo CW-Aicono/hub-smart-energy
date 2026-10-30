@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.16.1 – 30.10.2026
+- Alle OCPP-Ladestatus getrennt dargestellt, insbesondere Vorbereitung, Fahrzeug-/Stationspause, Beendet und Reserviert. Offene Sitzungen überschreiben gemeldete Zustände nicht; Statusanzeige in Listen, Details, Karten, Widgets und Lade-App vereinheitlicht.
+
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## Unreleased

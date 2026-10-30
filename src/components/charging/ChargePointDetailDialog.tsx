@@ -1,3 +1,5 @@
+import { CHARGE_POINT_STATUS_META, getChargePointStatusMeta } from "@/lib/chargePointStatusPresentation";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useState, useRef } from "react";
 import { ChargePoint } from "@/hooks/useChargePoints";
 import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
@@ -28,14 +30,7 @@ import { getOcppHost } from "@/lib/ocppEnvironment";
 import { downloadSecureStorageObject } from "@/lib/secureStorage";
 const OCPP_HOST = getOcppHost();
 
-const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
-  available: { label: "Verfügbar", variant: "default", icon: Zap },
-  charging: { label: "Lädt", variant: "secondary", icon: PlugZap },
-  faulted: { label: "Gestört", variant: "destructive", icon: AlertTriangle },
-  unavailable: { label: "Nicht verfügbar", variant: "outline", icon: ZapOff },
-  offline: { label: "Offline", variant: "outline", icon: WifiOff },
-  unconfigured: { label: "Nicht konfiguriert", variant: "outline", icon: Settings },
-};
+const statusConfig = CHARGE_POINT_STATUS_META;
 
 interface Props {
   chargePoint: ChargePoint | null;
@@ -58,6 +53,7 @@ export default function ChargePointDetailDialog({
   onUpdate,
   onDelete,
 }: Props) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connection_protocol: "wss" as "ws" | "wss", auth_required: true });
   const [showPassword, setShowPassword] = useState(false);
@@ -176,7 +172,7 @@ export default function ChargePointDetailDialog({
   if (!cp) return null;
 
   const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
-  const cfg = statusConfig[normalizeConnectorStatus(cp.status, cpOnline)] || statusConfig.offline;
+  const cfg = getChargePointStatusMeta(normalizeConnectorStatus(cp.status, cpOnline));
   const StatusIcon = cfg.icon;
   const cpSessions = sessions
     .filter((s) => s.charge_point_id === cp.id)
@@ -205,7 +201,7 @@ export default function ChargePointDetailDialog({
               <DocumentBadge scope="charge_point" scopeId={cp.id} label={cp.name} />
               <Badge variant={cfg.variant} className="ml-2">
                 <StatusIcon className="h-3 w-3 mr-1" />
-                {cfg.label}
+                {t(cfg.labelKey)}
               </Badge>
             </div>
           </div>

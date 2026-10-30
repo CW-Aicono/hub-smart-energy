@@ -1,3 +1,5 @@
+import { getChargePointStatusMeta } from "@/lib/chargePointStatusPresentation";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,16 +9,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { normalizeConnectorStatus } from "@/lib/formatCharging";
 
-const STATUS_LABEL: Record<string, string> = {
-  available: "Frei",
-  charging: "Lädt",
-  offline: "Offline",
-  faulted: "Störung",
-  unavailable: "Nicht verfügbar",
-};
+
 
 /** Aktuelle Ladeleistung je Ladepunkt (letzter OCPP-Messwert Power.Active.Import). */
 export default function ChargePointPowerWidget() {
+  const { t } = useTranslation();
   const { tenant } = useTenant();
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-cp-power", tenant?.id],
@@ -75,7 +72,7 @@ export default function ChargePointPowerWidget() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{cp.name}</p>
                   <Badge variant={cp.status === "charging" ? "default" : "secondary"} className="mt-1">
-                    {STATUS_LABEL[cp.status] ?? cp.status}
+                    {t(getChargePointStatusMeta(cp.status).labelKey)}
                   </Badge>
                 </div>
                 <div className="text-right">
