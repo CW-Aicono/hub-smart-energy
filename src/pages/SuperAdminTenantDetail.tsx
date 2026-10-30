@@ -2,6 +2,7 @@ import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
 import { LicenseSales } from "@/components/billing/LicenseSales";
 import { PackageBillingSwitch, usePackageBilling } from "@/components/billing/PackageBillingSwitch";
+import { useTranslation } from "@/hooks/useTranslation";
 import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndReturn } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
 import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
