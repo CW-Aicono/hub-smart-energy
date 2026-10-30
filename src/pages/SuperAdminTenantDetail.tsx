@@ -1,6 +1,7 @@
 import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
 import { LicenseSales } from "@/components/billing/LicenseSales";
+import { PackageBillingSwitch, usePackageBilling } from "@/components/billing/PackageBillingSwitch";
 import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndReturn } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
 import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
@@ -567,6 +568,7 @@ const SuperAdminTenantDetail = () => {
             </TabsList>
 
             <TabsContent value="info" className="mt-6 space-y-6">
+              {id && <PackageBillingSwitch tenantId={id} />}
               {id && <PackageBookingCard tenantId={id} />}
               {id && <LicenseSales tenantId={id} />}
               {/* Stats tiles */}
@@ -855,6 +857,7 @@ const SuperAdminTenantDetail = () => {
             </TabsContent>
 
             <TabsContent value="modules" className="mt-6 space-y-6">
+              {id && <ModulesDisplayOnlyHint tenantId={id} />}
               <Card>
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1402,3 +1405,10 @@ const SuperAdminTenantDetail = () => {
 };
 
 export default SuperAdminTenantDetail;
+
+function ModulesDisplayOnlyHint({ tenantId }: { tenantId: string }) {
+  const { t } = useTranslation();
+  const { data } = usePackageBilling(tenantId);
+  if (!data?.package_billing) return null;
+  return <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">{t("license.modulesDisplayOnly" as any)}</p>;
+}

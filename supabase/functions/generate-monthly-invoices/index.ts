@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // 1. Get all tenants
     const { data: tenants, error: tErr } = await supabase
       .from("tenants")
-      .select("id, name, partner_id, support_price_per_15min, is_aicono_member, is_kommune");
+      .select("id, name, partner_id, support_price_per_15min, is_aicono_member, is_kommune, package_billing, package_billing_from");
     if (tErr) throw tErr;
 
     // 2. Get all tenant_modules (active)
@@ -245,7 +245,9 @@ Deno.serve(async (req) => {
           moduleTotal += sum;
         }
       }
-      for (const tm of isPkg ? [] : tenantModules) {
+      // Auf Paketabrechnung umgestellt (ab Folgemonat): Modulpreise werden nur noch angezeigt, nicht berechnet.
+      const switchedToPackages = !!(tenant as any).package_billing && !!(tenant as any).package_billing_from && (tenant as any).package_billing_from <= fmt(lastMonthStart);
+      for (const tm of isPkg || switchedToPackages ? [] : tenantModules) {
         if (tm.module_code === "dashboard") continue;
         if (covered(tenant.id, "module", tm.module_code) || (["ev_charging", "adhoc_payment"].includes(tm.module_code) && covered(tenant.id, "unit", "charge_point"))) continue;
         const packageCovered = (contractSales ?? []).some((s: any) => s.tenant_id === tenant.id && s.product_kind === "package" && s.starts_on <= fmt(lastMonthEnd));
