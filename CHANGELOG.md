@@ -2,6 +2,18 @@
 
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
+## Unreleased
+- Rechnungs-PDF: Logo mittig, Leistungszeitraum überlappt nicht mehr.
+
+## [Unreleased]
+- Fix: Rechnungs-PDF-Download aus „Abrechnung" robust gegen blockierte Downloads (zusätzlicher Button „Herunterladen" im Hinweis).
+
+## v1.14.0 – 29.10.2026
+- Freie Rechnung: Auswahlfeld „Modul/Paket“ je Position füllt Bezeichnung und Preis vor (Kunde: UVP/Standardpreis, Partner: EK/Partnerpreis); Werte bleiben editierbar, keine Schema-/Logikänderung.
+- Migration drizzle 0043: aicono_billing_settings (Singleton, Seed AICONO GmbH), aicono_invoice_counter, tenant_invoices.issued_at/due_date/vat_rate/issued_by/emailed_at/emailed_to; Trigger sperren Inhalt/Löschen festgeschriebener Rechnungen; RPCs issue_aicono_invoice (fortlaufend PREFIX-JJJJ-NNNNN) und create_manual_aicono_invoice (nur can_portal_write commercial).
+- src/lib/aiconoInvoicePdf.ts (+3 Tests), components/billing/AiconoInvoices.tsx (PDF, E-Mail, freie Rechnung, Absender); Edge Function send-aicono-invoice.
+- generate-monthly-invoices überspringt Kunden mit festgeschriebener Monatsrechnung; Lexware-Sammelversand lässt festgeschriebene Rechnungen aus (Einzelversand weiter möglich).
+
 ## v1.13.2 – 29.10.2026
 - Migration drizzle 0042: Komplex-Etagen idempotent in Platzhalter-Gebäude „Gebäude 1 (bitte umbenennen)“ verschoben (inkl. meters.location_id); Trigger legt Platzhalter bei neuen Komplexen an; RPCs move_floor_to_building, convert_floor_to_building, convert_building_to_floor (SECURITY DEFINER, Admin + gleicher Mandant + gleicher Komplex, atomar).
 - ComplexBuildingsCard: Gebäude aufklappbar mit FloorList/AddFloorDialog und Umbau-Bereich; LocationDetail blendet Etagenkarte beim Komplex aus, solange dort keine Etagen hängen.

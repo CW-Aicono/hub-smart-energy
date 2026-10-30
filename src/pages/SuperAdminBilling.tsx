@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck, RefreshCw, Receipt, Search } from "lucide-react";
 import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
 import EditInvoiceContent from "@/components/super-admin/EditInvoiceContent";
+import { AiconoInvoiceRowActions, ManualInvoiceDialog, BillingSenderDialog } from "@/components/billing/AiconoInvoices";
 import { PortalDiscountRequestsCard } from "@/components/billing/DiscountRequests";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
@@ -258,12 +259,14 @@ const SuperAdminBilling = () => {
               {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Receipt className="h-4 w-4 mr-2" />}
               Rechnungen generieren
             </Button>
+            <ManualInvoiceDialog />
+            <BillingSenderDialog />
             <Button variant="outline" disabled={syncing} onClick={handleSyncStatus}>
               {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
               Status aktualisieren
             </Button>
             <Button variant="outline" disabled={lexwareMutation.isPending} onClick={() => {
-              const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && inv.document_type !== "subscription_notice" && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
+              const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && !inv.issued_at && inv.document_type !== "subscription_notice" && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
               if (openIds.length === 0) { toast.info(t("billing.lexware_no_open")); return; }
               lexwareMutation.mutate(openIds);
             }}>
@@ -410,12 +413,13 @@ const SuperAdminBilling = () => {
                     <SortableHead label={t("billing.payment_method")} sortId="payment" />
                     <SortableHead label="Status" sortId="status" />
                     <TableHead className="text-center">Bearbeiten</TableHead>
+                    <TableHead className="text-center">Rechnung</TableHead>
                     <SortableHead label="Lexware" sortId="lexware" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sorted.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
                   ) : (
                     sorted.map((inv: any) => (
                       <TableRow key={inv.id}>
@@ -449,6 +453,10 @@ const SuperAdminBilling = () => {
                           <Button size="sm" variant="ghost" onClick={() => { setEditInv(inv); setEditStatus(inv.status); }}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <AiconoInvoiceRowActions inv={inv} />
+                          {inv.issued_at && <div className="text-[10px] text-muted-foreground">{inv.invoice_number}</div>}
                         </TableCell>
                         <TableCell>
                           {inv.lexware_invoice_id ? (
