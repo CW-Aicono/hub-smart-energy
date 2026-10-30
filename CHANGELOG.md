@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.21.0 – 30.10.2026
+- Einstellungen → „Paket & Rechnungen“ für Kunden-Admins: gebuchte Pakete mit enthaltenen Funktionen (ohne Preise), nicht freigeschaltete Funktionen mit Hinweis „Im Paket X enthalten – Anfrage an Partner/AICONO“ und alle ausgestellten Rechnungen an den Kunden (von AICONO oder vom Partner) als PDF mit E-Rechnung. Normale Benutzer sehen den Bereich nicht.
+- Abnahmetests der Paketabrechnung (Fälle A, B, C, Flatrate, Neukunde, anteilig, Mengenänderung, Support-Prüfung, Paket 6) als automatische Tests hinterlegt.
+- Technisch: Migration 0057 RPC tenant_package_summary() (SECURITY DEFINER, nur Rolle admin des eigenen Mandanten; Pakete ohne Preise, gesperrte Module mit Paket, AICONO-Absender für PDFs). src/lib/tenantBillingView.ts, TenantPackageInvoices.tsx, packageAcceptance.test.ts. Befund: pricing_packages/pricing_unit_prices sind für alle Angemeldeten lesbar (inkl. EK) – nicht geändert.
+
 ## v1.20.0 – 30.10.2026
 - Partner-Portal → Abrechnung: Die Preisliste zeigt jetzt Pakete und Mengenpreise mit Einkauf (EK), empfohlenem Verkaufspreis (UVP), eigenem Verkaufspreis und Marge, getrennt für Kommunen und Industrie. Die alte Modulpreisliste erscheint nur noch für Kunden mit Altvertrag.
 - „Rabatt bei AICONO anfragen“: Auswahl von Paketen, Mengenpreisen und Remote-Support-Flatrate statt Einzelmodulen. Freigegebene Rabatte mindern den EK der gewählten Positionen.
