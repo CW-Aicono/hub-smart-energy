@@ -3,6 +3,7 @@
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## Unreleased
+- v1.15.0 validation: authenticated sales for two temporary partner customers, monthly and quarterly proration read back in both invoice paths; identical retry reused sale, changed payload rejected, direct bill RPC denied, partner issuance blocked without legal sender details. Test tenants/drafts removed. Partner PDF issuance awaits real sender data; email/bank debit not performed. Existing sales remain explicit opt-in rather than technical module toggles; new contract entry available in portal/partner customer details. Daily catch-up bounded; initial/follow-up calendar periods non-overlapping.
 - v1.15.0: Explicit license sales with once/monthly/quarterly/halfyearly cadence, catalog purchase snapshots, daily due draft generation and transactional billing-event idempotency. Separate partner customer invoices/settings/counters, partner-scoped issuance with immutable snapshots, PDF/email and approved-only SEPA export. Legacy monthly billing excludes explicitly sold positions; issued partner wholesale invoices are no longer overwritten. Existing bookings remain unchanged.
 - Rechnungs-PDF: Logo mittig, Leistungszeitraum überlappt nicht mehr.
 
