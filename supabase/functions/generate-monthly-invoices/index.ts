@@ -1,5 +1,6 @@
 import { loadUsage, prevMonth } from "../_shared/packageUsageLoader.ts";
 import { backCharge, monthDelta } from "../_shared/packageUsage.ts";
+import { buildCollective, commissionCredit, directDraftWarnings, mergeCustomLines, partnerCustomerLines, priceLines, routeTenant, type FlowPartner, type FlowTenant } from "../_shared/partnerInvoiceFlows.ts";
 import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -538,6 +539,49 @@ Deno.serve(async (req) => {
         .eq("id", upd.id);
       if (updErr) throw updErr;
     }
+
+    // Wiederverkauf: eine Sammelrechnung je Partner und Monat (EK, gegliedert nach Kunde)
+    for (const [pid, entries] of Object.entries(collectives)) {
+      const c = buildCollective(entries);
+      if (!c.lines.length) continue;
+      const first = [...entries].sort((a, b) => a.tenant.name.localeCompare(b.tenant.name, "de"))[0].tenant;
+      partnerDrafts.push({ tenant_id: first.id, partner_id: pid, invoice_kind: "recurring",
+        source_ref: `monthly:partner-sum:${pid}:${monthKey}`, invoice_number: c.amount > 0 ? "DRAFT" : "ABO-BELEG",
+        document_type: c.amount > 0 ? "invoice" : "subscription_notice", status: "draft",
+        period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), amount: c.amount, module_total: c.amount, support_total: 0,
+        usage_review: !!reviewByPartner[pid], usage_delta: `Sammelrechnung ${entries.length} Kunde(n)`, line_items: c.lines });
+    }
+    // Provision: monatliche Gutschrift an den Partner
+    for (const [pid, entries] of Object.entries(commissions)) {
+      const c = commissionCredit(partnerMap[pid], entries);
+      if (!(c.amount > 0)) continue;
+      partnerDrafts.push({ tenant_id: entries[0].tenant.id, partner_id: pid, invoice_kind: "recurring",
+        source_ref: `commission:${pid}:${monthKey}`, invoice_number: "DRAFT", document_type: "credit_note", status: "draft",
+        period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), amount: c.amount, module_total: c.amount, support_total: 0, line_items: c.lines });
+    }
+    // Endkunden-Entwürfe der Partner (eigene Preise); vom Partner ergänzte Positionen bleiben erhalten
+    let customerDraftsCreated = 0;
+    for (const d of customerDrafts) {
+      const { data: ex, error: exErr } = await supabase.from("partner_customer_invoices").select("id, issued_at, status, line_items").eq("source_ref", d.source_ref).maybeSingle();
+      if (exErr) throw exErr;
+      if (ex && (ex.issued_at || ex.status !== "draft")) continue;
+      const lines = mergeCustomLines(d.lines, ex?.line_items);
+      const amount = Math.round(lines.reduce((s, l) => s + Number(l.amount || 0), 0) * 100) / 100;
+      const row = { line_items: lines, amount, document_type: amount > 0 ? "invoice" : "subscription_notice", period_start: d.period_start, period_end: d.period_end };
+      if (ex) {
+        const { error } = await supabase.from("partner_customer_invoices").update(row).eq("id", ex.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("partner_customer_invoices").insert({ ...row, partner_id: d.partner_id, tenant_id: d.tenant_id, source_ref: d.source_ref, status: "draft" });
+        if (error && error.code !== "23505") throw error;
+        if (!error) customerDraftsCreated++;
+      }
+    }
+    // Warnung: Direktrechnungen an Kunden von Wiederverkaufs-Partnern
+    const { data: openDirect, error: odErr } = await supabase.from("tenant_invoices").select("tenant_id, partner_id, issued_at, status")
+      .is("partner_id", null).is("issued_at", null).eq("status", "draft");
+    if (odErr) throw odErr;
+    const warnings = directDraftWarnings(tenants ?? [], partnerMap, openDirect ?? []);
 
     // Partner-Entwürfe (EK): je Partnerkunde und Monat genau einer; offene Entwürfe werden aktualisiert
     let partnerCreated = 0;
