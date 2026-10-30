@@ -135,10 +135,12 @@ export async function buildAiconoInvoicePdf(opts: {
   row("Summe netto", eur(t.net));
   row(`zzgl. ${vatRate.toLocaleString("de-DE")} % USt.`, eur(t.vat));
   doc.setDrawColor(...brand); doc.line(140, y - 3.5, mr, y - 3.5);
-  row("Rechnungsbetrag", eur(t.gross), true);
+  row(inv.document_type === "credit_note" ? "Gutschriftbetrag" : "Rechnungsbetrag", eur(t.gross), true);
 
   y += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-  const pay = `Bitte überweisen Sie den Rechnungsbetrag bis zum ${dDE(inv.due_date)} (${s.payment_terms_days ?? 14} Tage netto) unter Angabe der Rechnungsnummer ${inv.invoice_number} auf das unten genannte Konto.`;
+  const pay = inv.document_type === "cancellation" ? `Der Betrag der ursprünglichen Rechnung ${inv.cancels_number ?? ""} wird storniert; bereits gezahlte Beträge werden erstattet bzw. verrechnet.`
+    : inv.document_type === "credit_note" ? `Der Gutschriftbetrag wird innerhalb von ${s.payment_terms_days ?? 14} Tagen auf Ihr hinterlegtes Konto überwiesen.`
+    : `Bitte überweisen Sie den Rechnungsbetrag bis zum ${dDE(inv.due_date)} (${s.payment_terms_days ?? 14} Tage netto) unter Angabe der Rechnungsnummer ${inv.invoice_number} auf das unten genannte Konto.`;
   const pw = doc.splitTextToSize(pay, mr - ml) as string[];
   doc.text(pw, ml, y); y += pw.length * 4.5;
   if (s.footer_note) { const fw = doc.splitTextToSize(s.footer_note, mr - ml) as string[]; doc.text(fw, ml, y + 2); }
