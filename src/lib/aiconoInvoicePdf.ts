@@ -12,12 +12,19 @@ export interface AiconoBillingSettings {
   logo_url?: string | null;
 }
 
-export interface InvoiceRecipient { name: string; contact?: string | null; street?: string | null; postalCity?: string | null; country?: string | null }
+export interface InvoiceRecipient { name: string; contact?: string | null; street?: string | null; postalCity?: string | null; country?: string | null; postalCode?: string | null; city?: string | null; vatId?: string | null; email?: string | null; leitwegId?: string | null }
 
 export interface InvoiceLine { label: string; quantity: number; unitPrice: number; amount: number }
 
 const eur = (n: number) => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 const dDE = (s?: string | null) => (s ? new Date(s.length === 10 ? s + "T00:00:00" : s).toLocaleDateString("de-DE") : "–");
+
+/** Überschrift je Belegart (Rechnung, Storno-Rechnung, Provisionsgutschrift). */
+export function documentTitle(inv: { invoice_number: string; document_type?: string | null }) {
+  if (inv.document_type === "cancellation") return `Stornorechnung ${inv.invoice_number}`;
+  if (inv.document_type === "credit_note") return `Gutschrift ${inv.invoice_number}`;
+  return `Rechnung ${inv.invoice_number}`;
+}
 
 /** Normalisiert gespeicherte Positionen (Monatslauf, Einmal, manuell) auf Menge × Einzelpreis = Betrag. */
 export function normalizeInvoiceLines(raw: unknown, fallbackAmount: number): InvoiceLine[] {
@@ -58,7 +65,7 @@ async function loadLogo(source: string): Promise<{ data: string; w: number; h: n
 export async function buildAiconoInvoicePdf(opts: {
   settings: AiconoBillingSettings;
   recipient: InvoiceRecipient;
-  invoice: { invoice_number: string; issued_at: string | null; due_date: string | null; period_start: string | null; period_end: string | null; amount: number; vat_rate: number | null; line_items: unknown; status?: string };
+  invoice: { invoice_number: string; issued_at: string | null; due_date: string | null; period_start: string | null; period_end: string | null; amount: number; vat_rate: number | null; line_items: unknown; status?: string; document_type?: string | null; cancels_number?: string | null };
   customerNumber?: string;
   partnerBranding?: boolean;
 }): Promise<jsPDF> {
@@ -92,8 +99,13 @@ export async function buildAiconoInvoicePdf(opts: {
 
   let y = 92;
   doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(...brand);
-  doc.text(inv.status === "voided" ? `Rechnung ${inv.invoice_number} (storniert)` : `Rechnung ${inv.invoice_number}`, ml, y);
+  doc.text(`${documentTitle(inv)}${inv.status === "voided" ? " (storniert)" : ""}`, ml, y);
   y += 10;
+  if (inv.document_type === "cancellation" && inv.cancels_number) {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(0);
+    doc.text(`Storno zu Rechnung ${inv.cancels_number}. Die Beträge der ursprünglichen Rechnung werden vollständig gutgeschrieben.`, ml, y - 3);
+    y += 4;
+  }
 
   doc.setFillColor(...brand); doc.rect(ml, y - 5, mr - ml, 7, "F");
   doc.setFontSize(9); doc.setTextColor(255);
