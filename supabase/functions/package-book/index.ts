@@ -52,6 +52,11 @@ Deno.serve(async (req) => {
 
     const { data: mods } = await admin.from("pricing_package_modules").select("package_code,module_code");
     const modsOf = (c: string) => (mods ?? []).filter((m) => m.package_code === c).map((m) => m.module_code);
+    const { data: explicitSales, error: salesError } = await admin.from("license_sales").select("product_kind,product_code").eq("tenant_id", tenantId).is("ended_on", null);
+    if (salesError) throw salesError;
+    if ((explicitSales ?? []).some((s) => s.product_kind === "package" && s.product_code === pkg || s.product_kind === "module" && modsOf(pkg).includes(s.product_code))) {
+      return json({ error: "Dieses Paket berührt einen neuen Lizenzvertrag. Bitte über Verträge & Lizenzverkäufe verwalten." }, 400);
+    }
     const basis = new Set((defs ?? []).filter((d) => d.always_active).flatMap((d) => modsOf(d.code)));
     let targets: string[];
     if (book) targets = [...new Set([...modsOf(pkg), ...basis])];
