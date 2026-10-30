@@ -358,6 +358,13 @@
       "when": 1793365240524,
       "tag": "0050_package_sale_catalog_validation",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1793365282584,
+      "tag": "0051_package_sales_and_support",
+      "breakpoints": true
     }
   ]
 }
