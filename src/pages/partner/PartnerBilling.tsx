@@ -7,7 +7,7 @@ import { useModulePrices } from "@/hooks/useModulePrices";
 import { ALL_MODULES } from "@/hooks/useTenantModules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Receipt, TrendingUp, Percent, Building2, Factory, Search } from "lucide-react";
@@ -277,7 +277,7 @@ export default function PartnerBilling() {
       {isCommission ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Provisionsübersicht je Tenant (Monatsbasis)</CardTitle>
+            <CardTitle className="text-base">Erwartete Provision je Tenant (laufender Monat)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="relative max-w-sm">
@@ -297,14 +297,14 @@ export default function PartnerBilling() {
                   <TableRow>
                     <SortableHead label="Tenant" sortKey="name" sort={sortTotals} onToggle={toggleTotals} />
                     <SortableHead label="Bereich" sortKey="sector" sort={sortTotals} onToggle={toggleTotals} />
-                    <SortableHead label="Endkunden-Verkauf (empf.)" sortKey="sale" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
+                    <SortableHead label="AICONO berechnet (UVP)" sortKey="sale" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
                     <SortableHead label={`Provision (${fmtPct(Number(partner.commission_pct ?? 0))})`} sortKey="commission" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedTotals.map((t) => (
                     <TableRow key={t.id}>
-                      <TableCell className="font-medium">{t.name}</TableCell>
+                      <TableCell className="font-medium">{t.name}{t.basis === "legacy" && <Badge variant="secondary" className="ml-2 text-xs">Altvertrag</Badge>}</TableCell>
                       <TableCell>
                         {t.is_kommune ? <Building2 className="inline h-3.5 w-3.5 mr-1" /> : <Factory className="inline h-3.5 w-3.5 mr-1" />}
                         {t.is_kommune ? "Kommune" : "Industrie"}
@@ -321,9 +321,31 @@ export default function PartnerBilling() {
                 </TableBody>
               </Table>
             )}
-            <p className="text-xs text-muted-foreground mt-4">
-              Read-only Ansicht. Verbindliche Abrechnungen erhältst du monatlich von AICONO.
+            <p className="text-xs text-muted-foreground">
+              Paketkunden: Grundlage ist die Monatsübersicht nach Paketen. „Altvertrag“: Berechnung nach bisherigen Modulpreisen. Verbindlich ist die monatliche Provisionsgutschrift.
             </p>
+            <div className="space-y-2 pt-2">
+              <h3 className="text-sm font-semibold">Provisionsgutschriften</h3>
+              {creditNotes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Noch keine Provisionsgutschriften.</p>
+              ) : (
+                <div className="overflow-x-auto"><Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Gutschrift</TableHead><TableHead>Zeitraum</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Betrag</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {creditNotes.map((c) => (
+                      <TableRow key={c.id}>
+                        <TableCell>{c.status === "draft" ? "Entwurf" : c.invoice_number}</TableCell>
+                        <TableCell>{new Date(c.period_start + "T00:00:00").toLocaleDateString("de-DE")} – {new Date(c.period_end + "T00:00:00").toLocaleDateString("de-DE")}</TableCell>
+                        <TableCell><Badge variant={c.status === "draft" ? "outline" : "secondary"}>{c.status === "draft" ? "In Vorbereitung" : c.status === "paid" ? "Ausgezahlt" : "Ausgestellt"}</Badge></TableCell>
+                        <TableCell className="text-right font-medium">{fmtEur(Math.abs(Number(c.amount ?? 0)))}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table></div>
+              )}
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -337,7 +359,54 @@ export default function PartnerBilling() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="text-base">Einkauf & Verkauf je Modul</CardTitle>
+                  <div>
+                    <CardTitle className="text-base">Pakete und Mengenpreise</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">Monatliche Nettopreise. Dein Verkaufspreis erscheint in den Endkunden-Entwürfen; ohne eigenen Preis gilt die UVP.</p>
+                  </div>
+                  <ToggleGroup type="single" value={sector} onValueChange={(v) => v && setSector(v as "kommune" | "industrie")} variant="outline" size="sm">
+                    <ToggleGroupItem value="kommune" className="gap-1.5"><Building2 className="h-4 w-4" /> Kommunen</ToggleGroupItem>
+                    <ToggleGroupItem value="industrie" className="gap-1.5"><Factory className="h-4 w-4" /> Industrie</ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!catalog ? <p className="text-sm text-muted-foreground">Lädt…</p> : (
+                  <div className="overflow-x-auto"><Table>
+                    <TableHeader><TableRow>
+                      <TableHead>Paket / Leistung</TableHead>
+                      <TableHead className="text-right">Einkauf (EK)</TableHead>
+                      <TableHead className="text-right">Empf. Verkaufspreis (UVP)</TableHead>
+                      <TableHead className="text-right">Dein Verkaufspreis</TableHead>
+                      <TableHead className="text-right">Marge</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {priceRows.map((r, i) => (
+                        <SalePriceRow
+                          key={`${sector}-${r.code}`}
+                          label={r.name}
+                          sub={r.unit}
+                          separator={i > 0 && r.kind === "unit" && priceRows[i - 1].kind === "package"}
+                          purchase={r.ek}
+                          recommended={r.uvp}
+                          sale={r.sale}
+                          margin={r.margin}
+                          disabled={!canEditPrices}
+                          onSave={(val) => saveSale.mutate({ moduleCode: r.code, value: val })}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table></div>
+                )}
+              </CardContent>
+            </Card>
+
+            {hasLegacy && (
+            <details className="rounded-lg border">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Alte Modulpreisliste – nur für Altverträge</summary>
+            <Card className="border-0 shadow-none">
+              <CardHeader>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="text-base">Einkauf & Verkauf je Modul (Altverträge)</CardTitle>
                   <ToggleGroup
                     type="single"
                     value={sector}
@@ -404,12 +473,15 @@ export default function PartnerBilling() {
                 )}
               </CardContent>
             </Card>
+            </details>
+            )}
           </TabsContent>
 
           <TabsContent value="margins">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Margenübersicht je Tenant (Monatsbasis)</CardTitle>
+                <CardTitle className="text-base">Margen je Tenant (laufender Monat)</CardTitle>
+                <p className="text-xs text-muted-foreground">Paketkunden: Einkauf aus der Monatsübersicht inkl. freigegebener Rabatte, Verkauf zu deinen Verkaufspreisen. „Altvertrag“: bisherige Modulpreise.</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="relative max-w-sm">
@@ -437,7 +509,7 @@ export default function PartnerBilling() {
                     <TableBody>
                       {sortedTotals.map((t) => (
                         <TableRow key={t.id}>
-                          <TableCell className="font-medium">{t.name}</TableCell>
+                          <TableCell className="font-medium">{t.name}{t.basis === "legacy" && <Badge variant="secondary" className="ml-2 text-xs">Altvertrag</Badge>}</TableCell>
                           <TableCell>
                             {t.is_kommune ? <Building2 className="inline h-3.5 w-3.5 mr-1" /> : <Factory className="inline h-3.5 w-3.5 mr-1" />}
                             {t.is_kommune ? "Kommune" : "Industrie"}
@@ -467,6 +539,8 @@ export default function PartnerBilling() {
 
 interface SalePriceRowProps {
   label: string;
+  sub?: string;
+  separator?: boolean;
   purchase: number;
   recommended: number;
   sale: number;
@@ -475,13 +549,13 @@ interface SalePriceRowProps {
   onSave: (val: number | null) => void;
 }
 
-function SalePriceRow({ label, purchase, recommended, sale, margin, disabled, onSave }: SalePriceRowProps) {
+function SalePriceRow({ label, sub, separator, purchase, recommended, sale, margin, disabled, onSave }: SalePriceRowProps) {
   const [value, setValue] = useState(String(sale.toFixed(2)));
   useMemo(() => setValue(String(sale.toFixed(2))), [sale]);
 
   return (
-    <TableRow>
-      <TableCell className="font-medium">{label}</TableCell>
+    <TableRow className={separator ? "border-t-2" : undefined}>
+      <TableCell className="font-medium">{label}{sub && <div className="text-xs font-normal text-muted-foreground">{sub}</div>}</TableCell>
       <TableCell className="text-right">{fmtEur(purchase)}</TableCell>
       <TableCell className="text-right text-muted-foreground">{fmtEur(recommended)}</TableCell>
       <TableCell className="text-right">
