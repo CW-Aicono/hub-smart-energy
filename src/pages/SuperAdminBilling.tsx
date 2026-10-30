@@ -430,7 +430,7 @@ const SuperAdminBilling = () => {
                     sorted.map((inv: any) => (
                       <TableRow key={inv.id} className={inv.usage_review && !inv.issued_at ? "bg-warning/10" : undefined}>
                         <TableCell className="font-medium">
-                          {inv.tenants?.name ?? "–"}
+                          {(inv.source_ref?.startsWith("monthly:partner-sum:") || inv.document_type === "credit_note") ? (inv.partners?.name ?? "–") : (inv.tenants?.name ?? "–")}
                           {inv.partner_id && (
                             <div className="text-xs text-muted-foreground">an Partner: {inv.partners?.name ?? "–"}{inv.document_type === "credit_note" ? "" : " (EK)"}</div>
                           )}
