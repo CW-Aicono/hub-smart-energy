@@ -194,7 +194,8 @@ const SuperAdminBilling = () => {
       return;
     }
     const sepaInvoices = invoices.filter((inv: any) =>
-      !inv.partner_id && (inv.tenants?.payment_method === "sepa") &&
+      !inv.partner_id && ((inv.license_payment_method ?? inv.tenants?.payment_method) === "sepa") &&
+      (!inv.source_ref?.startsWith("license") || (inv.issued_at && inv.tenants?.sepa_mandate_date)) &&
       (inv.status === "draft" || inv.status === "sent") &&
       Number(inv.amount) > 0 && inv.document_type !== "subscription_notice" &&
       inv.tenants?.sepa_iban &&
@@ -443,7 +444,7 @@ const SuperAdminBilling = () => {
                         <TableCell className="font-medium">{Number(inv.amount).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
-                            {inv.tenants?.payment_method === "sepa" ? "SEPA" : "Rechnung"}
+                            {(inv.license_payment_method ?? inv.tenants?.payment_method) === "sepa" ? "SEPA" : "Rechnung"}
                           </Badge>
                         </TableCell>
                         <TableCell>
