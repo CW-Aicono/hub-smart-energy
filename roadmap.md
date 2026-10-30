@@ -1,5 +1,8 @@
 # Roadmap
 
+## Partnerabrechnung und Ratierlichkeit (30.10.)
+- [ ] In Arbeit: einmalige/monatliche/quartalsweise/halbjährliche Abrechnung je Modul/Lizenz, Partner-Endkundenrechnungen und automatische zeitanteilige AICONO-EK-Entwürfe; bestehende Rechnungen und Altverträge unverändert.
+
 - [x] Portal-Navigation: eigene Symbole, Module & Bundles gemeinsam mit zwei Reitern (v1.8.1; angemeldeter Menü- und Reiterwechsel geprüft)
 
 - [x] Benutzerliste repariert; Portal-Admin, Partner-Admin, Kunden-Admin vereinheitlicht (v1.6.2; 16 Tests erfolgreich, angemeldete Browserprüfung mangels Sitzung offen)
