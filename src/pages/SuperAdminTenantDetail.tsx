@@ -655,7 +655,7 @@ const SuperAdminTenantDetail = () => {
                     <DialogDescription>Bundles für diesen Mandanten buchen oder entfernen.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto">
-                    {allBundles.filter(b => b.is_active).map((bundle) => {
+                    {allBundles.filter(b => b.is_active && (b.bookable !== false || tenantBundleIds.includes(b.id))).map((bundle) => {
                       const isBooked = tenantBundleIds.includes(bundle.id);
                       const bundleModules = getBundleModules(bundle.id);
                       return (
