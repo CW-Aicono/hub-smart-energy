@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.21.4 – 30.10.2026
+- Portal: Der Menüpunkt „Lizenzen“ entfällt – Verträge werden über Pakete gebucht.
+
 ## v1.21.3 – 30.10.2026
 - Partnerportal: Ladeinfrastruktur hat beim Tenant wieder eine eigene Karte zum Freischalten; abgerechnet wird je Ladepunkt.
 

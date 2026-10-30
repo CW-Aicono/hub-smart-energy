@@ -120,7 +120,6 @@ export default function SuperAdminSidebar() {
       area: "commercial",
       items: [
         { to: "/super-admin/billing", icon: Receipt, label: t("nav.billing") },
-         { to: "/super-admin/licenses", icon: BadgeCheck, label: t("nav.active_licenses") },
          { to: "/super-admin/savings-share", icon: Handshake, label: "Gain-Sharing" },
          { to: "/super-admin/module-pricing", icon: Layers, label: t("nav.bundles_modules"), activePaths: ["/super-admin/bundles"] },
       ],

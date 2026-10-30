@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.21.4 – 30.10.2026
+- Portal: Menüpunkt „Lizenzen“ entfernt (tenant_licenses leer, Verträge laufen über Pakete/license_sales); alte URL leitet auf Abrechnung um.
+
 ## v1.21.3 – 30.10.2026
 - Partnerportal → Tenant: eigene Karte „Ladeinfrastruktur“ (Freischaltung ev_charging + Ladepunktzahl), da sie je Ladepunkt abgerechnet wird und nicht im Paket-Dropdown steht.
 
