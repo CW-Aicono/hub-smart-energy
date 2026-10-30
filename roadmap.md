@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Paketumstellung (30.10.)
-- [ ] Neue Buchungen und Rechnungsauswahl nur Pakete/Zusatzleistungen; monatliche Nettopreise laut Preisliste, 8 € je Ladepunkt; Bestandsverträge unverändert.
+- [x] v1.16.0: Neue Buchungen und Rechnungsauswahl nur Pakete/Zusatzleistungen; monatliche Nettopreise, 8 € je Ladepunkt; Bestandsverträge unverändert. 39 Tests, angemeldete Portal-/Partnerauswahl und Vertrag mit anteiligem Entwurf (6,39 €) geprüft; Prüfdaten entfernt. Vorhandener Ladepunkt-Partner-EK 5,25 € unverändert, da kein neuer genannt.
 
 ## Partnerabrechnung und Ratierlichkeit (30.10.)
 - [x] v1.15.0: Intervalle je Lizenz, getrennte Endkunden-/EK-Entwürfe, zeitanteilige Ergänzungen, täglicher Nachlauf, Partnerabsender/Freigabe/PDF/E-Mail/SEPA. Angemeldete Testverkäufe, zwei Kunden, Retry und Sperre unvollständiger Absender geprüft; Testdaten entfernt.
