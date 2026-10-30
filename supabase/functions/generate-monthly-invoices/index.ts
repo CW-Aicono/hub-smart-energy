@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
           // Wiederverkauf: Sammelrechnung an Partner (EK) + Endkunden-Entwurf des Partners (außer Eigenbedarf)
           (collectives[partner!.id] ??= []).push({ tenant, lines: flowLines });
           if (delta.plausibility || u.review) reviewByPartner[partner!.id] = true;
-          if (!tenant.partner_self_customer) {
+          if (!(tenant as any).partner_self_customer) {
             const pl = partnerCustomerLines(flowLines, partnerPrices[partner!.id] ?? {});
             customerDrafts.push({ partner_id: partner!.id, tenant_id: tenant.id, source_ref: `monthly:pci:${tenant.id}:${monthKey}`,
               period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), lines: pl });
