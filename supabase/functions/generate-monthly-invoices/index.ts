@@ -139,12 +139,37 @@ Deno.serve(async (req) => {
     const prevKey = prevMonth(monthKey);
     const usage = switchedList.length ? await loadUsage(supabase, switchedList, monthKey) : null;
     const usagePrev = switchedList.length ? await loadUsage(supabase, switchedList, prevKey) : null;
-    const prevInvoices: Record<string, any> = {};
-    if (switchedList.length) {
-      const { data: pi } = await supabase.from("tenant_invoices").select("tenant_id, source_ref, line_items")
-        .in("source_ref", switchedList.flatMap((t: any) => [`monthly:partner:${t.id}:${prevKey}`, `monthly:tenant:${t.id}:${prevKey}`])).neq("status", "voided");
-      for (const i of pi ?? []) prevInvoices[i.tenant_id] = i;
+    // Partnermodell (Wiederverkauf / Provision) und Partner-Verkaufspreise
+    const partnerMap: Record<string, FlowPartner> = {};
+    const partnerPrices: Record<string, Record<string, number>> = {};
+    {
+      const [{ data: ps, error: pErr }, { data: pp, error: ppErr }] = await Promise.all([
+        supabase.from("partners").select("id, name, billing_mode, commission_pct"),
+        supabase.from("partner_module_prices").select("partner_id, module_code, sale_price_monthly"),
+      ]);
+      if (pErr) throw pErr;
+      if (ppErr) throw ppErr;
+      for (const p of ps ?? []) partnerMap[p.id] = { id: p.id, name: p.name, billing_mode: p.billing_mode, commission_pct: Number(p.commission_pct ?? 0) };
+      for (const p of pp ?? []) if (p.sale_price_monthly != null) (partnerPrices[p.partner_id] ??= {})[p.module_code] = Number(p.sale_price_monthly);
     }
+    // Bereits berechnete Mengen des Vormonats je Kunde (Einzel- oder Sammelrechnung)
+    const prevBilled: Record<string, any[]> = {};
+    if (switchedList.length) {
+      const refs = switchedList.flatMap((t: any) => [`monthly:partner:${t.id}:${prevKey}`, `monthly:tenant:${t.id}:${prevKey}`]);
+      for (const pid of new Set(switchedList.map((t: any) => t.partner_id).filter(Boolean))) refs.push(`monthly:partner-sum:${pid}:${prevKey}`);
+      const { data: pi } = await supabase.from("tenant_invoices").select("tenant_id, source_ref, line_items").in("source_ref", refs).neq("status", "voided");
+      for (const i of pi ?? []) {
+        const collective = i.source_ref.startsWith("monthly:partner-sum:");
+        for (const li of (i.line_items ?? []) as any[]) {
+          const tid = collective ? li.tenant_id : i.tenant_id;
+          if (tid) (prevBilled[tid] ??= []).push(li);
+        }
+      }
+    }
+    const collectives: Record<string, { tenant: FlowTenant; lines: any[] }[]> = {};
+    const commissions: Record<string, { tenant: FlowTenant; uvp: number }[]> = {};
+    const customerDrafts: any[] = [];
+    const reviewByPartner: Record<string, boolean> = {};
 
     // 4. Get support sessions from last month for all tenants
     const { data: supportSessions, error: sErr } = await supabase
