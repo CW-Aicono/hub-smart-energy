@@ -102,6 +102,7 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.16.2", date: "2026-10-30", changes: [{ type: "fix", textKey: "manual.ev.detailItem7" }] },
     { version: "1.16.1", date: "2026-10-30", changes: [{ type: "fix", textKey: "manual.ev.ocppStates" }] },
     { version: "1.16.0", date: "2026-10-30", changes: [{ type: "feature", textKey: "manual.billing.packageCatalog" }] },
     { version: "1.15.0", date: "2026-10-30", changes: [{ type: "feature", textKey: "manual.billing.licenseSales" }] },

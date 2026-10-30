@@ -2,6 +2,15 @@
 
 ## Ladestatus (30.10.)
 - [x] v1.16.1: Alle OCPP-Zustände getrennt anzeigen; Stationsmeldungen nicht durch offene Sitzungen überschreiben. 23 Tests erfolgreich, angemeldete ELMI-Detailansicht und neun Zustände in öffentlicher Prüfansicht verifiziert; vier Sprachen gepflegt. Keine Stationskonfiguration oder Fernbefehle geändert.
+- [x] v1.16.2: Fernstart auch bei „Vorbereitung“ (Fahrzeug angesteckt) zulässig; ELMI-Statuscode 0x0B0B0000 im Protokoll nicht mehr als Fehler markiert.
+
+## Paketabrechnung v5 (Dirk, 30.10.)
+- [ ] Schritt 1: Preisstammdaten (Ladepunkt-EK 6,00 €, Remote-Support-EK 112 €, Preisversionierung, Bundle-Kennzeichnung „Altvertrag“)
+- [ ] Schritt 2: Paketbuchung mit Freischaltung/Preisliste verknüpfen, Schalter „Abrechnung nach Paketen“ je Mandant
+- [ ] Schritt 3: Verbrauchsdaten in Monatsübersicht/Rechnung, tägliche Mengen-Snapshots, Support-Plausibilität (>4 h prüfen)
+- [ ] Schritt 4: Rechnungsflüsse nach Partnermodell (Wiederverkauf/Provision), E-Rechnung (ZUGFeRD/XRechnung) vorher prüfen und berichten
+- [ ] Schritt 5: Partner-Portal angleichen (Paket-Preisliste, Margen, Provisionsanzeige)
+- [ ] Schritt 6: Kunden-Ebene „Paket & Rechnungen“, Abnahmetests A–C
 
 ## Paketumstellung (30.10.)
 - [x] v1.16.0: Neue Buchungen und Rechnungsauswahl nur Pakete/Zusatzleistungen; monatliche Nettopreise, 8 € je Ladepunkt; Bestandsverträge unverändert. 39 Tests, angemeldete Portal-/Partnerauswahl und Vertrag mit anteiligem Entwurf (6,39 €) geprüft; Prüfdaten entfernt. Vorhandener Ladepunkt-Partner-EK 5,25 € unverändert, da kein neuer genannt.

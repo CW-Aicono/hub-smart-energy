@@ -1,5 +1,9 @@
 # Änderungsprotokoll (intern)
 
+## v1.16.2 – 30.10.2026
+- Fernstart (RemoteStartTransaction) jetzt auch bei Status „Vorbereitung“ (Fahrzeug angesteckt) zulässig, nicht nur bei „Verfügbar“/„Nicht verfügbar“ (ocpp-central).
+- OCPP-Protokoll: ELMI-Statuscode 0x0B0B0000 gilt als reine Information und wird nicht mehr rot als Fehler markiert (OcppLogViewer).
+
 ## v1.16.1 – 30.10.2026
 - Alle OCPP-Ladestatus getrennt dargestellt, insbesondere Vorbereitung, Fahrzeug-/Stationspause, Beendet und Reserviert. Offene Sitzungen überschreiben gemeldete Zustände nicht; Statusanzeige in Listen, Details, Karten, Widgets und Lade-App vereinheitlicht.
 

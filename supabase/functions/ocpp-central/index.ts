@@ -675,7 +675,9 @@ async function handleRemoteCommand(
       if (!cp) return { status: "Rejected", message: "Charge point not found" };
       // Normalize status to lowercase: gateways may report "Available" or "available"
       const cpStatus = (cp.status ?? "").toLowerCase();
-      if (cpStatus !== "available" && cpStatus !== "unavailable") {
+      // "preparing" = Fahrzeug bereits angesteckt, aber noch kein Ladevorgang –
+      // genau der Fall, in dem ein Fernstart sinnvoll ist.
+      if (cpStatus !== "available" && cpStatus !== "unavailable" && cpStatus !== "preparing") {
         return { status: "Rejected", message: `Charge point not ready (current status: ${cp.status || "unknown"})` };
       }
 
