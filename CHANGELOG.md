@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.21.2 – 30.10.2026
+- Partnerportal → Tenant → Module & Lizenzen: oben Pakete und Paketbuchung; alte Einzelmodule und Lizenzen nur noch als eingeklappter Bereich „Altvertrag“ bei Tenants ohne Paketabrechnung.
+
 ## v1.21.1 – 30.10.2026
 - Sicherheit: Paket- und Mengenpreisliste (inkl. Einkaufspreise) nur noch für AICONO-Portal und Partner lesbar; Kunden sehen ihre Pakete weiterhin über „Paket & Rechnungen“ ohne Preise. Migration 0058 can_read_price_catalog().
 
