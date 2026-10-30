@@ -5,7 +5,7 @@
 - [x] v1.16.2: Fernstart auch bei „Vorbereitung“ (Fahrzeug angesteckt) zulässig; ELMI-Statuscode 0x0B0B0000 im Protokoll nicht mehr als Fehler markiert.
 
 ## Paketabrechnung v5 (Dirk, 30.10.)
-- [ ] Schritt 1: Preisstammdaten (Ladepunkt-EK 6,00 €, Remote-Support-EK 112 €, Preisversionierung, Bundle-Kennzeichnung „Altvertrag“)
+- [x] Schritt 1 (v1.16.3): Ladepunkt-EK 6,00 €, Remote-Support-EK 112 € (partnerbuchbar), Preisversionierung mit Gültig-ab + Historie, Tooltip „Freischaltung Partner“, Bundles als „Altvertrag – nicht mehr buchbar“. 29 Tests, Build OK, DB-Werte verifiziert.
 - [ ] Schritt 2: Paketbuchung mit Freischaltung/Preisliste verknüpfen, Schalter „Abrechnung nach Paketen“ je Mandant
 - [ ] Schritt 3: Verbrauchsdaten in Monatsübersicht/Rechnung, tägliche Mengen-Snapshots, Support-Plausibilität (>4 h prüfen)
 - [ ] Schritt 4: Rechnungsflüsse nach Partnermodell (Wiederverkauf/Provision), E-Rechnung (ZUGFeRD/XRechnung) vorher prüfen und berichten

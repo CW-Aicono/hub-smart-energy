@@ -9377,6 +9377,7 @@ export type Database = {
       }
       module_bundles: {
         Row: {
+          bookable: boolean
           created_at: string
           description: string | null
           id: string
@@ -9386,6 +9387,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bookable?: boolean
           created_at?: string
           description?: string | null
           id?: string
@@ -9395,6 +9397,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bookable?: boolean
           created_at?: string
           description?: string | null
           id?: string
@@ -11736,6 +11739,7 @@ export type Database = {
           sort: number
           updated_at: string
           uvp: number
+          valid_from: string
         }
         Insert: {
           active?: boolean
@@ -11750,6 +11754,7 @@ export type Database = {
           sort?: number
           updated_at?: string
           uvp?: number
+          valid_from?: string
         }
         Update: {
           active?: boolean
@@ -11764,6 +11769,43 @@ export type Database = {
           sort?: number
           updated_at?: string
           uvp?: number
+          valid_from?: string
+        }
+        Relationships: []
+      }
+      pricing_price_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          code: string
+          field: string
+          id: string
+          new_value: number | null
+          old_value: number | null
+          table_name: string
+          valid_from: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          code: string
+          field: string
+          id?: string
+          new_value?: number | null
+          old_value?: number | null
+          table_name: string
+          valid_from: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          code?: string
+          field?: string
+          id?: string
+          new_value?: number | null
+          old_value?: number | null
+          table_name?: string
+          valid_from?: string
         }
         Relationships: []
       }
@@ -11777,6 +11819,7 @@ export type Database = {
           unit: string
           updated_at: string
           uvp: number
+          valid_from: string
         }
         Insert: {
           code: string
@@ -11787,6 +11830,7 @@ export type Database = {
           unit: string
           updated_at?: string
           uvp?: number
+          valid_from?: string
         }
         Update: {
           code?: string
@@ -11797,6 +11841,7 @@ export type Database = {
           unit?: string
           updated_at?: string
           uvp?: number
+          valid_from?: string
         }
         Relationships: []
       }

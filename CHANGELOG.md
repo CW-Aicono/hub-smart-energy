@@ -1,5 +1,11 @@
 # Änderungsprotokoll (intern)
 
+## v1.16.3 – 30.10.2026
+- Paketabrechnung Schritt 1 (Preisstammdaten): Ladepunkt-EK 6,00 € (bisher 5,25 €), Remote-Support-EK 112,00 € und für Partner buchbar (bisher kein Partnerpreis). UVP unverändert.
+- Preisversionierung: valid_from auf pricing_packages/pricing_unit_prices, Historientabelle pricing_price_history mit Trigger (jede UVP/EK-Änderung protokolliert), „Gültig ab“-Datum in der Katalogpflege; erzeugte Rechnungen bleiben unverändert.
+- Tooltip erklärt „Freischaltung Partner“ (einmalige Gebühr je Partner und Paket).
+- module_bundles.bookable (Standard false): alte Bundles als „Altvertrag – nicht mehr buchbar“ gekennzeichnet, Neubuchung im Mandanten-Dialog gesperrt, Bestandsbuchungen laufen unverändert weiter.
+
 ## v1.16.2 – 30.10.2026
 - Fernstart (RemoteStartTransaction) jetzt auch bei Status „Vorbereitung“ (Fahrzeug angesteckt) zulässig, nicht nur bei „Verfügbar“/„Nicht verfügbar“ (ocpp-central).
 - OCPP-Protokoll: ELMI-Statuscode 0x0B0B0000 gilt als reine Information und wird nicht mehr rot als Fehler markiert (OcppLogViewer).

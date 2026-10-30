@@ -655,7 +655,7 @@ const SuperAdminTenantDetail = () => {
                     <DialogDescription>Bundles für diesen Mandanten buchen oder entfernen.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto">
-                    {allBundles.filter(b => b.is_active).map((bundle) => {
+                    {allBundles.filter(b => b.is_active && (b.bookable !== false || tenantBundleIds.includes(b.id))).map((bundle) => {
                       const isBooked = tenantBundleIds.includes(bundle.id);
                       const bundleModules = getBundleModules(bundle.id);
                       return (
@@ -664,6 +664,7 @@ const SuperAdminTenantDetail = () => {
                             <div className="flex items-center gap-2">
                               <p className="font-medium text-sm">{bundle.name}</p>
                               <Badge variant="outline" className="text-xs">{Number(bundle.price_monthly).toFixed(2)} €/m</Badge>
+                              {bundle.bookable === false && <Badge variant="secondary" className="text-xs">Altvertrag</Badge>}
                             </div>
                             {bundle.description && <p className="text-xs text-muted-foreground mt-0.5">{bundle.description}</p>}
                             <p className="text-xs text-muted-foreground mt-0.5">{bundleModules.length} Module</p>
@@ -688,8 +689,8 @@ const SuperAdminTenantDetail = () => {
                         </div>
                       );
                     })}
-                    {allBundles.filter(b => b.is_active).length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">Keine aktiven Bundles vorhanden.</p>
+                    {allBundles.filter(b => b.is_active && (b.bookable !== false || tenantBundleIds.includes(b.id))).length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">Keine buchbaren Bundles vorhanden.</p>
                     )}
                   </div>
                 </DialogContent>

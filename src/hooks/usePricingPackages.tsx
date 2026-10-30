@@ -3,8 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { PackageDef, UnitPrice } from "@/lib/packagePricing";
 
 export interface PricingCatalog {
-  packages: (PackageDef & { sort: number; active: boolean; modules: string[]; partner_unlock_fee: number })[];
-  units: (UnitPrice & { name: string; unit: string; new_sale_uvp?: number | null; partner_available?: boolean })[];
+  packages: (PackageDef & { sort: number; active: boolean; modules: string[]; partner_unlock_fee: number; valid_from?: string })[];
+  units: (UnitPrice & { name: string; unit: string; new_sale_uvp?: number | null; partner_available?: boolean; valid_from?: string })[];
   flags: Record<string, "sellable" | "hidden" | "on_request">;
 }
 
@@ -34,8 +34,10 @@ export function usePricingPackages() {
   });
 
   const updatePrice = useMutation({
-    mutationFn: async ({ table, code, uvp, ek }: { table: "pricing_packages" | "pricing_unit_prices"; code: string; uvp: number; ek: number }) => {
-      const { error } = await (supabase as any).from(table).update({ uvp, ek, updated_at: new Date().toISOString() }).eq("code", code);
+    mutationFn: async ({ table, code, uvp, ek, validFrom }: { table: "pricing_packages" | "pricing_unit_prices"; code: string; uvp: number; ek: number; validFrom?: string }) => {
+      const payload: Record<string, unknown> = { uvp, ek, updated_at: new Date().toISOString() };
+      if (validFrom) payload.valid_from = validFrom;
+      const { error } = await (supabase as any).from(table).update(payload).eq("code", code);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["pricing-catalog"] }),

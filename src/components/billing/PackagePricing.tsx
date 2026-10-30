@@ -10,7 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Loader2, Package } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertTriangle, Info, Loader2, Package } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -20,6 +21,7 @@ const pct = (n: number) => `${n.toLocaleString("de-DE", { maximumFractionDigits:
 export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
   const { catalog, isLoading, error, updatePrice, updateUnlockFee } = usePricingPackages();
   const [draft, setDraft] = useState<Record<string, { uvp: string; ek: string }>>({});
+  const [validFrom, setValidFrom] = useState(() => new Date().toISOString().slice(0, 10));
   if (isLoading) return <Card><CardContent className="p-6"><Loader2 className="h-4 w-4 animate-spin" /></CardContent></Card>;
   if (error || !catalog) return <Card><CardContent className="p-6 text-destructive text-sm">Paketkatalog konnte nicht geladen werden.</CardContent></Card>;
 
@@ -28,7 +30,7 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
     if (!d) return;
     const nu = Number(d.uvp.replace(",", ".")), ne = Number(d.ek.replace(",", "."));
     if (!Number.isFinite(nu) || !Number.isFinite(ne) || (nu === uvp && ne === ek)) return;
-    try { await updatePrice.mutateAsync({ table, code, uvp: nu, ek: ne }); toast({ title: "Preis gespeichert" }); }
+    try { await updatePrice.mutateAsync({ table, code, uvp: nu, ek: ne, validFrom }); toast({ title: "Preis gespeichert", description: `Gültig ab ${new Date(validFrom + "T00:00:00").toLocaleDateString("de-DE")}. Bereits erzeugte Rechnungen bleiben unverändert.` }); }
     catch (e: any) { toast({ title: "Fehler", description: e.message, variant: "destructive" }); }
   };
   const cell = (table: "pricing_packages" | "pricing_unit_prices", code: string, uvp: number, ek: number, field: "uvp" | "ek") => (
@@ -42,11 +44,19 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Pakete (neue Buchungen)</CardTitle>
-        <CardDescription>UVP = unverbindliche Preisempfehlung, EK = Partner-Einkaufspreis, netto pro Monat. Bestandskunden werden weiter nach der Modulpreisliste unten abgerechnet.</CardDescription>
+        <CardDescription>UVP = unverbindliche Preisempfehlung, EK = Partner-Einkaufspreis, netto pro Monat. Bestandskunden werden weiter nach der Modulpreisliste unten abgerechnet. Jede Preisänderung wird mit Gültig-ab-Datum versioniert; bereits erzeugte Rechnungen bleiben unverändert.</CardDescription>
+        {canEdit && (
+          <div className="flex items-center gap-2 pt-2">
+            <Label htmlFor="price-valid-from" className="text-xs whitespace-nowrap">Änderungen gültig ab</Label>
+            <Input id="price-valid-from" type="date" className="w-40 h-8" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         <Table>
-          <TableHeader><TableRow><TableHead>Paket</TableHead><TableHead>Module</TableHead><TableHead>Voraussetzung</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right" title="Einmalig an den Partner, wenn ihm das erste Modul des Pakets freigeschaltet wird">Freischaltung Partner</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Paket</TableHead><TableHead>Module</TableHead><TableHead>Voraussetzung</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right">Gültig ab</TableHead><TableHead className="text-right">
+            <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Freischaltung Partner <Info className="h-3.5 w-3.5 text-muted-foreground" /></span></TooltipTrigger><TooltipContent className="max-w-xs">Einmalige Gebühr, die dem Partner in Rechnung gestellt wird, sobald ihm das erste Modul dieses Pakets freigeschaltet wird. Sie fällt pro Partner nur einmal je Paket an.</TooltipContent></Tooltip></TooltipProvider>
+          </TableHead></TableRow></TableHeader>
           <TableBody>
             {catalog.packages.map((p) => (
               <TableRow key={p.code}>
@@ -55,6 +65,7 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
                 <TableCell className="text-xs">{p.requires_package ? catalog.packages.find((x) => x.code === p.requires_package)?.name : p.requires_any_other ? "mind. ein anderes Paket" : "–"}</TableCell>
                 <TableCell className="text-right">{p.always_active ? eur(0) : cell("pricing_packages", p.code, p.uvp, p.ek, "uvp")}</TableCell>
                 <TableCell className="text-right">{p.always_active ? eur(0) : cell("pricing_packages", p.code, p.uvp, p.ek, "ek")}</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{p.valid_from ? new Date(p.valid_from + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
                 <TableCell className="text-right">{p.always_active ? "–" : (
                   <Input className="h-8 w-24 ml-auto text-right" disabled={!canEdit}
                     defaultValue={p.partner_unlock_fee.toLocaleString("de-DE", { minimumFractionDigits: 2 })}
@@ -70,13 +81,14 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
           </TableBody>
         </Table>
         <Table>
-          <TableHeader><TableRow><TableHead>Mengen- und Servicepreise</TableHead><TableHead>Einheit</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Mengen- und Servicepreise</TableHead><TableHead>Einheit</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right">Gültig ab</TableHead></TableRow></TableHeader>
           <TableBody>
             {catalog.units.map((u) => (
               <TableRow key={u.code}>
                 <TableCell>{u.name}</TableCell><TableCell className="text-xs">{u.unit}</TableCell>
                 <TableCell className="text-right">{eur(u.new_sale_uvp ?? u.uvp)}</TableCell>
                 <TableCell className="text-right">{u.partner_available === false ? "–" : cell("pricing_unit_prices", u.code, u.uvp, u.ek, "ek")}</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{u.valid_from ? new Date(u.valid_from + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
               </TableRow>
             ))}
           </TableBody>

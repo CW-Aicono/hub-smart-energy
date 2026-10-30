@@ -365,6 +365,13 @@
       "when": 1793365282584,
       "tag": "0051_package_sales_and_support",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1793383699727,
+      "tag": "0052_package_price_master_step1",
+      "breakpoints": true
     }
   ]
 }
