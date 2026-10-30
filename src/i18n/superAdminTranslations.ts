@@ -203,6 +203,7 @@ export const saTranslations: SATranslations = {
   "billing.payment_method": { de: "Zahlart", en: "Payment", es: "Zahlart", nl: "Zahlart" },
   "billing.lexware_send": { de: "An Lexware senden", en: "Send to Lexware", es: "An Lexware senden", nl: "An Lexware senden" },
   "billing.lexware_send_all": { de: "Alle an Lexware senden", en: "Send all to Lexware", es: "Alle an Lexware senden", nl: "Alle an Lexware senden" },
+  "billing.lexware_draft": { de: "In Lexware (Entwurf)", en: "In Lexware (draft)", es: "En Lexware (borrador)", nl: "In Lexware (concept)" },
   "billing.lexware_synced": { de: "In Lexware", en: "In Lexware", es: "In Lexware", nl: "In Lexware" },
   "billing.lexware_sending": { de: "Sende...", en: "Sending...", es: "Sende...", nl: "Sende..." },
   "billing.lexware_success": { de: "Erfolgreich an Lexware gesendet", en: "Successfully sent to Lexware", es: "Erfolgreich an Lexware gesendet", nl: "Erfolgreich an Lexware gesendet" },

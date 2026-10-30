@@ -252,6 +252,9 @@ const SuperAdminBilling = () => {
                 if (error) throw error;
                 queryClient.invalidateQueries({ queryKey: ["super-admin-invoices"] });
                 toast.success(`Rechnungen generiert: ${data?.invoices_created ?? 0} neu, ${data?.invoices_updated ?? 0} aktualisiert`);
+                if (Array.isArray(data?.warnings) && data.warnings.length) {
+                  toast.warning(`Achtung: Offene Direktrechnung an Kunden eines Wiederverkaufs-Partners: ${data.warnings.join(", ")}. Diese Kunden rechnet der Partner selbst ab – Entwurf prüfen und ggf. löschen.`, { duration: 20000 });
+                }
               } catch (err: any) {
                 toast.error(`Fehler: ${err.message}`);
               } finally {
@@ -268,7 +271,7 @@ const SuperAdminBilling = () => {
               Status aktualisieren
             </Button>
             <Button variant="outline" disabled={lexwareMutation.isPending} onClick={() => {
-              const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && !inv.issued_at && inv.document_type !== "subscription_notice" && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
+              const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && !inv.issued_at && (inv.document_type ?? "invoice") === "invoice" && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
               if (openIds.length === 0) { toast.info(t("billing.lexware_no_open")); return; }
               lexwareMutation.mutate(openIds);
             }}>
@@ -429,10 +432,19 @@ const SuperAdminBilling = () => {
                         <TableCell className="font-medium">
                           {inv.tenants?.name ?? "–"}
                           {inv.partner_id && (
-                            <div className="text-xs text-muted-foreground">an Partner: {inv.partners?.name ?? "–"} (EK)</div>
+                            <div className="text-xs text-muted-foreground">an Partner: {inv.partners?.name ?? "–"}{inv.document_type === "credit_note" ? "" : " (EK)"}</div>
                           )}
                           {inv.invoice_kind === "one_time" && (
                             <Badge variant="outline" className="ml-2 text-xs">Einmalig</Badge>
+                          )}
+                          {inv.source_ref?.startsWith("monthly:partner-sum:") && (
+                            <Badge variant="outline" className="ml-2 text-xs" title="Eine Rechnung je Partner und Monat, gegliedert nach Kunde">Sammelrechnung</Badge>
+                          )}
+                          {inv.document_type === "credit_note" && (
+                            <Badge variant="outline" className="ml-2 text-xs" title="Provisionsgutschrift an den Partner">Gutschrift</Badge>
+                          )}
+                          {inv.document_type === "cancellation" && (
+                            <Badge variant="outline" className="ml-2 text-xs" title="Korrektur einer festgeschriebenen Rechnung">Storno-Rechnung</Badge>
                           )}
                           {inv.document_type === "subscription_notice" && (
                             <Badge variant="secondary" className="ml-2 text-xs" title="Kein Zahlbetrag – keine Rechnung">Abo-Beleg</Badge>
@@ -468,9 +480,9 @@ const SuperAdminBilling = () => {
                         <TableCell>
                           {inv.lexware_invoice_id ? (
                             <Badge variant="default" className="text-xs gap-1">
-                              <CheckCircle2 className="h-3 w-3" />{t("billing.lexware_synced")}
+                              <CheckCircle2 className="h-3 w-3" />{inv.status === "draft" ? t("billing.lexware_draft") : t("billing.lexware_synced")}
                             </Badge>
-                          ) : inv.status === "voided" || inv.document_type === "subscription_notice" ? (
+                          ) : inv.status === "voided" || (inv.document_type ?? "invoice") !== "invoice" ? (
                             <Badge variant="outline" className="text-xs text-muted-foreground">—</Badge>
                           ) : (
                             <Button size="sm" variant="ghost" disabled={sendingIds.has(inv.id) || lexwareMutation.isPending} onClick={() => lexwareMutation.mutate([inv.id])}>
