@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.16.3 – 30.10.2026
+- Preisstammdaten aktualisiert: Ladepunkt 8 € / Partner 6 € pro Monat, Remote-Support-Flatrate 149 € / Partner 112 € – jetzt auch für Partner buchbar.
+- Preisänderungen werden mit Gültig-ab-Datum versioniert und automatisch protokolliert; bereits erzeugte Rechnungen bleiben unverändert.
+- Die bisherigen Bundles sind als „Altvertrag – nicht mehr buchbar“ gekennzeichnet; Kunden mit bestehender Buchung werden unverändert weiter abgerechnet.
+
 ## v1.16.2 – 30.10.2026
 - Fernstart eines Ladevorgangs ist jetzt auch möglich, wenn das Fahrzeug bereits angesteckt ist (Status „Vorbereitung“).
 - Im OCPP-Protokoll werden reine Hersteller-Statusmeldungen (z. B. ELMI 0x0B0B0000) nicht mehr als Fehler markiert.
