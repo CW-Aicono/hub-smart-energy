@@ -1,5 +1,8 @@
 # Roadmap
 
+## Paketumstellung (30.10.)
+- [ ] Neue Buchungen und Rechnungsauswahl nur Pakete/Zusatzleistungen; monatliche Nettopreise laut Preisliste, 8 € je Ladepunkt; Bestandsverträge unverändert.
+
 ## Partnerabrechnung und Ratierlichkeit (30.10.)
 - [x] v1.15.0: Intervalle je Lizenz, getrennte Endkunden-/EK-Entwürfe, zeitanteilige Ergänzungen, täglicher Nachlauf, Partnerabsender/Freigabe/PDF/E-Mail/SEPA. Angemeldete Testverkäufe, zwei Kunden, Retry und Sperre unvollständiger Absender geprüft; Testdaten entfernt.
 - [ ] Wartet auf Nutzer: Partner-Rechnungsabsender vervollständigen, anschließend Freigabe/PDF-Ende-zu-Ende prüfen; Live-Deploy und Live-Prüfung offen. Versand und Bankabbuchung nicht ausgeführt.
