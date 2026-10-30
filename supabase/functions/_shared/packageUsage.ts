@@ -51,6 +51,19 @@ export function supportMinutes(s: SupportSession): { minutes: number; review: bo
   return { minutes, review: minutes > SUPPORT_REVIEW_MIN };
 }
 
+/**
+ * Welche Position ein freigegebener Partnerrabatt mindert: direkt gewählte Paket-/Mengencodes
+ * (Paket, weitere Liegenschaft, Ladepunkt, Ladevorgang, Remote-Support-Flatrate) oder – bei älteren
+ * Anfragen mit Modulcodes – Pakete, die eines der Module enthalten. Ohne Auswahl: alle Pakete.
+ * Über Vertrag abgerechnete Positionen behalten ihren vereinbarten Vertragspreis.
+ */
+export function discountApplies(d: Discount, l: UsageLine, defs: PkgDef[]) {
+  if (l.viaContract || l.review || (l.type !== "package" && l.type !== "package_unit")) return false;
+  if (!d.modules?.length) return l.type === "package";
+  if (d.modules.includes(l.code)) return true;
+  return l.type === "package" && (defs.find((x) => x.code === l.code)?.modules ?? []).some((m) => d.modules!.includes(m));
+}
+
 export function computeTenantMonth(i: UsageInput): UsageResult {
   const lines: UsageLine[] = [];
   const u = (c: string) => i.units[c] ?? { uvp: 0, ek: 0 };
@@ -90,7 +103,7 @@ export function computeTenantMonth(i: UsageInput): UsageResult {
   // Freigegebene Partnerrabatte wirken auf den EK der betroffenen Pakete
   if (i.partner) {
     for (const d of i.discounts) {
-      const base = lines.filter((l) => l.type === "package" && !l.viaContract && (!d.modules?.length || (i.defs.find((x) => x.code === l.code)?.modules ?? []).some((m) => d.modules!.includes(m)))).reduce((s, l) => s + l.ek, 0);
+      const base = lines.filter((l) => discountApplies(d, l, i.defs)).reduce((s, l) => s + l.ek, 0);
       if (base <= 0) continue;
       const amt = r2(Math.min(base, d.type === "percent" ? base * d.value / 100 : d.value));
       if (amt > 0) lines.push({ code: "discount", type: "discount", label: d.label ?? (d.type === "percent" ? `Partnerrabatt ${d.value.toLocaleString("de-DE")} %` : "Partnerrabatt"), quantity: 1, uvp: 0, ek: -amt });
