@@ -239,26 +239,38 @@ Deno.serve(async (req) => {
       if (lockedTenants.has(tenant.id)) continue;
       if (isSwitched(tenant) && usage) {
         const u = usage.results[tenant.id];
-        const toPartner = !!tenant.partner_id;
-        const pick = (x: { uvp: number; ek: number }) => (toPartner ? x.ek : x.uvp);
-        const lines: any[] = u.lines.filter((l) => !l.viaContract).map((l) => ({ type: l.type, code: l.code, label: l.label, quantity: l.quantity, unit_price: l.quantity ? Math.round(pick(l) / l.quantity * 100) / 100 : pick(l), amount: l.review ? 0 : pick(l), review: l.review || undefined, session_id: l.session_id }));
+        const partner = tenant.partner_id ? partnerMap[tenant.partner_id] : null;
+        const route = routeTenant(tenant, partner);
+        const flowLines: any[] = u.lines.filter((l) => !l.viaContract).map((l) => ({ ...l }));
         // Nachberechnung: nachträglich erfasste Mengen des Vormonats (nur wenn der Vormonat bereits nach Paketen lief)
-        const prevInv = prevInvoices[tenant.id];
-        if (prevInv && usagePrev) {
+        if (prevBilled[tenant.id] && usagePrev) {
           const billedQty: Record<string, number> = {};
-          for (const li of (prevInv.line_items ?? []) as any[]) if (li.code && (li.type === "package_unit" || li.type === "back_charge")) billedQty[li.code] = (billedQty[li.code] ?? 0) + Number(li.quantity ?? 0);
-          for (const l of backCharge(usagePrev.results[tenant.id], billedQty, usage.units, prevKey)) lines.push({ type: l.type, code: l.code, label: l.label, quantity: l.quantity, unit_price: Math.round(pick(l) / l.quantity * 100) / 100, amount: pick(l) });
+          for (const li of prevBilled[tenant.id]) if (li.code && (li.type === "package_unit" || li.type === "back_charge")) billedQty[li.code] = (billedQty[li.code] ?? 0) + Number(li.quantity ?? 0);
+          for (const l of backCharge(usagePrev.results[tenant.id], billedQty, usage.units, prevKey)) flowLines.push(l);
         }
+        if (!flowLines.length) continue;
         const delta = monthDelta(u, tenant.package_billing_from < fmt(lastMonthStart) && usagePrev ? usagePrev.results[tenant.id] : null);
+        if (route === "reseller") {
+          // Wiederverkauf: Sammelrechnung an Partner (EK) + Endkunden-Entwurf des Partners (außer Eigenbedarf)
+          (collectives[partner!.id] ??= []).push({ tenant, lines: flowLines });
+          if (delta.plausibility || u.review) reviewByPartner[partner!.id] = true;
+          if (!tenant.partner_self_customer) {
+            const pl = partnerCustomerLines(flowLines, partnerPrices[partner!.id] ?? {});
+            customerDrafts.push({ partner_id: partner!.id, tenant_id: tenant.id, source_ref: `monthly:pci:${tenant.id}:${monthKey}`,
+              period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), lines: pl });
+          }
+          continue;
+        }
+        // Direktkunde und Provisionsmodell: AICONO rechnet mit dem Kunden zur UVP ab
+        const lines = priceLines(flowLines, "uvp");
         const sum = Math.round(lines.reduce((x, l) => x + Number(l.amount || 0), 0) * 100) / 100;
-        if (!lines.length) continue;
-        const deltaText = delta.text ? `${delta.text}, ${(toPartner ? delta.ek : delta.uvp) >= 0 ? "+" : ""}${(toPartner ? delta.ek : delta.uvp).toLocaleString("de-DE", { minimumFractionDigits: 2 })} €` : null;
-        partnerDrafts.push({ tenant_id: tenant.id, partner_id: tenant.partner_id ?? null, invoice_kind: "recurring",
-          source_ref: `monthly:${toPartner ? "partner" : "tenant"}:${tenant.id}:${monthKey}`, invoice_number: sum > 0 ? "DRAFT" : "ABO-BELEG",
+        if (route === "commission") (commissions[partner!.id] ??= []).push({ tenant, uvp: sum });
+        const deltaText = delta.text ? `${delta.text}, ${delta.uvp >= 0 ? "+" : ""}${delta.uvp.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €` : null;
+        partnerDrafts.push({ tenant_id: tenant.id, partner_id: null, invoice_kind: "recurring",
+          source_ref: `monthly:tenant:${tenant.id}:${monthKey}`, invoice_number: sum > 0 ? "DRAFT" : "ABO-BELEG",
           document_type: sum > 0 ? "invoice" : "subscription_notice", status: "draft",
           period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), amount: sum, module_total: sum, support_total: 0,
-          usage_review: delta.plausibility || u.review, usage_delta: deltaText,
-          line_items: lines.map((l) => (toPartner ? { ...l, label: `${l.label} – ${tenant.name}` } : l)) });
+          usage_review: delta.plausibility || u.review, usage_delta: deltaText, line_items: lines });
         continue;
       }
       const tenantModules = (allModules ?? []).filter(
