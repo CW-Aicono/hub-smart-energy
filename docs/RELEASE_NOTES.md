@@ -1,5 +1,14 @@
 # Versionshinweise
 
+## v1.18.0 – 30.10.2026
+- Monatsübersicht nach Paketen berechnet für umgestellte Kunden UVP und EK je Position und ist dort Grundlage der Monatsrechnung („Positionen“ aufklappbar).
+- Mengen werden automatisch gezählt (täglicher Zähllauf): Ladepunkte mit mindestens einem aktiven Tag, Liegenschaften, abgerechnete Ladevorgänge, Pakete taggenau anteilig, Remote-Support, Support je 15 Min., Einrichtung im Aktivierungsmonat.
+- Support-Sitzungen über 4 Stunden oder ohne Ende werden nicht automatisch berechnet, sondern als „Prüfen“ markiert.
+- Freigegebene Partnerrabatte mindern den EK; Summen je Partner und für Direktkunden.
+- Neue Spalte „Änderung zum Vormonat“; Mengenänderungen über 50 % markieren den Entwurf gelb. Nachträgliche Mengen werden im nächsten Lauf nachberechnet.
+- Partner sehen Mengenänderungen ihrer Kunden einmal täglich gesammelt unter Abrechnung.
+- Neue Kunden werden ab Anlage nach Paketen abgerechnet; Bestandskunden bleiben unverändert.
+
 ## v1.17.0 – 30.10.2026
 - „Paket buchen“ belegt den Preis automatisch aus der Preisliste vor (Direktkunde UVP, Partnerkunde EK); abweichende Preise nur mit Begründung, gekennzeichnet als „individueller Preis“.
 - Neu buchbar: „Einrichtung (einmalig)“. Ladepunkte und weitere Liegenschaften werden nicht mehr manuell gebucht, sondern automatisch gezählt.
