@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.16.2 – 30.10.2026
+- Fernstart eines Ladevorgangs ist jetzt auch möglich, wenn das Fahrzeug bereits angesteckt ist (Status „Vorbereitung“).
+- Im OCPP-Protokoll werden reine Hersteller-Statusmeldungen (z. B. ELMI 0x0B0B0000) nicht mehr als Fehler markiert.
+
 ## v1.16.1 – 30.10.2026
 - Alle OCPP-Ladestatus getrennt dargestellt, insbesondere Vorbereitung, Fahrzeug-/Stationspause, Beendet und Reserviert. Offene Sitzungen überschreiben gemeldete Zustände nicht; Statusanzeige in Listen, Details, Karten, Widgets und Lade-App vereinheitlicht.
 
