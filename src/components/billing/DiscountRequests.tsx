@@ -267,7 +267,7 @@ export function PortalDiscountRequestsCard() {
 
   const decide = async (r: DiscountRequest, decision: "approve" | "reject") => {
     const moduleCodes = selected[r.id] ?? r.module_codes;
-    if (decision === "approve" && !moduleCodes.length) return toast.error("Mindestens ein Modul freigeben oder ablehnen");
+    if (decision === "approve" && !moduleCodes.length) return toast.error("Mindestens eine Position freigeben oder ablehnen");
     setBusyId(r.id);
     try {
       const { data: res, error } = await supabase.functions.invoke("portal-decide-discount-request", {
@@ -283,7 +283,7 @@ export function PortalDiscountRequestsCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><BadgePercent className="h-5 w-5" />Rabatt-Anfragen von Partnern ({pending.length} offen)</CardTitle>
-        <CardDescription>Freigabe ganz oder nur für einzelne Module. Bei Freigabe werden die Rabatte automatisch beim Kunden hinterlegt und in der Abrechnung berücksichtigt.</CardDescription>
+        <CardDescription>Freigabe ganz oder nur für einzelne Positionen. Freigegebene Rabatte mindern den Partner-EK der gewählten Pakete und Mengenpreise in der Paketabrechnung; ältere Modul-Anfragen werden wie bisher beim Kunden hinterlegt.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && <p className="text-sm text-destructive">Anfragen konnten nicht geladen werden: {(error as Error).message}</p>}
@@ -312,7 +312,7 @@ export function PortalDiscountRequestsCard() {
               <Input placeholder="Notiz an den Partner (optional)" value={notes[r.id] ?? ""} onChange={(e) => setNotes((p) => ({ ...p, [r.id]: e.target.value }))} maxLength={500} />
               <div className="flex gap-2">
                 <Button size="sm" disabled={busyId === r.id || !sel.length} onClick={() => decide(r, "approve")}>
-                  <Check className="mr-1 h-4 w-4" />{sel.length === r.module_codes.length ? "Freigeben" : `${sel.length} von ${r.module_codes.length} Modulen freigeben`}
+                  <Check className="mr-1 h-4 w-4" />{sel.length === r.module_codes.length ? "Freigeben" : `${sel.length} von ${r.module_codes.length} Positionen freigeben`}
                 </Button>
                 <Button size="sm" variant="outline" disabled={busyId === r.id} onClick={() => decide(r, "reject")}><X className="mr-1 h-4 w-4" />Ablehnen</Button>
               </div>
@@ -321,7 +321,7 @@ export function PortalDiscountRequestsCard() {
         })}
         {done.length > 0 && (
           <Table>
-            <TableHeader><TableRow><TableHead>Entschieden</TableHead><TableHead>Partner / Kunde</TableHead><TableHead>Module</TableHead><TableHead>Rabatt</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Entschieden</TableHead><TableHead>Partner / Kunde</TableHead><TableHead>Pakete / Preise</TableHead><TableHead>Rabatt</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>
               {done.map((r) => (
                 <TableRow key={r.id}>
