@@ -2,6 +2,7 @@ import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
 import { LicenseSales } from "@/components/billing/LicenseSales";
 import { PackageBillingSwitch, usePackageBilling } from "@/components/billing/PackageBillingSwitch";
+import { TenantInvoiceOptions } from "@/components/billing/TenantInvoiceOptions";
 import { useTranslation } from "@/hooks/useTranslation";
 import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndReturn } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
@@ -570,6 +571,7 @@ const SuperAdminTenantDetail = () => {
 
             <TabsContent value="info" className="mt-6 space-y-6">
               {id && <PackageBillingSwitch tenantId={id} />}
+              {id && <TenantInvoiceOptions tenantId={id} />}
               {id && <PackageBookingCard tenantId={id} />}
               {id && <LicenseSales tenantId={id} />}
               {/* Stats tiles */}
