@@ -15,7 +15,7 @@ export async function loadUsage(admin: any, tenants: { id: string; partner_id: s
   const [defs, mods, units, sales, bookings, snaps, locs, cps, inv, adhoc, support, discounts] = await Promise.all([
     q(admin.from("pricing_packages").select("code,name,uvp,ek,always_active")),
     q(admin.from("pricing_package_modules").select("package_code,module_code")),
-    q(admin.from("pricing_unit_prices").select("code,uvp,ek")),
+    q(admin.from("pricing_unit_prices").select("code,uvp,ek,new_sale_uvp")),
     q(admin.from("license_sales").select("tenant_id,product_kind,product_code,starts_on,ended_on").in("tenant_id", ids)),
     q(admin.from("tenant_package_bookings").select("tenant_id,package_code,booked_at,cancelled_at").in("tenant_id", ids).lt("booked_at", to)),
     q(admin.from("tenant_usage_daily").select("tenant_id,day,locations,active_charge_point_ids").in("tenant_id", ids).gte("day", b.start).lte("day", b.end)),
@@ -27,7 +27,7 @@ export async function loadUsage(admin: any, tenants: { id: string; partner_id: s
     q(admin.from("partner_discount_requests").select("tenant_id,partner_id,approved_module_codes,discount_type,value,valid_from,duration_months,reason").eq("status", "approved").lte("valid_from", b.end)),
   ]);
   const pkgDefs: PkgDef[] = defs.map((d: any) => ({ code: d.code, name: d.name, uvp: Number(d.uvp), ek: Number(d.ek), always_active: !!d.always_active, modules: mods.filter((m: any) => m.package_code === d.code).map((m: any) => m.module_code) }));
-  const unitMap: Record<string, { uvp: number; ek: number }> = Object.fromEntries(units.map((u: any) => [u.code, { uvp: Number(u.uvp), ek: Number(u.ek) }]));
+  const unitMap: Record<string, { uvp: number; ek: number }> = Object.fromEntries(units.map((u: any) => [u.code, { uvp: Number(u.new_sale_uvp ?? u.uvp), ek: Number(u.ek) }]));
   const results: Record<string, UsageResult> = {};
   for (const t of tenants) {
     const ts = sales.filter((s: any) => s.tenant_id === t.id);
