@@ -372,6 +372,13 @@
       "when": 1793383699727,
       "tag": "0052_package_price_master_step1",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1793384326190,
+      "tag": "0053_package_booking_step2",
+      "breakpoints": true
     }
   ]
 }

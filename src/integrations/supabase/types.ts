@@ -6830,6 +6830,8 @@ export type Database = {
           next_period: string | null
           partner_id: string | null
           payment_method: string
+          price_individual: boolean
+          price_reason: string | null
           product_code: string
           product_kind: string
           purchase_price: number
@@ -6849,6 +6851,8 @@ export type Database = {
           next_period?: string | null
           partner_id?: string | null
           payment_method?: string
+          price_individual?: boolean
+          price_reason?: string | null
           product_code: string
           product_kind: string
           purchase_price?: number
@@ -6868,6 +6872,8 @@ export type Database = {
           next_period?: string | null
           partner_id?: string | null
           payment_method?: string
+          price_individual?: boolean
+          price_reason?: string | null
           product_code?: string
           product_kind?: string
           purchase_price?: number
@@ -14956,6 +14962,7 @@ export type Database = {
           disabled_at: string | null
           enabled_at: string | null
           id: string
+          individual_grant: boolean
           is_enabled: boolean
           module_code: string
           price_override: number | null
@@ -14968,6 +14975,7 @@ export type Database = {
           disabled_at?: string | null
           enabled_at?: string | null
           id?: string
+          individual_grant?: boolean
           is_enabled?: boolean
           module_code: string
           price_override?: number | null
@@ -14980,6 +14988,7 @@ export type Database = {
           disabled_at?: string | null
           enabled_at?: string | null
           id?: string
+          individual_grant?: boolean
           is_enabled?: boolean
           module_code?: string
           price_override?: number | null
@@ -15369,6 +15378,10 @@ export type Database = {
           logo_url: string | null
           name: string
           onboarding_completed: boolean
+          package_billing: boolean
+          package_billing_from: string | null
+          package_billing_set_at: string | null
+          package_billing_set_by: string | null
           partner_id: string | null
           payment_method: string
           postal_code: string | null
@@ -15415,6 +15428,10 @@ export type Database = {
           logo_url?: string | null
           name: string
           onboarding_completed?: boolean
+          package_billing?: boolean
+          package_billing_from?: string | null
+          package_billing_set_at?: string | null
+          package_billing_set_by?: string | null
           partner_id?: string | null
           payment_method?: string
           postal_code?: string | null
@@ -15461,6 +15478,10 @@ export type Database = {
           logo_url?: string | null
           name?: string
           onboarding_completed?: boolean
+          package_billing?: boolean
+          package_billing_from?: string | null
+          package_billing_set_at?: string | null
+          package_billing_set_by?: string | null
           partner_id?: string | null
           payment_method?: string
           postal_code?: string | null
@@ -16841,6 +16862,10 @@ export type Database = {
       set_partner_invoice_status: {
         Args: { p_invoice: string; p_status: string }
         Returns: undefined
+      }
+      set_tenant_package_billing: {
+        Args: { p_enabled: boolean; p_individual: string[]; p_tenant: string }
+        Returns: string
       }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
       touch_location_integration_sync: {
