@@ -16243,6 +16243,7 @@ export type Database = {
         Args: { _area: string; _uid: string }
         Returns: boolean
       }
+      can_read_price_catalog: { Args: { _uid: string }; Returns: boolean }
       cancel_aicono_invoice: {
         Args: { p_invoice_id: string }
         Returns: {

@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.21.1 – 30.10.2026
+- Sicherheit: Paket- und Mengenpreisliste (inkl. Einkaufspreise) nur noch für AICONO-Portal und Partner lesbar; Kunden sehen ihre Pakete weiterhin über „Paket & Rechnungen“ ohne Preise. Migration 0058 can_read_price_catalog().
+
 ## v1.21.0 – 30.10.2026
 - Einstellungen → „Paket & Rechnungen“ für Kunden-Admins: gebuchte Pakete mit enthaltenen Funktionen (ohne Preise), nicht freigeschaltete Funktionen mit Hinweis „Im Paket X enthalten – Anfrage an Partner/AICONO“ und alle ausgestellten Rechnungen an den Kunden (von AICONO oder vom Partner) als PDF mit E-Rechnung. Normale Benutzer sehen den Bereich nicht.
 - Abnahmetests der Paketabrechnung (Fälle A, B, C, Flatrate, Neukunde, anteilig, Mengenänderung, Support-Prüfung, Paket 6) als automatische Tests hinterlegt.

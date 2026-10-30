@@ -407,6 +407,13 @@
       "when": 1793389179699,
       "tag": "0057_tenant_package_summary_step6",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1793389652649,
+      "tag": "0058_lock_pricing_catalog",
+      "breakpoints": true
     }
   ]
 }
