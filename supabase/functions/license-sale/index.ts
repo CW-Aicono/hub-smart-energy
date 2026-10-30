@@ -18,7 +18,10 @@ Deno.serve(async req => {
     const {data:portal}=await client.rpc("can_portal_write",{_uid:user.id,_area:"commercial"});
     const {data:partner}=t.partner_id ? await client.rpc("can_manage_partner_billing",{p_partner:t.partner_id}):{data:false};
     if(!portal&&!partner) return json({error:"Keine Berechtigung"},403);
-    const {data:exists}=await client.from("license_sales").select("id").eq("request_id",p.request_id).maybeSingle(); if(exists) return json({id:exists.id});
+    const args={p_tenant:p.tenant_id,p_kind:p.product_kind,p_code:p.product_code,p_quantity:p.quantity,p_cadence:p.cadence,p_price:p.sale_price,p_start:p.starts_on,p_payment:p.payment_method,p_request:p.request_id};
+    const {data:existing,error:preflightError}=await client.rpc("preflight_license_sale",args);
+    if(preflightError)return json({error:preflightError.message},400);
+    if(existing)return json({id:existing});
     let modules:string[]=[];
     if(p.product_kind==="package") {
       const {data:def}=await admin.from("pricing_packages").select("requires_package,requires_any_other").eq("code",p.product_code).eq("active",true).eq("always_active",false).single(); if(!def) return json({error:"Paket nicht buchbar"},400);
@@ -35,7 +38,7 @@ Deno.serve(async req => {
       const response=await fetch(`${url}/functions/v1/${fn}`,{method:"POST",headers:{Authorization:authorization,apikey:key,"Content-Type":"application/json"},body:JSON.stringify(body)});
       const result=await response.json(); if(!response.ok||result.error||result.success===false) return json({error:result.error||"Freigabe fehlgeschlagen"},400);
     }
-    const {data,error}=await client.rpc("create_license_sale",{p_tenant:p.tenant_id,p_kind:p.product_kind,p_code:p.product_code,p_quantity:p.quantity,p_cadence:p.cadence,p_price:p.sale_price,p_start:p.starts_on,p_payment:p.payment_method,p_request:p.request_id});
+    const {data,error}=await client.rpc("create_license_sale",args);
     if(error) return json({error:error.message},400); return json({id:data});
   } catch(e) { return json({error:(e as Error).message},500); }
 });
