@@ -1,5 +1,13 @@
 # Versionshinweise
 
+## v1.19.0 – 30.10.2026
+- Rechnungsflüsse nach Partnermodell: Direktkunden zur UVP; Wiederverkaufs-Partner erhalten eine Sammelrechnung je Monat zum EK, gegliedert nach Kunde (inkl. Einrichtung im Aktivierungsmonat); Provisions-Partner erhalten eine monatliche Provisionsgutschrift, der Kunde wird zur UVP abgerechnet.
+- Partner erhalten je Kunde automatisch einen Endkunden-Entwurf mit eigenen Preisen und können eigene Positionen ergänzen; AICONO sieht diese Rechnungen nicht.
+- Warnung beim Generieren, wenn ein offener Direktentwurf an einen Kunden eines Wiederverkaufs-Partners besteht; Eigenbedarf des Partners wird „An Partner“ gekennzeichnet.
+- Korrektur freigegebener Rechnungen nur noch per Storno-Rechnung mit Bezug auf das Original (AICONO und Partner).
+- Alle Rechnungs-PDFs enthalten eine E-Rechnung (ZUGFeRD, EN 16931); Leitweg-ID je Kunde für Behörden.
+- Lexware: Rechnungen werden weiter als Entwurf übertragen und dort abgeschlossen; die Liste zeigt ehrlich „In Lexware (Entwurf)“.
+
 ## v1.18.0 – 30.10.2026
 - Monatsübersicht nach Paketen berechnet für umgestellte Kunden UVP und EK je Position und ist dort Grundlage der Monatsrechnung („Positionen“ aufklappbar).
 - Mengen werden automatisch gezählt (täglicher Zähllauf): Ladepunkte mit mindestens einem aktiven Tag, Liegenschaften, abgerechnete Ladevorgänge, Pakete taggenau anteilig, Remote-Support, Support je 15 Min., Einrichtung im Aktivierungsmonat.
