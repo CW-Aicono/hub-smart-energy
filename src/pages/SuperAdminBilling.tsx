@@ -425,7 +425,7 @@ const SuperAdminBilling = () => {
                     <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">{t("billing.no_invoices")}</TableCell></TableRow>
                   ) : (
                     sorted.map((inv: any) => (
-                      <TableRow key={inv.id}>
+                      <TableRow key={inv.id} className={inv.usage_review && !inv.issued_at ? "bg-warning/10" : undefined}>
                         <TableCell className="font-medium">
                           {inv.tenants?.name ?? "–"}
                           {inv.partner_id && (
@@ -437,6 +437,10 @@ const SuperAdminBilling = () => {
                           {inv.document_type === "subscription_notice" && (
                             <Badge variant="secondary" className="ml-2 text-xs" title="Kein Zahlbetrag – keine Rechnung">Abo-Beleg</Badge>
                           )}
+                          {inv.usage_review && !inv.issued_at && (
+                            <Badge className="ml-2 text-xs bg-warning text-warning-foreground hover:bg-warning" title="Menge ändert sich um mehr als 50 % oder Support-Sitzung über 4 Stunden">Prüfen</Badge>
+                          )}
+                          {inv.usage_delta && <div className="text-xs text-muted-foreground">Änderung zum Vormonat: {inv.usage_delta}</div>}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{inv.period_start ? new Date(inv.period_start + "T00:00:00").toLocaleDateString("de-DE") : "–"} – {inv.period_end ? new Date(inv.period_end + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
                         <TableCell>{Number(inv.module_total ?? 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
