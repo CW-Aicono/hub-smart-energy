@@ -344,6 +344,13 @@
       "when": 1793364446700,
       "tag": "0048_license_invoice_payment_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1793365197068,
+      "tag": "0049_package_only_new_sales",
+      "breakpoints": true
     }
   ]
 }
