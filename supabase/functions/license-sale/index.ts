@@ -38,7 +38,7 @@ Deno.serve(async req => {
       const response=await fetch(`${url}/functions/v1/${fn}`,{method:"POST",headers:{Authorization:authorization,apikey:key,"Content-Type":"application/json"},body:JSON.stringify(body)});
       const result=await response.json(); if(!response.ok||result.error||result.success===false) return json({error:result.error||"Freigabe fehlgeschlagen"},400);
     }
-    const {data,error}=await client.rpc("create_license_sale",args);
+    const {data,error}=await client.rpc("finalize_license_sale",args);
     if(error) return json({error:error.message},400); return json({id:data});
   } catch(e) { return json({error:(e as Error).message},500); }
 });
