@@ -6,7 +6,7 @@
 
 ## Paketabrechnung v5 (Dirk, 30.10.)
 - [x] Schritt 1 (v1.16.3): Ladepunkt-EK 6,00 €, Remote-Support-EK 112 € (partnerbuchbar), Preisversionierung mit Gültig-ab + Historie, Tooltip „Freischaltung Partner“, Bundles als „Altvertrag – nicht mehr buchbar“. 29 Tests, Build OK, DB-Werte verifiziert.
-- [ ] Schritt 2: Paketbuchung mit Freischaltung/Preisliste verknüpfen, Schalter „Abrechnung nach Paketen“ je Mandant
+- [x] Schritt 2 (v1.17.0): Preis-Vorbelegung + Begründungspflicht, Einrichtung einmalig, Mengen automatisch, Voraussetzungen/Hinweis Paket 6, Modul-Abschaltung beim Kündigen, Schalter „Abrechnung nach Paketen“ mit Vorschlag.
 - [ ] Schritt 3: Verbrauchsdaten in Monatsübersicht/Rechnung, tägliche Mengen-Snapshots, Support-Plausibilität (>4 h prüfen)
 - [ ] Schritt 4: Rechnungsflüsse nach Partnermodell (Wiederverkauf/Provision), E-Rechnung (ZUGFeRD/XRechnung) vorher prüfen und berichten
 - [ ] Schritt 5: Partner-Portal angleichen (Paket-Preisliste, Margen, Provisionsanzeige)

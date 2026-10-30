@@ -1,5 +1,13 @@
 # Änderungsprotokoll (intern)
 
+## v1.17.0 – 30.10.2026
+- „Paket buchen“ belegt den Preis automatisch aus der Preisliste vor (Direktkunde UVP, Partnerkunde EK); abweichende Preise nur mit Begründung, gekennzeichnet als „individueller Preis“.
+- Neu buchbar: „Einrichtung (einmalig)“. Ladepunkte und weitere Liegenschaften werden nicht mehr manuell gebucht, sondern automatisch gezählt.
+- Voraussetzungen werden geprüft (Pakete 2/3/5 nur mit Paket 1, Paket 6 nur mit weiterem Paket oder Ladepunkten); ab 7 Liegenschaften Hinweis auf Paket 6.
+- Kündigen eines Pakets schaltet nur Module ab, die kein anderes Paket abdeckt und die nicht einzeln freigeschaltet sind.
+- Neuer Schalter „Abrechnung nach Paketen“ je Kunde mit Paketvorschlag; gilt ab dem Folgemonat, Modulpreise werden danach nur angezeigt.
+- Technisch: Migrationen 0053/0054 (tenants.package_billing*, tenant_modules.individual_grant, license_sales.price_individual/price_reason, set_tenant_package_billing, Schutz-Trigger), license-sale (Begründungspflicht, action=end), generate-monthly-invoices (Modulpreise für umgestellte Kunden aussetzen).
+
 ## v1.16.3 – 30.10.2026
 - Paketabrechnung Schritt 1 (Preisstammdaten): Ladepunkt-EK 6,00 € (bisher 5,25 €), Remote-Support-EK 112,00 € und für Partner buchbar (bisher kein Partnerpreis). UVP unverändert.
 - Preisversionierung: valid_from auf pricing_packages/pricing_unit_prices, Historientabelle pricing_price_history mit Trigger (jede UVP/EK-Änderung protokolliert), „Gültig ab“-Datum in der Katalogpflege; erzeugte Rechnungen bleiben unverändert.
