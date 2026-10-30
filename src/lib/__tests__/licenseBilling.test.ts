@@ -5,7 +5,9 @@ describe("license billing rules", () => {
   it("accepts new package bookings", () => expect(saleSchema.safeParse(sale).success).toBe(true));
   it("rejects separately sold modules", () => expect(saleSchema.safeParse({ ...sale, kind: "module", code: "energy_monitoring" }).success).toBe(false));
   it("bills charging by charging-point quantity instead of a free package", () => expect(saleSchema.safeParse({ ...sale, code: "p4_charging", price: 0 }).success).toBe(false));
-  it("allows charging-point quantity at 8 euros", () => expect(saleSchema.safeParse({ ...sale, kind: "unit", code: "charge_point", quantity: 2, price: 8 }).success).toBe(true));
+  it("rejects manually booked charge points (counted automatically)", () => expect(saleSchema.safeParse({ ...sale, kind: "unit", code: "charge_point", quantity: 2, price: 8 }).success).toBe(false));
+  it("allows one-time setup", () => expect(saleSchema.safeParse({ ...sale, kind: "unit", code: "setup", cadence: "once", price: 200 }).success).toBe(true));
+  it("rejects recurring setup", () => expect(saleSchema.safeParse({ ...sale, kind: "unit", code: "setup", price: 200 }).success).toBe(false));
   it("rejects multiple copies of a flat-rate package", () => expect(saleSchema.safeParse({ ...sale, quantity: 2 }).success).toBe(false));
   it("once charges only the selected quantity", () => expect(licenseAmount(8, 2, "2026-10-30", "2026-10-30", "once")).toBe(16));
   it("monthly ends at calendar month end", () => expect(licensePeriodEnd("2026-10-30", "monthly")).toBe("2026-10-31"));
@@ -18,5 +20,5 @@ describe("license billing rules", () => {
   it("starts the next quarter without overlapping the prior supplement", () => expect(licensePeriodEnd("2027-01-01", "quarterly")).toBe("2027-03-31"));
   it("halfyearly supplement ends at the calendar halfyear boundary", () => expect(licensePeriodEnd("2026-10-30", "halfyearly")).toBe("2026-12-31"));
   it("allows zero-value subscription notices", () => expect(licenseAmount(0, 3, "2026-10-30", "2026-12-31", "quarterly")).toBe(0));
-  it("rejects negative prices", () => expect(saleSchema.safeParse({ tenant: "11111111-1111-4111-8111-111111111111", kind: "unit", code: "charge_point", quantity: 1, cadence: "monthly", price: -1, payment: "invoice" }).success).toBe(false));
+  it("rejects negative prices", () => expect(saleSchema.safeParse({ tenant: "11111111-1111-4111-8111-111111111111", kind: "unit", code: "remote_support", quantity: 1, cadence: "monthly", price: -1, payment: "invoice" }).success).toBe(false));
 });
