@@ -17,6 +17,7 @@ import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { PartnerDiscountRequestsCard } from "@/components/billing/DiscountRequests";
 import { LicenseSales } from "@/components/billing/LicenseSales";
 import { PartnerCustomerInvoices } from "@/components/billing/PartnerCustomerInvoices";
+import { partnerPriceRows, packageMargin, expectedCommission, salePriceFor, unitUvp, type CatPackage, type CatUnit, type OverviewRow, type PriceRow } from "@/lib/partnerPriceList";
 
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
 const fmtEur = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -87,6 +88,48 @@ export default function PartnerBilling() {
     },
   });
 
+  const { data: catalog } = useQuery({
+    queryKey: ["partner-package-catalog"],
+    queryFn: async () => {
+      const db = supabase as any;
+      const [pk, un] = await Promise.all([
+        db.from("pricing_packages").select("code,name,uvp,ek,always_active,active,sort"),
+        db.from("pricing_unit_prices").select("code,name,uvp,ek,new_sale_uvp,partner_available"),
+      ]);
+      if (pk.error) throw pk.error;
+      if (un.error) throw un.error;
+      return { packages: (pk.data ?? []) as CatPackage[], units: (un.data ?? []) as CatUnit[] };
+    },
+  });
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const { data: overview } = useQuery({
+    queryKey: ["package-billing-overview", currentMonth, partnerId],
+    enabled: !!partnerId,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("package-billing-overview", { body: { month: currentMonth, partner_id: partnerId } });
+      if (error) throw error;
+      return data as { rows: OverviewRow[]; partners: any[] };
+    },
+  });
+  const { data: creditNotes = [] } = useQuery({
+    queryKey: ["partner-commission-credits", partnerId],
+    enabled: !!partnerId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("tenant_invoices")
+        .select("id,invoice_number,status,amount,period_start,period_end,document_type")
+        .eq("partner_id", partnerId!).eq("document_type", "credit_note").order("period_start", { ascending: false }).limit(24);
+      if (error) throw error;
+      return data as { id: string; invoice_number: string; status: string; amount: number; period_start: string; period_end: string }[];
+    },
+  });
+  const catalogUvp = (code: string) => {
+    const pk = catalog?.packages.find((p) => p.code === code);
+    if (pk) return Number(pk.uvp);
+    const u = catalog?.units.find((x) => x.code === code);
+    return u ? unitUvp(u) : 0;
+  };
+  const priceRows: PriceRow[] = catalog ? partnerPriceRows(catalog.packages, catalog.units, partnerOverrides as any, sector) : [];
+
   const overrideFor = (code: string) => partnerOverrides.find((o) => o.module_code === code);
 
   const recommendedSale = (code: string, isKommune: boolean) => {
@@ -134,8 +177,17 @@ export default function PartnerBilling() {
       toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
+  // Margen je Tenant: Paketkunden aus der Monatsübersicht (laufender Monat), übrige nach Altvertrag (Modulpreise)
   const tenantTotals = useMemo(() => {
+    const pct = Number(partner?.commission_pct ?? 0);
     return tenants.map((t) => {
+      const row = overview?.rows.find((r) => r.tenant_id === t.id);
+      if (row && !row.legacy) {
+        const own = (code: string) => salePriceFor(code, t.is_kommune ? "kommune" : "industrie", partnerOverrides as any);
+        const m = packageMargin(row, own, catalogUvp);
+        const billedUvp = row.lines ? row.lines.filter((l) => !l.review && !l.viaContract).reduce((s, l) => s + l.uvp, 0) : row.uvp;
+        return { ...t, basis: "package" as const, purchase: m.ek, sale: m.sale, margin: m.margin, commission: expectedCommission(billedUvp, pct), commissionBase: billedUvp };
+      }
       let purchase = 0;
       let sale = 0;
       for (const code of t.modules) {
@@ -143,11 +195,10 @@ export default function PartnerBilling() {
         purchase += purchasePrice(code, t.is_kommune);
         sale += effectiveSale(code, t.is_kommune);
       }
-      const margin = sale - purchase;
-      const commission = sale * ((partner?.commission_pct ?? 0) / 100);
-      return { ...t, purchase, sale, margin, commission };
+      return { ...t, basis: "legacy" as const, purchase, sale, margin: sale - purchase, commission: expectedCommission(sale, pct), commissionBase: sale };
     });
-  }, [tenants, modulePrices, partnerOverrides, partner]);
+  }, [tenants, modulePrices, partnerOverrides, partner, overview, catalog]);
+  const hasLegacy = tenantTotals.some((t) => t.basis === "legacy");
 
   const [tenantSearch, setTenantSearch] = useState("");
   const filteredTenantTotals = tenantSearch.trim()
