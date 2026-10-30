@@ -668,16 +668,12 @@ function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, 
                           `}
                         >
                           <div className="flex items-center justify-center gap-1.5 mb-0.5">
-                            <span className={`h-2 w-2 rounded-full ${
-                              c.status === "available" ? "bg-emerald-500" :
-                              c.status === "charging" ? "bg-blue-500" :
-                              c.status === "faulted" ? "bg-destructive" : "bg-muted-foreground"
-                            }`} />
+                            <span className={`h-2 w-2 rounded-full ${getChargePointStatusMeta(c.status).dotColor}`} />
                             {isSelected && <Check className="h-3.5 w-3.5 text-primary" />}
                           </div>
                           <p className="text-xs font-medium">{c.name || `Anschluss ${c.connector_id}`}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {c.status === "available" ? "Frei" : c.status === "charging" ? "Lädt" : c.status === "faulted" ? "Gestört" : c.status}
+                            {t(getChargePointStatusMeta(c.status).labelKey)}
                           </p>
                         </button>
                       );
