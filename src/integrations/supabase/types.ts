@@ -16700,6 +16700,20 @@ export type Database = {
           user_id: string
         }[]
       }
+      preflight_license_sale: {
+        Args: {
+          p_cadence: string
+          p_code: string
+          p_kind: string
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
+        Returns: string
+      }
       purge_meter_power_readings_retention: { Args: never; Returns: undefined }
       refresh_meter_daily_totals: {
         Args: {
@@ -16755,6 +16769,10 @@ export type Database = {
       }
       run_ems_cron_bundle: { Args: never; Returns: undefined }
       run_meter_power_hourly_backfill_guarded: { Args: never; Returns: number }
+      set_partner_invoice_status: {
+        Args: { p_invoice: string; p_status: string }
+        Returns: undefined
+      }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
       touch_location_integration_sync: {
         Args: { _id: string; _min_interval_seconds?: number; _status: string }
