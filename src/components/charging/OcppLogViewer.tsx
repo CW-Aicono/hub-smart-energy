@@ -103,12 +103,15 @@ const OcppLogViewer = ({ chargePointId, ocppId, showCpColumn = false }: OcppLogV
     }
   }
 
+  // Hersteller-Codes, die KEINEN Fehler darstellen (ELMI: 0x0B0B0000 = reine Statusinfo)
+  const BENIGN_VENDOR_CODES = new Set(["", "0", "0x00000000", "0x0B0B0000"]);
+
   const isErrorEntry = (l: OcppLogEntry): boolean => {
     if (l.message_type?.startsWith("CALLERROR")) return true;
     const rawStr = JSON.stringify(l.raw_message);
     if (rawStr.includes('"Faulted"')) return true;
     const vecMatch = rawStr.match(/"vendorErrorCode"\s*:\s*"([^"]+)"/);
-    if (vecMatch && vecMatch[1] && vecMatch[1] !== "" && vecMatch[1] !== "0" && vecMatch[1] !== "0x00000000") return true;
+    if (vecMatch && vecMatch[1] && !BENIGN_VENDOR_CODES.has(vecMatch[1])) return true;
     return false;
   };
 
