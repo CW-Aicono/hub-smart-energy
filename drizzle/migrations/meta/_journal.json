@@ -316,6 +316,13 @@
       "when": 1793363446454,
       "tag": "0044_license_sales_partner_invoice_cycles",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793363644555,
+      "tag": "0045_license_sale_security_and_calendar_job",
+      "breakpoints": true
     }
   ]
 }

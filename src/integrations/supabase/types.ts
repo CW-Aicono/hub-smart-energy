@@ -16526,6 +16526,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      install_license_billing_schedule: { Args: never; Returns: undefined }
       is_app_tenant_user: { Args: { _user_id: string }; Returns: boolean }
       is_document_category_in_tenant: {
         Args: { _category_id: string; _tenant_id: string }
