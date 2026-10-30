@@ -75,8 +75,8 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
             {catalog.units.map((u) => (
               <TableRow key={u.code}>
                 <TableCell>{u.name}</TableCell><TableCell className="text-xs">{u.unit}</TableCell>
-                <TableCell className="text-right">{cell("pricing_unit_prices", u.code, u.uvp, u.ek, "uvp")}</TableCell>
-                <TableCell className="text-right">{cell("pricing_unit_prices", u.code, u.uvp, u.ek, "ek")}</TableCell>
+                <TableCell className="text-right">{eur(u.new_sale_uvp ?? u.uvp)}</TableCell>
+                <TableCell className="text-right">{u.partner_available === false ? "–" : cell("pricing_unit_prices", u.code, u.uvp, u.ek, "ek")}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -101,7 +101,7 @@ export function PackageQuoteCalculator() {
   const defs = catalog?.packages ?? [];
   const packages = useMemo(() => [...defs.filter((d) => d.always_active).map((d) => d.code), ...sel], [defs, sel]);
   const errors = checkDependencies(packages, defs);
-  const q = calculateQuote({ packages, locations, chargePoints: cps, billedSessions: sessions }, defs, catalog?.units ?? []);
+  const q = calculateQuote({ packages, locations, chargePoints: cps, billedSessions: sessions }, defs, (catalog?.units ?? []).map(u => ({ ...u, uvp: u.new_sale_uvp ?? u.uvp })));
   const ep = endPrice === "" ? q.uvp : Number(endPrice.replace(",", "."));
   const v = priceViews(ep, q.uvp, q.ek);
   if (!catalog) return null;
@@ -164,10 +164,10 @@ export function PackageBookingCard({ tenantId }: { tenantId: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base"><Package className="h-4 w-4" /> Pakete</CardTitle>
-        <CardDescription>{booked.length === 0 ? "Bestandskunde – Abrechnung nach bisheriger Modulpreisliste. Mit der ersten Paketbuchung gilt die neue Preislogik." : "Abrechnung nach Paketlogik."}</CardDescription>
+        <CardDescription>Bestehende Paketbuchungen</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
-        {catalog.packages.filter((p) => !p.always_active && p.active).map((p) => {
+        {catalog.packages.filter((p) => !p.always_active && p.active && booked.includes(p.code)).map((p) => {
           const on = booked.includes(p.code);
           return (
             <div key={p.code} className="flex items-center justify-between gap-2 text-sm">

@@ -4,7 +4,7 @@ import type { PackageDef, UnitPrice } from "@/lib/packagePricing";
 
 export interface PricingCatalog {
   packages: (PackageDef & { sort: number; active: boolean; modules: string[]; partner_unlock_fee: number })[];
-  units: (UnitPrice & { name: string; unit: string })[];
+  units: (UnitPrice & { name: string; unit: string; new_sale_uvp?: number | null; partner_available?: boolean })[];
   flags: Record<string, "sellable" | "hidden" | "on_request">;
 }
 
