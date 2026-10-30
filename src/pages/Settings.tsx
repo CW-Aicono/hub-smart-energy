@@ -15,8 +15,9 @@ import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
 import { WidgetDesigner } from "@/components/settings/WidgetDesigner";
 import { BoardThemesSettings } from "@/components/settings/BoardThemesSettings";
 import { TaskSettings } from "@/components/settings/TaskSettings";
+import { TenantPackageInvoices } from "@/components/settings/TenantPackageInvoices";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palette, HardDrive, Building2, LayoutGrid, LayoutDashboard, ListChecks } from "lucide-react";
+import { Palette, HardDrive, Building2, LayoutGrid, LayoutDashboard, ListChecks, Package } from "lucide-react";
 
 const Settings = () => {
   const { user, loading: authLoading } = useAuth();
@@ -55,6 +56,10 @@ const Settings = () => {
                 <Building2 className="h-4 w-4" />
                 {t("settings.tabTenant" as any)}
               </TabsTrigger>
+              <TabsTrigger value="package-invoices" className="gap-2">
+                <Package className="h-4 w-4" />
+                {t("tenantBilling.tab" as any)}
+              </TabsTrigger>
               <TabsTrigger value="branding" className="gap-2">
                 <Palette className="h-4 w-4" />
                 {t("settings.title")}
@@ -80,6 +85,9 @@ const Settings = () => {
             </TabsList>
             <TabsContent value="tenant-info">
               <TenantInfoSettings />
+            </TabsContent>
+            <TabsContent value="package-invoices">
+              <TenantPackageInvoices />
             </TabsContent>
             <TabsContent value="branding" className="space-y-6">
               <WeekStartSetting />

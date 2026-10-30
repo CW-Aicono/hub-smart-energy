@@ -17094,6 +17094,7 @@ export type Database = {
       }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
       snapshot_tenant_usage: { Args: { p_day?: string }; Returns: number }
+      tenant_package_summary: { Args: never; Returns: Json }
       touch_location_integration_sync: {
         Args: { _id: string; _min_interval_seconds?: number; _status: string }
         Returns: undefined
