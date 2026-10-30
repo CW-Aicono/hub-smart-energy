@@ -21,3 +21,5 @@
 - Battery setpoints go through `_shared/elmiAio.ts` (computeStorageSetpointKw) and are delivered to the on-site controller (Loxone virtual input); `energy_storages.allow_grid_discharge` is forced false by trigger — grid discharge stays locked until the grid operator approves.
 
 - OCPP display states remain distinct through chargePointStatus and shared chargePointStatusPresentation; open billing sessions never override reported connector states — preserves physical station truth across all charging views.
+
+- Monthly package invoices are routed by partner billing model in `_shared/partnerInvoiceFlows.ts` (direct, reseller collective invoice per partner/month, commission credit note); issued invoices are corrected only via cancellation RPCs and every invoice PDF embeds ZUGFeRD XML via `src/lib/eInvoicePdf.ts` — one routing source, immutable issued documents, e-invoice duty.

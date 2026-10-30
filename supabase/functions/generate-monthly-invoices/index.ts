@@ -1,5 +1,6 @@
 import { loadUsage, prevMonth } from "../_shared/packageUsageLoader.ts";
 import { backCharge, monthDelta } from "../_shared/packageUsage.ts";
+import { buildCollective, commissionCredit, directDraftWarnings, mergeCustomLines, partnerCustomerLines, priceLines, routeTenant, type FlowPartner, type FlowTenant } from "../_shared/partnerInvoiceFlows.ts";
 import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -139,12 +140,37 @@ Deno.serve(async (req) => {
     const prevKey = prevMonth(monthKey);
     const usage = switchedList.length ? await loadUsage(supabase, switchedList, monthKey) : null;
     const usagePrev = switchedList.length ? await loadUsage(supabase, switchedList, prevKey) : null;
-    const prevInvoices: Record<string, any> = {};
-    if (switchedList.length) {
-      const { data: pi } = await supabase.from("tenant_invoices").select("tenant_id, source_ref, line_items")
-        .in("source_ref", switchedList.flatMap((t: any) => [`monthly:partner:${t.id}:${prevKey}`, `monthly:tenant:${t.id}:${prevKey}`])).neq("status", "voided");
-      for (const i of pi ?? []) prevInvoices[i.tenant_id] = i;
+    // Partnermodell (Wiederverkauf / Provision) und Partner-Verkaufspreise
+    const partnerMap: Record<string, FlowPartner> = {};
+    const partnerPrices: Record<string, Record<string, number>> = {};
+    {
+      const [{ data: ps, error: pErr }, { data: pp, error: ppErr }] = await Promise.all([
+        supabase.from("partners").select("id, name, billing_mode, commission_pct"),
+        supabase.from("partner_module_prices").select("partner_id, module_code, sale_price_monthly"),
+      ]);
+      if (pErr) throw pErr;
+      if (ppErr) throw ppErr;
+      for (const p of ps ?? []) partnerMap[p.id] = { id: p.id, name: p.name, billing_mode: p.billing_mode, commission_pct: Number(p.commission_pct ?? 0) };
+      for (const p of pp ?? []) if (p.sale_price_monthly != null) (partnerPrices[p.partner_id] ??= {})[p.module_code] = Number(p.sale_price_monthly);
     }
+    // Bereits berechnete Mengen des Vormonats je Kunde (Einzel- oder Sammelrechnung)
+    const prevBilled: Record<string, any[]> = {};
+    if (switchedList.length) {
+      const refs = switchedList.flatMap((t: any) => [`monthly:partner:${t.id}:${prevKey}`, `monthly:tenant:${t.id}:${prevKey}`]);
+      for (const pid of new Set(switchedList.map((t: any) => t.partner_id).filter(Boolean))) refs.push(`monthly:partner-sum:${pid}:${prevKey}`);
+      const { data: pi } = await supabase.from("tenant_invoices").select("tenant_id, source_ref, line_items").in("source_ref", refs).neq("status", "voided");
+      for (const i of pi ?? []) {
+        const collective = i.source_ref.startsWith("monthly:partner-sum:");
+        for (const li of (i.line_items ?? []) as any[]) {
+          const tid = collective ? li.tenant_id : i.tenant_id;
+          if (tid) (prevBilled[tid] ??= []).push(li);
+        }
+      }
+    }
+    const collectives: Record<string, { tenant: FlowTenant; lines: any[] }[]> = {};
+    const commissions: Record<string, { tenant: FlowTenant; uvp: number }[]> = {};
+    const customerDrafts: any[] = [];
+    const reviewByPartner: Record<string, boolean> = {};
 
     // 4. Get support sessions from last month for all tenants
     const { data: supportSessions, error: sErr } = await supabase
@@ -214,26 +240,38 @@ Deno.serve(async (req) => {
       if (lockedTenants.has(tenant.id)) continue;
       if (isSwitched(tenant) && usage) {
         const u = usage.results[tenant.id];
-        const toPartner = !!tenant.partner_id;
-        const pick = (x: { uvp: number; ek: number }) => (toPartner ? x.ek : x.uvp);
-        const lines: any[] = u.lines.filter((l) => !l.viaContract).map((l) => ({ type: l.type, code: l.code, label: l.label, quantity: l.quantity, unit_price: l.quantity ? Math.round(pick(l) / l.quantity * 100) / 100 : pick(l), amount: l.review ? 0 : pick(l), review: l.review || undefined, session_id: l.session_id }));
+        const partner = tenant.partner_id ? partnerMap[tenant.partner_id] : null;
+        const route = routeTenant(tenant, partner);
+        const flowLines: any[] = u.lines.filter((l) => !l.viaContract).map((l) => ({ ...l }));
         // Nachberechnung: nachträglich erfasste Mengen des Vormonats (nur wenn der Vormonat bereits nach Paketen lief)
-        const prevInv = prevInvoices[tenant.id];
-        if (prevInv && usagePrev) {
+        if (prevBilled[tenant.id] && usagePrev) {
           const billedQty: Record<string, number> = {};
-          for (const li of (prevInv.line_items ?? []) as any[]) if (li.code && (li.type === "package_unit" || li.type === "back_charge")) billedQty[li.code] = (billedQty[li.code] ?? 0) + Number(li.quantity ?? 0);
-          for (const l of backCharge(usagePrev.results[tenant.id], billedQty, usage.units, prevKey)) lines.push({ type: l.type, code: l.code, label: l.label, quantity: l.quantity, unit_price: Math.round(pick(l) / l.quantity * 100) / 100, amount: pick(l) });
+          for (const li of prevBilled[tenant.id]) if (li.code && (li.type === "package_unit" || li.type === "back_charge")) billedQty[li.code] = (billedQty[li.code] ?? 0) + Number(li.quantity ?? 0);
+          for (const l of backCharge(usagePrev.results[tenant.id], billedQty, usage.units, prevKey)) flowLines.push(l);
         }
+        if (!flowLines.length) continue;
         const delta = monthDelta(u, tenant.package_billing_from < fmt(lastMonthStart) && usagePrev ? usagePrev.results[tenant.id] : null);
+        if (route === "reseller") {
+          // Wiederverkauf: Sammelrechnung an Partner (EK) + Endkunden-Entwurf des Partners (außer Eigenbedarf)
+          (collectives[partner!.id] ??= []).push({ tenant, lines: flowLines });
+          if (delta.plausibility || u.review) reviewByPartner[partner!.id] = true;
+          if (!(tenant as any).partner_self_customer) {
+            const pl = partnerCustomerLines(flowLines, partnerPrices[partner!.id] ?? {});
+            customerDrafts.push({ partner_id: partner!.id, tenant_id: tenant.id, source_ref: `monthly:pci:${tenant.id}:${monthKey}`,
+              period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), lines: pl });
+          }
+          continue;
+        }
+        // Direktkunde und Provisionsmodell: AICONO rechnet mit dem Kunden zur UVP ab
+        const lines = priceLines(flowLines, "uvp");
         const sum = Math.round(lines.reduce((x, l) => x + Number(l.amount || 0), 0) * 100) / 100;
-        if (!lines.length) continue;
-        const deltaText = delta.text ? `${delta.text}, ${(toPartner ? delta.ek : delta.uvp) >= 0 ? "+" : ""}${(toPartner ? delta.ek : delta.uvp).toLocaleString("de-DE", { minimumFractionDigits: 2 })} €` : null;
-        partnerDrafts.push({ tenant_id: tenant.id, partner_id: tenant.partner_id ?? null, invoice_kind: "recurring",
-          source_ref: `monthly:${toPartner ? "partner" : "tenant"}:${tenant.id}:${monthKey}`, invoice_number: sum > 0 ? "DRAFT" : "ABO-BELEG",
+        if (route === "commission") (commissions[partner!.id] ??= []).push({ tenant, uvp: sum });
+        const deltaText = delta.text ? `${delta.text}, ${delta.uvp >= 0 ? "+" : ""}${delta.uvp.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €` : null;
+        partnerDrafts.push({ tenant_id: tenant.id, partner_id: null, invoice_kind: "recurring",
+          source_ref: `monthly:tenant:${tenant.id}:${monthKey}`, invoice_number: sum > 0 ? "DRAFT" : "ABO-BELEG",
           document_type: sum > 0 ? "invoice" : "subscription_notice", status: "draft",
           period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), amount: sum, module_total: sum, support_total: 0,
-          usage_review: delta.plausibility || u.review, usage_delta: deltaText,
-          line_items: lines.map((l) => (toPartner ? { ...l, label: `${l.label} – ${tenant.name}` } : l)) });
+          usage_review: delta.plausibility || u.review, usage_delta: deltaText, line_items: lines });
         continue;
       }
       const tenantModules = (allModules ?? []).filter(
@@ -501,6 +539,54 @@ Deno.serve(async (req) => {
         .eq("id", upd.id);
       if (updErr) throw updErr;
     }
+
+    // Wiederverkauf: eine Sammelrechnung je Partner und Monat (EK, gegliedert nach Kunde)
+    for (const [pid, entries] of Object.entries(collectives)) {
+      const c = buildCollective(entries);
+      if (!c.lines.length) continue;
+      // Frühere Einzelentwürfe je Kunde (vor der Sammelrechnung) durch die Sammelrechnung ersetzen
+      const oldRefs = entries.map((e) => `monthly:partner:${e.tenant.id}:${monthKey}`);
+      const { error: delErr } = await supabase.from("tenant_invoices").delete().in("source_ref", oldRefs)
+        .is("issued_at", null).is("lexware_invoice_id", null).eq("status", "draft");
+      if (delErr) throw delErr;
+      const first = [...entries].sort((a, b) => a.tenant.name.localeCompare(b.tenant.name, "de"))[0].tenant;
+      partnerDrafts.push({ tenant_id: first.id, partner_id: pid, invoice_kind: "recurring",
+        source_ref: `monthly:partner-sum:${pid}:${monthKey}`, invoice_number: c.amount > 0 ? "DRAFT" : "ABO-BELEG",
+        document_type: c.amount > 0 ? "invoice" : "subscription_notice", status: "draft",
+        period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), amount: c.amount, module_total: c.amount, support_total: 0,
+        usage_review: !!reviewByPartner[pid], usage_delta: null, line_items: c.lines });
+    }
+    // Provision: monatliche Gutschrift an den Partner
+    for (const [pid, entries] of Object.entries(commissions)) {
+      const c = commissionCredit(partnerMap[pid], entries);
+      if (!(c.amount > 0)) continue;
+      partnerDrafts.push({ tenant_id: entries[0].tenant.id, partner_id: pid, invoice_kind: "recurring",
+        source_ref: `commission:${pid}:${monthKey}`, invoice_number: "DRAFT", document_type: "credit_note", status: "draft",
+        period_start: fmt(lastMonthStart), period_end: fmt(lastMonthEnd), amount: c.amount, module_total: c.amount, support_total: 0, line_items: c.lines });
+    }
+    // Endkunden-Entwürfe der Partner (eigene Preise); vom Partner ergänzte Positionen bleiben erhalten
+    let customerDraftsCreated = 0;
+    for (const d of customerDrafts) {
+      const { data: ex, error: exErr } = await supabase.from("partner_customer_invoices").select("id, issued_at, status, line_items").eq("source_ref", d.source_ref).maybeSingle();
+      if (exErr) throw exErr;
+      if (ex && (ex.issued_at || ex.status !== "draft")) continue;
+      const lines = mergeCustomLines(d.lines, ex?.line_items);
+      const amount = Math.round(lines.reduce((s, l) => s + Number(l.amount || 0), 0) * 100) / 100;
+      const row = { line_items: lines, amount, document_type: amount > 0 ? "invoice" : "subscription_notice", period_start: d.period_start, period_end: d.period_end };
+      if (ex) {
+        const { error } = await supabase.from("partner_customer_invoices").update(row).eq("id", ex.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("partner_customer_invoices").insert({ ...row, partner_id: d.partner_id, tenant_id: d.tenant_id, source_ref: d.source_ref, status: "draft" });
+        if (error && error.code !== "23505") throw error;
+        if (!error) customerDraftsCreated++;
+      }
+    }
+    // Warnung: Direktrechnungen an Kunden von Wiederverkaufs-Partnern
+    const { data: openDirect, error: odErr } = await supabase.from("tenant_invoices").select("tenant_id, partner_id, issued_at, status")
+      .is("partner_id", null).is("issued_at", null).eq("status", "draft");
+    if (odErr) throw odErr;
+    const warnings = directDraftWarnings(tenants ?? [], partnerMap, openDirect ?? []);
 
     // Partner-Entwürfe (EK): je Partnerkunde und Monat genau einer; offene Entwürfe werden aktualisiert
     let partnerCreated = 0;

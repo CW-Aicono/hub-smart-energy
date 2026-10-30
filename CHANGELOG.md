@@ -1,5 +1,14 @@
 # Änderungsprotokoll (intern)
 
+## v1.19.0 – 30.10.2026
+- Rechnungsflüsse nach Partnermodell: Direktkunden zur UVP; Wiederverkaufs-Partner erhalten eine Sammelrechnung je Monat zum EK, gegliedert nach Kunde (inkl. Einrichtung im Aktivierungsmonat); Provisions-Partner erhalten eine monatliche Provisionsgutschrift, der Kunde wird zur UVP abgerechnet.
+- Partner erhalten je Kunde automatisch einen Endkunden-Entwurf mit eigenen Preisen und können eigene Positionen ergänzen; AICONO sieht diese Rechnungen nicht.
+- Warnung beim Generieren, wenn ein offener Direktentwurf an einen Kunden eines Wiederverkaufs-Partners besteht; Eigenbedarf des Partners wird „An Partner“ gekennzeichnet.
+- Korrektur freigegebener Rechnungen nur noch per Storno-Rechnung mit Bezug auf das Original (AICONO und Partner).
+- Alle Rechnungs-PDFs enthalten eine E-Rechnung (ZUGFeRD, EN 16931); Leitweg-ID je Kunde für Behörden.
+- Lexware: Rechnungen werden weiter als Entwurf übertragen und dort abgeschlossen; die Liste zeigt ehrlich „In Lexware (Entwurf)“.
+- Technisch: Migration 0056 (document_type credit_note/cancellation, cancels_invoice_id, tenants.partner_self_customer + leitweg_id mit Guard, RPCs cancel_aicono_invoice, cancel_partner_customer_invoice, partner_set_custom_lines, set_tenant_invoice_options; issue_aicono_invoice erlaubt Gutschriften; set_partner_invoice_status lehnt direktes Stornieren freigegebener Rechnungen ab). _shared/partnerInvoiceFlows.ts, src/lib/zugferd.ts + eInvoicePdf.ts (pdf-lib). lexware-api setzt keinen Status „sent“ mehr und überträgt keine Gutschriften/Stornos; Sammelrechnung ersetzt offene Einzel-EK-Entwürfe (source_ref monthly:partner-sum:{partner}:{monat}). PDF/A-3-Konformität des Containers nicht validiert.
+
 ## v1.18.0 – 30.10.2026
 - Monatsübersicht nach Paketen berechnet für umgestellte Kunden UVP und EK je Position und ist dort Grundlage der Monatsrechnung („Positionen“ aufklappbar).
 - Mengen werden automatisch gezählt (täglicher Zähllauf): Ladepunkte mit mindestens einem aktiven Tag, Liegenschaften, abgerechnete Ladevorgänge, Pakete taggenau anteilig, Remote-Support, Support je 15 Min., Einrichtung im Aktivierungsmonat.

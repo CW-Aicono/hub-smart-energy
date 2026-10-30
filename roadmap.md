@@ -8,8 +8,9 @@
 - [x] Schritt 1 (v1.16.3): Ladepunkt-EK 6,00 €, Remote-Support-EK 112 € (partnerbuchbar), Preisversionierung mit Gültig-ab + Historie, Tooltip „Freischaltung Partner“, Bundles als „Altvertrag – nicht mehr buchbar“. 29 Tests, Build OK, DB-Werte verifiziert.
 - [x] Schritt 2 (v1.17.0): Preis-Vorbelegung + Begründungspflicht, Einrichtung einmalig, Mengen automatisch, Voraussetzungen/Hinweis Paket 6, Modul-Abschaltung beim Kündigen, Schalter „Abrechnung nach Paketen“ mit Vorschlag.
 - [x] Schritt 3 (v1.18.0): Monatsübersicht mit UVP/EK, tägliche Mengen-Snapshots, Support > 4 h „Prüfen“, Partnerrabatt auf EK, Änderung zum Vormonat/Gelbmarkierung, Nachberechnung, Partner-Hinweise, neue Kunden nach Paketen.
-- [ ] Offen aus Schritt 3: Endkunden-Entwurf des Partners passt sich erst mit Schritt 4 (Partnerpreise) an.
-- [ ] Schritt 4: Rechnungsflüsse nach Partnermodell (Wiederverkauf/Provision), E-Rechnung (ZUGFeRD/XRechnung) vorher prüfen und berichten
+- [x] Offen aus Schritt 3: Endkunden-Entwurf des Partners mit Partnerpreisen (v1.19.0).
+- [x] Schritt 4 (v1.19.0): Sammelrechnung Wiederverkauf, Provisionsgutschrift, Endkunden-Entwürfe mit eigenen Positionen, Warnung Direktrechnung, Eigenbedarf „An Partner“, Storno-Rechnung, ZUGFeRD in allen PDFs, Leitweg-ID, Lexware weiter als Entwurf.
+- [ ] Wartet auf Nutzer: eine erzeugte Rechnung mit einem ZUGFeRD-Prüfwerkzeug validieren (PDF/A-3-Container nicht zertifiziert); Lexware-Einstellung E-Rechnung prüfen
 - [ ] Schritt 5: Partner-Portal angleichen (Paket-Preisliste, Margen, Provisionsanzeige)
 - [ ] Schritt 6: Kunden-Ebene „Paket & Rechnungen“, Abnahmetests A–C
 

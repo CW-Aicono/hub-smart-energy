@@ -83,6 +83,11 @@ Deno.serve(async (req) => {
           // Delay between invoices to avoid rate limits
           if (results.length > 0) await sleep(600);
           // Abo-Belege (0 €) sind keine Rechnungen und werden nie übertragen
+          // Gutschriften und Storno-Rechnungen werden nicht als Rechnung an Lexware übertragen
+          if (inv.document_type === "credit_note" || inv.document_type === "cancellation") {
+            results.push({ invoiceId: inv.id, status: "skipped", reason: inv.document_type });
+            continue;
+          }
           if (inv.document_type === "subscription_notice" || !(Number(inv.amount) > 0)) {
             results.push({ invoiceId: inv.id, status: "skipped", reason: "subscription_notice" });
             continue;
@@ -166,10 +171,11 @@ Deno.serve(async (req) => {
           const lexData = await lexRes.json();
           const lexwareInvoiceId = lexData.id;
 
-          // 3. Store Lexware invoice ID and set status to 'sent'
+          // 3. Lexware-ID speichern. Die Rechnung liegt in Lexware als Entwurf vor und wird dort
+          // abgeschlossen; den Status gleicht lexware-sync-status anschließend ab.
           await supabase
             .from("tenant_invoices")
-            .update({ lexware_invoice_id: lexwareInvoiceId, status: "sent" })
+            .update({ lexware_invoice_id: lexwareInvoiceId })
             .eq("id", inv.id);
 
           results.push({ invoiceId: inv.id, status: "success", lexwareId: lexwareInvoiceId });

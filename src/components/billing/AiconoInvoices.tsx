@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, FileDown, Loader2, Mail, Plus, Trash2 } from "lucide-react";
+import { Building2, FileDown, Loader2, Mail, Plus, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
-import { buildAiconoInvoicePdf, type AiconoBillingSettings, type InvoiceRecipient } from "@/lib/aiconoInvoicePdf";
+import { type AiconoBillingSettings, type InvoiceRecipient } from "@/lib/aiconoInvoicePdf";
+import { buildEInvoicePdf, downloadBlob } from "@/lib/eInvoicePdf";
 import { packageSaleCatalog } from "@/lib/packageSaleCatalog";
 
 const db = supabase as any;
@@ -35,18 +36,20 @@ async function loadRecipient(inv: any): Promise<{ recipient: InvoiceRecipient; e
         contact: a.contact || null,
         street: [a.street, a.house_number].filter(Boolean).join(" ") || a.address || null,
         postalCity: [a.postal_code ?? a.zip, a.city].filter(Boolean).join(" ") || null,
-        country: a.country || null,
+        postalCode: a.postal_code ?? a.zip ?? null, city: a.city ?? null,
+        country: a.country || null, vatId: a.vat_id || null, email: a.email || p?.contact_email || null,
       },
       email: a.email || p?.contact_email || null,
     };
   }
-  const { data: t } = await db.from("tenants").select("name, contact_person, street, house_number, address, postal_code, city, contact_email").eq("id", inv.tenant_id).maybeSingle();
+  const { data: t } = await db.from("tenants").select("name, contact_person, street, house_number, address, postal_code, city, contact_email, leitweg_id").eq("id", inv.tenant_id).maybeSingle();
   return {
     recipient: {
       name: t?.name ?? "Kunde",
       contact: t?.contact_person ? `z. Hd. ${t.contact_person}` : null,
       street: [t?.street, t?.house_number].filter(Boolean).join(" ") || t?.address || null,
       postalCity: [t?.postal_code, t?.city].filter(Boolean).join(" ") || null,
+      postalCode: t?.postal_code ?? null, city: t?.city ?? null, email: t?.contact_email ?? null, leitwegId: t?.leitweg_id ?? null,
     },
     email: t?.contact_email ?? null,
   };
@@ -66,11 +69,17 @@ async function ensureIssued(inv: any): Promise<any> {
 
 async function makePdf(inv: any, settings: AiconoBillingSettings) {
   const { recipient, email } = await loadRecipient(inv);
-  const doc = await buildAiconoInvoicePdf({ settings, recipient, invoice: inv });
-  return { doc, email };
+  let cancels_number: string | null = null;
+  if (inv.cancels_invoice_id) {
+    const { data } = await db.from("tenant_invoices").select("invoice_number").eq("id", inv.cancels_invoice_id).maybeSingle();
+    cancels_number = data?.invoice_number ?? null;
+  }
+  const pdf = await buildEInvoicePdf({ settings, recipient, invoice: { ...inv, cancels_number } });
+  return { pdf, email };
 }
 
 export function canUseAiconoInvoice(inv: any) {
+  if (inv.document_type === "cancellation") return !!inv.issued_at;
   return inv.document_type !== "subscription_notice" && Number(inv.amount) > 0 && (inv.issued_at || inv.status !== "voided");
 }
 
@@ -93,16 +102,9 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
     try {
       const cur = await ensureIssued(inv);
       if (!cur) return;
-      const { doc } = await makePdf(cur, settings);
-      const blob = doc.output("blob") as Blob;
-      const name = `Rechnung_${cur.invoice_number}.pdf`;
-      const download = () => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = name;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 30_000);
-      };
+      const { pdf } = await makePdf(cur, settings);
+      const name = `${cur.document_type === "cancellation" ? "Stornorechnung" : cur.document_type === "credit_note" ? "Gutschrift" : "Rechnung"}_${cur.invoice_number}.pdf`;
+      const download = () => downloadBlob(pdf.blob, name);
       // Browser blockieren Downloads nach längerer Wartezeit (Bestätigung + PDF-Erstellung).
       // Daher zusätzlich ein Button im Hinweis, der den Download per frischem Klick auslöst.
       download();
@@ -130,8 +132,8 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
     if (!issued || !settings) return;
     setBusy("mail");
     try {
-      const { doc } = await makePdf(issued, settings);
-      const pdf_base64 = (doc.output("datauristring") as string).split(",")[1];
+      const { pdf } = await makePdf(issued, settings);
+      const pdf_base64 = pdf.base64;
       const { data, error } = await supabase.functions.invoke("send-aicono-invoice", { body: { invoice_id: issued.id, to: mailTo, message: msg, pdf_base64 } });
       if (error || !data?.success) throw new Error(data?.error || error?.message || "Versand fehlgeschlagen");
       toast.success(`Rechnung ${issued.invoice_number} an ${mailTo} gesendet`);
@@ -140,8 +142,26 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
     } catch (e: any) { toast.error(e.message); } finally { setBusy(null); }
   };
 
+  const onCancel = async () => {
+    const lex = inv.lexware_invoice_id ? "\n\nDie Rechnung liegt auch in Lexware – dort bitte ebenfalls stornieren." : "";
+    if (!window.confirm(`Storno-Rechnung zu ${inv.invoice_number} erstellen?\n\nEs entsteht eine neue Rechnung mit negativen Beträgen und Bezug auf das Original; das Original wird als storniert markiert.${lex}`)) return;
+    setBusy("pdf");
+    try {
+      const { error } = await db.rpc("cancel_aicono_invoice", { p_invoice_id: inv.id });
+      if (error) throw error;
+      toast.success(`Storno-Rechnung zu ${inv.invoice_number} erstellt`);
+      refresh();
+    } catch (e: any) { toast.error(e.message); } finally { setBusy(null); }
+  };
+  const canCancel = !!inv.issued_at && inv.status !== "voided" && ["invoice", "credit_note"].includes(inv.document_type ?? "invoice");
+
   return (
     <div className="flex items-center justify-center gap-1">
+      {canCancel && (
+        <Button size="sm" variant="ghost" title="Storno-Rechnung erstellen" disabled={!!busy} onClick={onCancel}>
+          <Undo2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
       <Button size="sm" variant="ghost" title="PDF (AICONO GmbH)" disabled={!!busy} onClick={onPdf}>
         {busy === "pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
       </Button>
@@ -152,7 +172,7 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rechnung {issued?.invoice_number} per E-Mail senden</DialogTitle>
-            <DialogDescription>Das PDF im AICONO-Branding wird als Anhang verschickt.</DialogDescription>
+            <DialogDescription>Das PDF im AICONO-Branding mit eingebetteter E-Rechnung (ZUGFeRD) wird als Anhang verschickt.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1"><Label>Empfänger</Label><Input type="email" value={mailTo} onChange={(e) => setMailTo(e.target.value)} /></div>

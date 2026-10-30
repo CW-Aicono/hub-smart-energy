@@ -10020,6 +10020,7 @@ export type Database = {
       partner_customer_invoices: {
         Row: {
           amount: number
+          cancels_invoice_id: string | null
           created_at: string
           document_type: string
           due_date: string | null
@@ -10043,6 +10044,7 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          cancels_invoice_id?: string | null
           created_at?: string
           document_type?: string
           due_date?: string | null
@@ -10066,6 +10068,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cancels_invoice_id?: string | null
           created_at?: string
           document_type?: string
           due_date?: string | null
@@ -10088,6 +10091,13 @@ export type Database = {
           vat_rate?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "partner_customer_invoices_cancels_invoice_id_fkey"
+            columns: ["cancels_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "partner_customer_invoices"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "partner_customer_invoices_partner_id_fkey"
             columns: ["partner_id"]
@@ -14770,6 +14780,7 @@ export type Database = {
       tenant_invoices: {
         Row: {
           amount: number
+          cancels_invoice_id: string | null
           created_at: string
           document_type: string
           due_date: string | null
@@ -14799,6 +14810,7 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          cancels_invoice_id?: string | null
           created_at?: string
           document_type?: string
           due_date?: string | null
@@ -14828,6 +14840,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cancels_invoice_id?: string | null
           created_at?: string
           document_type?: string
           due_date?: string | null
@@ -14856,6 +14869,13 @@ export type Database = {
           vat_rate?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tenant_invoices_cancels_invoice_id_fkey"
+            columns: ["cancels_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_invoices"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tenant_invoices_partner_id_fkey"
             columns: ["partner_id"]
@@ -15460,6 +15480,7 @@ export type Database = {
           id: string
           is_aicono_member: boolean
           is_kommune: boolean
+          leitweg_id: string | null
           lexware_contact_id: string | null
           logo_url: string | null
           name: string
@@ -15469,6 +15490,7 @@ export type Database = {
           package_billing_set_at: string | null
           package_billing_set_by: string | null
           partner_id: string | null
+          partner_self_customer: boolean
           payment_method: string
           postal_code: string | null
           remote_support_enabled: boolean
@@ -15510,6 +15532,7 @@ export type Database = {
           id?: string
           is_aicono_member?: boolean
           is_kommune?: boolean
+          leitweg_id?: string | null
           lexware_contact_id?: string | null
           logo_url?: string | null
           name: string
@@ -15519,6 +15542,7 @@ export type Database = {
           package_billing_set_at?: string | null
           package_billing_set_by?: string | null
           partner_id?: string | null
+          partner_self_customer?: boolean
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -15560,6 +15584,7 @@ export type Database = {
           id?: string
           is_aicono_member?: boolean
           is_kommune?: boolean
+          leitweg_id?: string | null
           lexware_contact_id?: string | null
           logo_url?: string | null
           name?: string
@@ -15569,6 +15594,7 @@ export type Database = {
           package_billing_set_at?: string | null
           package_billing_set_by?: string | null
           partner_id?: string | null
+          partner_self_customer?: boolean
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -16217,6 +16243,78 @@ export type Database = {
         Args: { _area: string; _uid: string }
         Returns: boolean
       }
+      cancel_aicono_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: {
+          amount: number
+          cancels_invoice_id: string | null
+          created_at: string
+          document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
+          id: string
+          invoice_kind: string
+          invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
+          lexware_invoice_id: string | null
+          license_payment_method: string | null
+          line_items: Json | null
+          module_total: number
+          partner_id: string | null
+          pdf_url: string | null
+          period_end: string
+          period_start: string
+          source_ref: string | null
+          status: string
+          support_total: number
+          tenant_id: string
+          updated_at: string
+          usage_delta: string | null
+          usage_review: boolean
+          vat_rate: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tenant_invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      cancel_partner_customer_invoice: {
+        Args: { p_invoice: string }
+        Returns: {
+          amount: number
+          cancels_invoice_id: string | null
+          created_at: string
+          document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
+          id: string
+          invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
+          line_items: Json
+          partner_id: string
+          payment_method: string
+          period_end: string
+          period_start: string
+          recipient_snapshot: Json | null
+          sender_snapshot: Json | null
+          source_ref: string
+          status: string
+          tenant_id: string
+          vat_rate: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "partner_customer_invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cleanup_bridge_raw_samples: { Args: never; Returns: undefined }
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_cron_job_history: { Args: never; Returns: number }
@@ -16722,6 +16820,7 @@ export type Database = {
         Args: { p_invoice_id: string }
         Returns: {
           amount: number
+          cancels_invoice_id: string | null
           created_at: string
           document_type: string
           due_date: string | null
@@ -16760,6 +16859,7 @@ export type Database = {
         Args: { p_invoice: string }
         Returns: {
           amount: number
+          cancels_invoice_id: string | null
           created_at: string
           document_type: string
           due_date: string | null
@@ -16861,6 +16961,39 @@ export type Database = {
         Args: { _partner_id: string }
         Returns: Json
       }
+      partner_set_custom_lines: {
+        Args: { p_invoice: string; p_lines: Json }
+        Returns: {
+          amount: number
+          cancels_invoice_id: string | null
+          created_at: string
+          document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
+          id: string
+          invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
+          line_items: Json
+          partner_id: string
+          payment_method: string
+          period_end: string
+          period_start: string
+          recipient_snapshot: Json | null
+          sender_snapshot: Json | null
+          source_ref: string
+          status: string
+          tenant_id: string
+          vat_rate: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "partner_customer_invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       portal_roles: { Args: { _uid: string }; Returns: string[] }
       portal_set_user_roles: {
         Args: { _roles: string[]; _target: string }
@@ -16949,6 +17082,10 @@ export type Database = {
       run_meter_power_hourly_backfill_guarded: { Args: never; Returns: number }
       set_partner_invoice_status: {
         Args: { p_invoice: string; p_status: string }
+        Returns: undefined
+      }
+      set_tenant_invoice_options: {
+        Args: { p_leitweg: string; p_self: boolean; p_tenant: string }
         Returns: undefined
       }
       set_tenant_package_billing: {
