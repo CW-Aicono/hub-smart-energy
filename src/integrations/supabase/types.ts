@@ -16238,6 +16238,20 @@ export type Database = {
         Returns: number
       }
       evaluate_monitoring_rules: { Args: never; Returns: number }
+      finalize_license_sale: {
+        Args: {
+          p_cadence: string
+          p_code: string
+          p_kind: string
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
+        Returns: string
+      }
       find_duplicate_meters: {
         Args: never
         Returns: {
