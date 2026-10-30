@@ -44,11 +44,19 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Pakete (neue Buchungen)</CardTitle>
-        <CardDescription>UVP = unverbindliche Preisempfehlung, EK = Partner-Einkaufspreis, netto pro Monat. Bestandskunden werden weiter nach der Modulpreisliste unten abgerechnet.</CardDescription>
+        <CardDescription>UVP = unverbindliche Preisempfehlung, EK = Partner-Einkaufspreis, netto pro Monat. Bestandskunden werden weiter nach der Modulpreisliste unten abgerechnet. Jede Preisänderung wird mit Gültig-ab-Datum versioniert; bereits erzeugte Rechnungen bleiben unverändert.</CardDescription>
+        {canEdit && (
+          <div className="flex items-center gap-2 pt-2">
+            <Label htmlFor="price-valid-from" className="text-xs whitespace-nowrap">Änderungen gültig ab</Label>
+            <Input id="price-valid-from" type="date" className="w-40 h-8" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         <Table>
-          <TableHeader><TableRow><TableHead>Paket</TableHead><TableHead>Module</TableHead><TableHead>Voraussetzung</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right" title="Einmalig an den Partner, wenn ihm das erste Modul des Pakets freigeschaltet wird">Freischaltung Partner</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Paket</TableHead><TableHead>Module</TableHead><TableHead>Voraussetzung</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right">Gültig ab</TableHead><TableHead className="text-right">
+            <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Freischaltung Partner <Info className="h-3.5 w-3.5 text-muted-foreground" /></span></TooltipTrigger><TooltipContent className="max-w-xs">Einmalige Gebühr, die dem Partner in Rechnung gestellt wird, sobald ihm das erste Modul dieses Pakets freigeschaltet wird. Sie fällt pro Partner nur einmal je Paket an.</TooltipContent></Tooltip></TooltipProvider>
+          </TableHead></TableRow></TableHeader>
           <TableBody>
             {catalog.packages.map((p) => (
               <TableRow key={p.code}>
