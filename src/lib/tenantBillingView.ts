@@ -20,6 +20,7 @@ export function customerInvoiceList(aicono: any[], partner: any[]): CustomerInvo
   ].sort((a, b) => (a.issued_at < b.issued_at ? 1 : -1));
 }
 
-export function lockedHint(packageName: string, requestTo: string) {
-  return `Im Paket ${packageName} enthalten – Anfrage an ${requestTo}`;
+/** Hinweis bei gesperrter Funktion; Vorlage z. B. „Im Paket {pkg} enthalten – Anfrage an {to}“. */
+export function lockedHint(packageName: string, requestTo: string, template = "Im Paket {pkg} enthalten – Anfrage an {to}") {
+  return template.replace("{pkg}", packageName).replace("{to}", requestTo);
 }

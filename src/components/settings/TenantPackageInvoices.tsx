@@ -117,7 +117,7 @@ export function TenantPackageInvoices() {
                 {summary!.locked.map((l) => (
                   <li key={l.module_code} className="flex items-start gap-2 text-muted-foreground">
                     <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    <span><span className="text-foreground">{modLabel(l.module_code)}</span> – {lockedHint(l.package_name, requestTo)}</span>
+                    <span><span className="text-foreground">{modLabel(l.module_code)}</span> – {lockedHint(l.package_name, requestTo, T("lockedHint"))}</span>
                   </li>
                 ))}
               </ul>
