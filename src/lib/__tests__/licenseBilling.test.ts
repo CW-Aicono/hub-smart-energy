@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { licenseAmount, licensePeriodEnd, saleSchema } from "../licenseBilling";
 describe("license billing rules", () => {
+  const sale = { tenant: "11111111-1111-4111-8111-111111111111", kind: "package", code: "p1_monitoring", quantity: 1, cadence: "monthly", price: 99, payment: "invoice" };
+  it("accepts new package bookings", () => expect(saleSchema.safeParse(sale).success).toBe(true));
+  it("rejects separately sold modules", () => expect(saleSchema.safeParse({ ...sale, kind: "module", code: "energy_monitoring" }).success).toBe(false));
+  it("bills charging by charging-point quantity instead of a free package", () => expect(saleSchema.safeParse({ ...sale, code: "p4_charging", price: 0 }).success).toBe(false));
+  it("allows charging-point quantity at 8 euros", () => expect(saleSchema.safeParse({ ...sale, kind: "unit", code: "charge_point", quantity: 2, price: 8 }).success).toBe(true));
+  it("rejects multiple copies of a flat-rate package", () => expect(saleSchema.safeParse({ ...sale, quantity: 2 }).success).toBe(false));
   it("once charges only the selected quantity", () => expect(licenseAmount(8, 2, "2026-10-30", "2026-10-30", "once")).toBe(16));
   it("monthly ends at calendar month end", () => expect(licensePeriodEnd("2026-10-30", "monthly")).toBe("2026-10-31"));
   it("quarterly covers three months", () => expect(licenseAmount(8, 1, "2026-10-01", "2026-12-31", "quarterly")).toBe(24));

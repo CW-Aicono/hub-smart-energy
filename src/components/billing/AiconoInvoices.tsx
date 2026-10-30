@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, FileDown, Loader2, Mail, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { buildAiconoInvoicePdf, type AiconoBillingSettings, type InvoiceRecipient } from "@/lib/aiconoInvoicePdf";
-import { ALL_MODULES } from "@/hooks/useTenantModules";
+import { packageSaleCatalog } from "@/lib/packageSaleCatalog";
 
 const db = supabase as any;
 
@@ -196,19 +196,13 @@ export function ManualInvoiceDialog() {
     queryKey: ["manual-invoice-packages"], enabled: open,
     queryFn: async () => (await db.from("pricing_packages").select("code, name, uvp, ek, active, sort").eq("active", true).order("sort")).data ?? [],
   });
-  const { data: modPrices = [] } = useQuery({
-    queryKey: ["manual-invoice-module-prices"], enabled: open,
-    queryFn: async () => (await db.from("module_prices").select("module_code, price_monthly, partner_price_monthly")).data ?? [],
+  const { data: unitPrices = [] } = useQuery({
+    queryKey: ["manual-invoice-unit-prices"], enabled: open,
+    queryFn: async () => { const { data, error } = await db.from("pricing_unit_prices").select("code,name,uvp,ek,new_sale_uvp,partner_available"); if (error) throw error; return data ?? []; },
   });
   // Prefill only: price is the partner purchase price (EK) for partner invoices, otherwise the customer price; always editable.
   const isPartner = target === "partner";
-  const catalog = [
-    ...(pkgs as any[]).map((p) => ({ key: `pkg:${p.code}`, group: "Paket", label: p.name, price: Number(isPartner ? p.ek : p.uvp) || 0 })),
-    ...ALL_MODULES.map((m) => {
-      const mp = (modPrices as any[]).find((x) => x.module_code === m.code);
-      return { key: `mod:${m.code}`, group: "Modul", label: m.label, price: Number(isPartner ? mp?.partner_price_monthly : mp?.price_monthly) || 0 };
-    }),
-  ];
+  const catalog = packageSaleCatalog(pkgs, unitPrices, isPartner).map(p => ({ key: `${p.kind}:${p.code}`, group: p.kind === "package" ? "Paket" : "Zusatzleistung", label: p.name, price: isPartner ? p.ek : p.uvp }));
 
   const partnerTenants = (tenants as any[]).filter((t) => t.partner_id === partnerId);
   const net = lines.reduce((s, l) => s + Math.round(num(l.quantity) * num(l.unit_price) * 100) / 100, 0);
@@ -268,9 +262,9 @@ export function ManualInvoiceDialog() {
             <div className="space-y-2">
               <Label>Positionen</Label>
               {lines.map((l, i) => (
-                <div key={i} className="flex gap-2">
+                <div key={i} className="grid grid-cols-[1fr_5rem_7rem_2.5rem] gap-2">
                   <Select value="" onValueChange={(v) => { const o = catalog.find((c) => c.key === v); if (o) setLines((ls) => ls.map((x, j) => j === i ? { ...x, label: o.label, unit_price: o.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }) } : x)); }}>
-                    <SelectTrigger className="w-40"><SelectValue placeholder="Modul/Paket" /></SelectTrigger>
+                    <SelectTrigger className="col-span-4 min-w-0"><SelectValue placeholder="Paket / Zusatzleistung" /></SelectTrigger>
                     <SelectContent>
                       {catalog.map((c) => <SelectItem key={c.key} value={c.key}>{c.group}: {c.label} ({c.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €)</SelectItem>)}
                     </SelectContent>
