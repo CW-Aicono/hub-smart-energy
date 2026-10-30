@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
+import { LicenseSales } from "@/components/billing/LicenseSales";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -313,6 +314,7 @@ export default function PartnerTenantDetail() {
               )}
             </CardContent>
           </Card>
+          {tenantId && partnerId && <LicenseSales tenantId={tenantId} partnerId={partnerId} canEdit={isPartnerAdmin} />}
         </TabsContent>
 
         {modules.some((m) => m.module_code === "gain_sharing") && (

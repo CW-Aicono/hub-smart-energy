@@ -15,6 +15,7 @@ import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
 import EditInvoiceContent from "@/components/super-admin/EditInvoiceContent";
 import { AiconoInvoiceRowActions, ManualInvoiceDialog, BillingSenderDialog } from "@/components/billing/AiconoInvoices";
 import { PortalDiscountRequestsCard } from "@/components/billing/DiscountRequests";
+import { LicenseSales } from "@/components/billing/LicenseSales";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -314,6 +315,7 @@ const SuperAdminBilling = () => {
         <div className="p-6 space-y-6">
           <PortalDiscountRequestsCard />
           <PackageBillingOverviewCard />
+          <LicenseSales />
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
