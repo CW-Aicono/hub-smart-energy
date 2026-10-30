@@ -1,5 +1,12 @@
 # Versionshinweise
 
+## v1.17.0 – 30.10.2026
+- „Paket buchen“ belegt den Preis automatisch aus der Preisliste vor (Direktkunde UVP, Partnerkunde EK); abweichende Preise nur mit Begründung, gekennzeichnet als „individueller Preis“.
+- Neu buchbar: „Einrichtung (einmalig)“. Ladepunkte und weitere Liegenschaften werden nicht mehr manuell gebucht, sondern automatisch gezählt.
+- Voraussetzungen werden geprüft (Pakete 2/3/5 nur mit Paket 1, Paket 6 nur mit weiterem Paket oder Ladepunkten); ab 7 Liegenschaften Hinweis auf Paket 6.
+- Kündigen eines Pakets schaltet nur Module ab, die kein anderes Paket abdeckt und die nicht einzeln freigeschaltet sind.
+- Neuer Schalter „Abrechnung nach Paketen“ je Kunde mit Paketvorschlag; gilt ab dem Folgemonat, Modulpreise werden danach nur angezeigt.
+
 ## v1.16.3 – 30.10.2026
 - Preisstammdaten aktualisiert: Ladepunkt 8 € / Partner 6 € pro Monat, Remote-Support-Flatrate 149 € / Partner 112 € – jetzt auch für Partner buchbar.
 - Preisänderungen werden mit Gültig-ab-Datum versioniert und automatisch protokolliert; bereits erzeugte Rechnungen bleiben unverändert.

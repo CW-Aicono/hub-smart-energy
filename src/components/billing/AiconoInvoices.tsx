@@ -202,7 +202,7 @@ export function ManualInvoiceDialog() {
   });
   // Prefill only: price is the partner purchase price (EK) for partner invoices, otherwise the customer price; always editable.
   const isPartner = target === "partner";
-  const catalog = packageSaleCatalog(pkgs, unitPrices, isPartner).map(p => ({ key: `${p.kind}:${p.code}`, group: p.kind === "package" ? "Paket" : "Zusatzleistung", label: p.name, price: isPartner ? p.ek : p.uvp }));
+  const catalog = packageSaleCatalog(pkgs, unitPrices, isPartner, true).map(p => ({ key: `${p.kind}:${p.code}`, group: p.kind === "package" ? "Paket" : "Zusatzleistung", label: p.name, price: isPartner ? p.ek : p.uvp }));
 
   const partnerTenants = (tenants as any[]).filter((t) => t.partner_id === partnerId);
   const net = lines.reduce((s, l) => s + Math.round(num(l.quantity) * num(l.unit_price) * 100) / 100, 0);
