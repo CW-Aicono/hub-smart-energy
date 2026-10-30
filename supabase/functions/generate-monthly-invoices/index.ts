@@ -38,6 +38,9 @@ Deno.serve(async (req) => {
       .from("tenant_modules")
       .select("tenant_id, module_code, is_enabled, price_override, charge_point_price_override");
     if (mErr) throw mErr;
+    const { data: contractSales, error: csErr } = await supabase.from("license_sales").select("tenant_id,product_kind,product_code,starts_on,ended_on");
+    if (csErr) throw csErr;
+    const covered = (tenantId: string, kind: string, code: string) => (contractSales ?? []).some((s: any) => s.tenant_id === tenantId && s.product_kind === kind && s.product_code === code && s.starts_on <= fmt(lastMonthEnd));
 
     // 3. Get global module prices (member + standard + per charge point)
     const { data: globalPrices, error: gpErr } = await supabase
@@ -158,7 +161,7 @@ Deno.serve(async (req) => {
     for (const inv of existingInvoices ?? []) {
       // Never merge into or delete Lexware-synced invoices
       // Einmalrechnungen und an Partner adressierte Rechnungen nie zusammenführen
-      if (inv.invoice_kind === "one_time" || inv.partner_id) continue;
+      if (inv.invoice_kind === "one_time" || inv.partner_id || inv.source_ref?.startsWith("license")) continue;
       if (inv.issued_at) {
         // In AICONO festgeschriebene Rechnung: Monat gilt als abgerechnet, nie ändern
         lockedTenants.add(inv.tenant_id);
@@ -219,6 +222,7 @@ Deno.serve(async (req) => {
         const codes = [...new Set(pkgByTenant[tenant.id])];
         const lines: any[] = [];
         for (const c of codes) {
+          if (covered(tenant.id, "package", c)) continue;
           const d = pkgDefs[c];
           if (!d || d.always_active) continue;
           const a = price(d);
@@ -226,9 +230,9 @@ Deno.serve(async (req) => {
         }
         const extraLoc = codes.includes("p6_enterprise") ? 0 : Math.max(0, (locCount[tenant.id] ?? 0) - 1);
         const lp = price(unitPrice["extra_location"]);
-        if (extraLoc > 0 && lp > 0) lines.push({ type: "package_unit", code: "extra_location", label: `${extraLoc} weitere Liegenschaft(en)`, quantity: extraLoc, unit_price: lp, amount: Math.round(extraLoc * lp * 100) / 100 });
+        if (extraLoc > 0 && lp > 0 && !covered(tenant.id, "unit", "extra_location")) lines.push({ type: "package_unit", code: "extra_location", label: `${extraLoc} weitere Liegenschaft(en)`, quantity: extraLoc, unit_price: lp, amount: Math.round(extraLoc * lp * 100) / 100 });
         const cpp = price(unitPrice["charge_point"]);
-        if (codes.includes("p4_charging") && activeCp > 0 && cpp > 0) lines.push({ type: "package_unit", code: "charge_point", label: `${activeCp} aktive Ladepunkte`, quantity: activeCp, unit_price: cpp, amount: Math.round(activeCp * cpp * 100) / 100 });
+        if (codes.includes("p4_charging") && activeCp > 0 && cpp > 0 && !covered(tenant.id, "unit", "charge_point")) lines.push({ type: "package_unit", code: "charge_point", label: `${activeCp} aktive Ladepunkte`, quantity: activeCp, unit_price: cpp, amount: Math.round(activeCp * cpp * 100) / 100 });
         const sum = Math.round(lines.reduce((x, l) => x + l.amount, 0) * 100) / 100;
         if (toPartner) {
           if (lines.length) partnerDrafts.push({ tenant_id: tenant.id, partner_id: tenant.partner_id, invoice_kind: "recurring",
@@ -243,6 +247,13 @@ Deno.serve(async (req) => {
       }
       for (const tm of isPkg ? [] : tenantModules) {
         if (tm.module_code === "dashboard") continue;
+        if (covered(tenant.id, "module", tm.module_code)) continue;
+        const packageCovered = (contractSales ?? []).some((s: any) => s.tenant_id === tenant.id && s.product_kind === "package" && s.starts_on <= fmt(lastMonthEnd));
+        if (packageCovered) {
+          const { data: maps, error: mapErr } = await supabase.from("pricing_package_modules").select("package_code").eq("module_code", tm.module_code);
+          if (mapErr) throw mapErr;
+          if ((maps ?? []).some((p: any) => covered(tenant.id, "package", p.package_code))) continue;
+        }
         const priceEntry = globalPriceMap[tm.module_code];
         let globalPrice = 0;
         let globalCpPrice = 0;
@@ -254,7 +265,7 @@ Deno.serve(async (req) => {
         // Pauschale und Ladepunktpreis sind frei kombinierbar (0 = nicht berechnet)
         const flat = tm.price_override != null ? Number(tm.price_override) : globalPrice;
         // Ladepunktpreis nur als Unterpunkt von Ladeinfrastruktur
-        const cpPrice = tm.module_code !== "ev_charging" ? 0
+        const cpPrice = tm.module_code !== "ev_charging" || covered(tenant.id, "unit", "charge_point") ? 0
           : tm.charge_point_price_override != null ? Number(tm.charge_point_price_override) : globalCpPrice;
         const cpGross = cpPrice > 0 && activeCp > 0 ? Math.round(cpPrice * activeCp * 100) / 100 : 0;
         grossByCode[tm.module_code] = flat + cpGross;
@@ -455,9 +466,9 @@ Deno.serve(async (req) => {
     // Partner-Entwürfe (EK): je Partnerkunde und Monat genau einer; offene Entwürfe werden aktualisiert
     let partnerCreated = 0;
     for (const pd of partnerDrafts) {
-      const { data: ex } = await supabase.from("tenant_invoices").select("id, lexware_invoice_id")
+      const { data: ex } = await supabase.from("tenant_invoices").select("id, lexware_invoice_id, issued_at")
         .eq("source_ref", pd.source_ref).neq("status", "voided").maybeSingle();
-      if (ex?.lexware_invoice_id) continue;
+      if (ex?.lexware_invoice_id || ex?.issued_at) continue;
       if (ex) {
         const { error } = await supabase.from("tenant_invoices").update({ line_items: pd.line_items, amount: pd.amount, module_total: pd.module_total, document_type: pd.document_type }).eq("id", ex.id);
         if (error) throw error;
