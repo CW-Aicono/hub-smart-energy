@@ -10,7 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Loader2, Package } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertTriangle, Info, Loader2, Package } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -20,6 +21,7 @@ const pct = (n: number) => `${n.toLocaleString("de-DE", { maximumFractionDigits:
 export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
   const { catalog, isLoading, error, updatePrice, updateUnlockFee } = usePricingPackages();
   const [draft, setDraft] = useState<Record<string, { uvp: string; ek: string }>>({});
+  const [validFrom, setValidFrom] = useState(() => new Date().toISOString().slice(0, 10));
   if (isLoading) return <Card><CardContent className="p-6"><Loader2 className="h-4 w-4 animate-spin" /></CardContent></Card>;
   if (error || !catalog) return <Card><CardContent className="p-6 text-destructive text-sm">Paketkatalog konnte nicht geladen werden.</CardContent></Card>;
 
@@ -28,7 +30,7 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
     if (!d) return;
     const nu = Number(d.uvp.replace(",", ".")), ne = Number(d.ek.replace(",", "."));
     if (!Number.isFinite(nu) || !Number.isFinite(ne) || (nu === uvp && ne === ek)) return;
-    try { await updatePrice.mutateAsync({ table, code, uvp: nu, ek: ne }); toast({ title: "Preis gespeichert" }); }
+    try { await updatePrice.mutateAsync({ table, code, uvp: nu, ek: ne, validFrom }); toast({ title: "Preis gespeichert", description: `Gültig ab ${new Date(validFrom + "T00:00:00").toLocaleDateString("de-DE")}. Bereits erzeugte Rechnungen bleiben unverändert.` }); }
     catch (e: any) { toast({ title: "Fehler", description: e.message, variant: "destructive" }); }
   };
   const cell = (table: "pricing_packages" | "pricing_unit_prices", code: string, uvp: number, ek: number, field: "uvp" | "ek") => (
