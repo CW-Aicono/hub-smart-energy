@@ -20,5 +20,10 @@ describe("license billing rules", () => {
   it("starts the next quarter without overlapping the prior supplement", () => expect(licensePeriodEnd("2027-01-01", "quarterly")).toBe("2027-03-31"));
   it("halfyearly supplement ends at the calendar halfyear boundary", () => expect(licensePeriodEnd("2026-10-30", "halfyearly")).toBe("2026-12-31"));
   it("allows zero-value subscription notices", () => expect(licenseAmount(0, 3, "2026-10-30", "2026-12-31", "quarterly")).toBe(0));
+  it("bills a one-time package at the full price without proration", () => expect(licenseAmount(99, 1, "2026-10-31", "2026-10-31", "once")).toBe(99));
+  it("bills a monthly package supplement and the next full period", () => {
+    expect(licenseAmount(99, 1, "2026-10-31", "2026-10-31", "monthly")).toBe(3.19);
+    expect(licenseAmount(99, 1, "2026-11-01", "2026-11-30", "monthly")).toBe(99);
+  });
   it("rejects negative prices", () => expect(saleSchema.safeParse({ tenant: "11111111-1111-4111-8111-111111111111", kind: "unit", code: "remote_support", quantity: 1, cadence: "monthly", price: -1, payment: "invoice" }).success).toBe(false));
 });

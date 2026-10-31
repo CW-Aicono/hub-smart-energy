@@ -1,5 +1,8 @@
 # Roadmap
 
+## Automatische Paketverkaufsrechnungen (31.10.)
+- [x] v1.27.4: Automatische Entwürfe bei monatlichem AICONO-Verkauf und einmaligem Partnerverkauf angemeldet geprüft; täglicher Folgelauf aktiv und erfolgreich. Rechnungserstellung im Buchungsbutton und Handbuch verdeutlicht; Freigabe/Versand bleiben manuell.
+
 ## Ladestatus (30.10.)
 - [x] v1.16.1: Alle OCPP-Zustände getrennt anzeigen; Stationsmeldungen nicht durch offene Sitzungen überschreiben. 23 Tests erfolgreich, angemeldete ELMI-Detailansicht und neun Zustände in öffentlicher Prüfansicht verifiziert; vier Sprachen gepflegt. Keine Stationskonfiguration oder Fernbefehle geändert.
 - [x] v1.16.2: Fernstart auch bei „Vorbereitung“ (Fahrzeug angesteckt) zulässig; ELMI-Statuscode 0x0B0B0000 im Protokoll nicht mehr als Fehler markiert.
