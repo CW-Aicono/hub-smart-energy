@@ -38,7 +38,7 @@ export function useUploadPpaDocument() {
       validFrom?: string | null;
       validUntil?: string | null;
     }) => {
-      if (!tenant?.id) throw new Error("Kein Mandant");
+      if (!tenant?.id) throw new Error("Kein Tenant");
       const hash = await sha256(params.file);
       const safeName = params.file.name.replace(/[^\w.\-]+/g, "_");
       const path = `${tenant.id}/${params.contractId}/${Date.now()}_${safeName}`;

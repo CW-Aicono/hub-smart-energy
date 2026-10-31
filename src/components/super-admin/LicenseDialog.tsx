@@ -74,7 +74,7 @@ export default function LicenseDialog({ mode, initial, trigger }: Props) {
 
   const save = async () => {
     if (!values.tenant_id || !values.plan_name) {
-      toast({ title: "Fehler", description: "Mandant und Plan-Name erforderlich", variant: "destructive" });
+      toast({ title: "Fehler", description: "Tenant und Plan-Name erforderlich", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -122,13 +122,13 @@ export default function LicenseDialog({ mode, initial, trigger }: Props) {
         <div className="space-y-3 pt-2">
           {mode === "create" && (
             <div className="space-y-1.5">
-              <Label>Mandant *</Label>
+              <Label>Tenant *</Label>
               <Select
                 value={values.tenant_id}
                 onValueChange={(v) => setValues({ ...values, tenant_id: v })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Mandant wählen" />
+                  <SelectValue placeholder="Tenant wählen" />
                 </SelectTrigger>
                 <SelectContent>
                   {tenantOptions.map((t: any) => (

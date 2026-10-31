@@ -94,7 +94,7 @@ const InviteTenantAdminDialog = ({ tenantId, tenantName, onSuccess }: InviteTena
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Kunden-Admin einladen</DialogTitle>
+          <DialogTitle>Tenant-Admin einladen</DialogTitle>
           <DialogDescription>Neuen Benutzer für <strong>{tenantName}</strong> einladen.</DialogDescription>
         </DialogHeader>
         {!inviteLink ? (
@@ -113,7 +113,7 @@ const InviteTenantAdminDialog = ({ tenantId, tenantName, onSuccess }: InviteTena
               <Select value={role} onValueChange={(v: any) => setRole(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" />Kunden-Admin</div></SelectItem>
+                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" />Tenant-Admin</div></SelectItem>
                   <SelectItem value="user"><div className="flex items-center gap-2"><User className="h-4 w-4" />Benutzer</div></SelectItem>
                 </SelectContent>
               </Select>
@@ -489,7 +489,7 @@ const SuperAdminTenantDetail = () => {
         throw new Error(msg);
       }
       if (data?.success === false) throw new Error(data.error);
-      toast.success(`${email ?? "Person"} aus dem Mandanten entfernt (Konto bleibt bestehen)`);
+      toast.success(`${email ?? "Person"} aus dem Tenant entfernt (Konto bleibt bestehen)`);
       refreshUsers();
     } catch (err: any) {
       toast.error("Entfernen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
@@ -656,7 +656,7 @@ const SuperAdminTenantDetail = () => {
                 <DialogContent className="max-w-lg">
                   <DialogHeader>
                     <DialogTitle>Bundles verwalten – {tenant?.name}</DialogTitle>
-                    <DialogDescription>Bundles für diesen Mandanten buchen oder entfernen.</DialogDescription>
+                    <DialogDescription>Bundles für diesen Tenants buchen oder entfernen.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto">
                     {allBundles.filter(b => b.is_active && (b.bookable !== false || tenantBundleIds.includes(b.id))).map((bundle) => {
@@ -703,7 +703,7 @@ const SuperAdminTenantDetail = () => {
               {/* Existing tenant info card */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Mandanten-Informationen</CardTitle>
+                  <CardTitle>Tenants-Informationen</CardTitle>
                   {!editingTenantInfo ? (
                     <Button variant="ghost" size="icon" onClick={() => {
                       setTenantInfoForm({
@@ -1378,7 +1378,7 @@ const SuperAdminTenantDetail = () => {
 
             <TabsContent value="audit" className="mt-6">
 
-              <AuditLogList tenantId={id} title="Aktivitätslog dieses Mandanten" />
+              <AuditLogList tenantId={id} title="Aktivitätslog dieses Tenants" />
             </TabsContent>
           </Tabs>
         </div>

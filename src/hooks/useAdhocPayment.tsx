@@ -162,7 +162,7 @@ export function useAdhocRules() {
     onError: (e: any) => {
       const msg = String(e?.message ?? "");
       const friendly = msg.includes("idx_adhoc_rules_tenant_unique")
-        ? "Es existiert bereits eine Basis-Regel für diesen Mandanten. Bitte bestehende Regel bearbeiten oder als Geltungsbereich Ladepunkt-Gruppe oder einzelnen Ladepunkt wählen."
+        ? "Es existiert bereits eine Basis-Regel für diesen Tenants. Bitte bestehende Regel bearbeiten oder als Geltungsbereich Ladepunkt-Gruppe oder einzelnen Ladepunkt wählen."
         : msg;
       toast({ title: "Fehler", description: friendly, variant: "destructive" });
     },

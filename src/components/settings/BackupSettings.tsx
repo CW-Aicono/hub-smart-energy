@@ -107,7 +107,7 @@ function GatewayDumpsCard() {
         </CardTitle>
         <CardDescription>
           Diese Einträge werden vom lokalen Gateway (Home Assistant Add-on) hochgeladen und enthalten
-          nur den aktuellen Status des Gateways – <strong>keine</strong> Mandanten- oder Messdaten.
+          nur den aktuellen Status des Gateways – <strong>keine</strong> Tenants- oder Messdaten.
           Sie sind nur für den Support relevant.
         </CardDescription>
       </CardHeader>
@@ -160,7 +160,7 @@ export function BackupSettings() {
       <TabsList>
         <TabsTrigger value="tenant" className="gap-2">
           <HardDrive className="h-4 w-4" />
-          Mandanten-Sicherungen
+          Tenants-Sicherungen
         </TabsTrigger>
         <TabsTrigger value="gateway" className="gap-2">
           <Router className="h-4 w-4" />

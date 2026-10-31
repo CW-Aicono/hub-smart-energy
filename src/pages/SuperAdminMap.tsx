@@ -90,7 +90,7 @@ const SuperAdminMap = () => {
         <header className="border-b p-6">
           <h1 className="text-2xl font-bold">Standort-Karte</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Alle Kundenstandorte auf einen Blick ({locations.length} Standorte, {Object.keys(tenantGroups).length} Mandanten)
+            Alle Kundenstandorte auf einen Blick ({locations.length} Standorte, {Object.keys(tenantGroups).length} Tenants)
           </p>
         </header>
         <div className="p-6 space-y-4">
@@ -118,7 +118,7 @@ const SuperAdminMap = () => {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div>
-                      <p className="text-xs text-muted-foreground">Mandant</p>
+                      <p className="text-xs text-muted-foreground">Tenant</p>
                       <p className="text-sm font-medium">{selectedLocation.tenant_name}</p>
                     </div>
                     {selectedLocation.address && (
@@ -146,7 +146,7 @@ const SuperAdminMap = () => {
                       onClick={() => navigate(`/super-admin/tenants/${selectedLocation.tenant_id}`)}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
-                      Mandant anzeigen
+                      Tenant anzeigen
                     </Button>
                   </CardContent>
                 </Card>
@@ -159,7 +159,7 @@ const SuperAdminMap = () => {
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
-                Standorte nach Mandant
+                Standorte nach Tenant
               </CardTitle>
             </CardHeader>
             <CardContent>

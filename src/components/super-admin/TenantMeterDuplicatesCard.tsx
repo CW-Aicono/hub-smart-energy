@@ -140,7 +140,7 @@ export default function TenantMeterDuplicatesCard({ tenantId, tenantName }: Prop
               Zähler-Duplikate
             </CardTitle>
             <CardDescription className="mt-1">
-              Sucht bei diesem Mandanten{tenantName ? ` (${tenantName})` : ""} nach Zählern, die
+              Sucht bei diesem Tenants{tenantName ? ` (${tenantName})` : ""} nach Zählern, die
               mehrfach für denselben Sensor eines Gateways angelegt wurden. Der Scan läuft nur nach
               manuellem Klick.
             </CardDescription>

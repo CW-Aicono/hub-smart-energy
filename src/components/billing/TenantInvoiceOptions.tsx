@@ -11,7 +11,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 
 const db = supabase as any;
 
-/** Rechnungsangaben je Mandant: Eigenbedarf des Partners und Leitweg-ID für E-Rechnungen. */
+/** Rechnungsangaben je Tenant: Eigenbedarf des Partners und Leitweg-ID für E-Rechnungen. */
 export function TenantInvoiceOptions({ tenantId }: { tenantId: string }) {
   const { t } = useTranslation();
   const T = (k: string) => t(`license.${k}` as any);

@@ -1,4 +1,4 @@
-// Kundenansicht „Paket & Rechnungen“: welche Rechnungen ein Mandant sieht (reine Logik).
+// Kundenansicht „Paket & Rechnungen“: welche Rechnungen ein Tenant sieht (reine Logik).
 export interface CustomerInvoice {
   id: string; source: "aicono" | "partner"; number: string; period_start: string; period_end: string;
   amount: number; issued_at: string; cancellation: boolean; row: any;

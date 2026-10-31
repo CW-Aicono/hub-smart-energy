@@ -272,7 +272,7 @@ export default function SuperAdminChargePointOnboarding() {
         <Card>
           <CardHeader>
             <CardTitle>Wallbox-Stammdaten</CardTitle>
-            <CardDescription>Grunddaten zur Wallbox und Zuordnung zum Mandanten.</CardDescription>
+            <CardDescription>Grunddaten zur Wallbox und Zuordnung zum Tenant.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
@@ -295,9 +295,9 @@ export default function SuperAdminChargePointOnboarding() {
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Stellplatz 5" />
               </div>
               <div className="space-y-1.5">
-                <Label>Mandant *</Label>
+                <Label>Tenant *</Label>
                 <Select value={tenantId} onValueChange={setTenantId}>
-                  <SelectTrigger><SelectValue placeholder="Mandant wählen…" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Tenant wählen…" /></SelectTrigger>
                   <SelectContent>
                     {tenants.map((t: any) => (
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>

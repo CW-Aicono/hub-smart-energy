@@ -29,7 +29,7 @@ interface Staff {
  * Portal-Rollen der Teammitglieder. Serverseitig geschützt:
  * RPC portal_set_user_roles (nur super_admin, Selbst-/Letzter-Admin-Schutz),
  * Trigger guard_privileged_roles + guard_last_portal_admin auf user_roles.
- * Ändert ausschließlich Portal-Rollen – Partner-/Mandantenrollen bleiben unberührt.
+ * Ändert ausschließlich Portal-Rollen – Partner-/Tenant-Rollen bleiben unberührt.
  */
 export default function PortalStaffCard() {
   const qc = useQueryClient();

@@ -94,7 +94,7 @@ export default function TenantPartnerTransferCard({
       });
       const res: any = typeof data === "string" ? JSON.parse(data) : data;
       if (error || !res?.success) throw new Error(res?.error || error?.message || "Übertragung fehlgeschlagen");
-      toast({ title: "Mandant übertragen", description: `${tenantName} wurde ${targetPartnerId ? "einem neuen Partner" : "AICONO direkt"} zugeordnet.` });
+      toast({ title: "Tenant übertragen", description: `${tenantName} wurde ${targetPartnerId ? "einem neuen Partner" : "AICONO direkt"} zugeordnet.` });
       setOpen(false);
       setReason("");
       setTarget(PLATFORM);
@@ -156,7 +156,7 @@ export default function TenantPartnerTransferCard({
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setReason(""); setTarget(PLATFORM); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Mandant an anderen Partner übertragen</DialogTitle>
+            <DialogTitle>Tenant an anderen Partner übertragen</DialogTitle>
             <DialogDescription>
               „{tenantName}" wird dem gewählten Ziel zugeordnet. Der bisherige Partner verliert
               sofort Zugriff und Remote-Support-Rechte.
@@ -196,7 +196,7 @@ export default function TenantPartnerTransferCard({
             <div className="flex items-start gap-2 p-3 rounded-md border border-destructive/30 bg-destructive/5 text-sm">
               <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
               <span>
-                Diese Aktion wirkt sofort. Bestehende Partner-Members verlieren den Zugriff auf diesen Mandanten.
+                Diese Aktion wirkt sofort. Bestehende Partner-Members verlieren den Zugriff auf diesen Tenants.
               </span>
             </div>
           </div>

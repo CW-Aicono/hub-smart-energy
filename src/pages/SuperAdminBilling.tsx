@@ -395,7 +395,7 @@ const SuperAdminBilling = () => {
           <div className="relative max-w-sm mb-4">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Rechnung suchen (Mandant, Nr., Status)…"
+              placeholder="Rechnung suchen (Tenant, Nr., Status)…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-8"

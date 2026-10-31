@@ -45,7 +45,7 @@ export function useCreatePpaGooCertificate() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: Omit<PpaGooCertificate, "id" | "tenant_id" | "created_at" | "updated_at">) => {
-      if (!tenant?.id) throw new Error("Kein Mandant");
+      if (!tenant?.id) throw new Error("Kein Tenant");
       const { data, error } = await supabase
         .from("ppa_goo_certificates" as any)
         .insert({ ...input, tenant_id: tenant.id, issued_at: input.issued_at ?? new Date().toISOString() } as any)

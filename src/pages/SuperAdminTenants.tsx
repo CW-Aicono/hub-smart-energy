@@ -139,7 +139,7 @@ const SuperAdminTenants = () => {
       if (!result?.success) throw new Error(result?.error || "Einladung fehlgeschlagen");
 
       toast({
-        title: "Mandant angelegt",
+        title: "Tenant angelegt",
         description: `Eine Einladungsmail wurde an ${adminEmail} gesendet.`,
       });
       setDialogOpen(false);
@@ -186,7 +186,7 @@ const SuperAdminTenants = () => {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                     <Building2 className="h-4 w-4" />
-                    Mandant
+                    Tenant
                   </div>
                   <div className="space-y-2">
                     <Label>{t("common.name")} *</Label>
@@ -200,7 +200,7 @@ const SuperAdminTenants = () => {
                   <div className="space-y-2">
                     <Label>{t("tenants.contact_email")}</Label>
                     <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="info@firma.de" type="email" />
-                    <p className="text-xs text-muted-foreground">Allgemeine Kontaktadresse des Mandanten (optional)</p>
+                    <p className="text-xs text-muted-foreground">Allgemeine Kontaktadresse des Tenants (optional)</p>
                   </div>
                   <div className="space-y-2">
                     <Label className="flex items-center gap-1">
@@ -219,7 +219,7 @@ const SuperAdminTenants = () => {
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">Wird kein Partner ausgewählt, betreut AICONO den Mandanten direkt.</p>
+                    <p className="text-xs text-muted-foreground">Wird kein Partner ausgewählt, betreut AICONO den Tenants direkt.</p>
                   </div>
                 </div>
 
@@ -255,7 +255,7 @@ const SuperAdminTenants = () => {
                   disabled={creating || !newName || !newSlug || !adminEmail}
                   className="w-full"
                 >
-                  {creating ? "Wird angelegt..." : "Mandant anlegen & Einladung senden"}
+                  {creating ? "Wird angelegt..." : "Tenant anlegen & Einladung senden"}
                 </Button>
               </div>
             </DialogContent>
@@ -316,14 +316,14 @@ const SuperAdminTenants = () => {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setConfirmName(""); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mandant unwiderruflich löschen?</AlertDialogTitle>
+            <AlertDialogTitle>Tenant unwiderruflich löschen?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>
-                  Der Mandant <strong>{deleteTarget?.name}</strong> und alle zugehörigen Daten werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+                  Der Tenant <strong>{deleteTarget?.name}</strong> und alle zugehörigen Daten werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
                 </p>
                 <p className="text-sm">
-                  Bitte geben Sie zur Bestätigung den Namen des Mandanten ein:
+                  Bitte geben Sie zur Bestätigung den Namen des Tenants ein:
                 </p>
                 <Input
                   value={confirmName}

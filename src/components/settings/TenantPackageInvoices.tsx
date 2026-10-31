@@ -26,7 +26,7 @@ interface Summary {
   sender: Record<string, any> | null;
 }
 
-/** Kunden-Admin: gebuchte Pakete (ohne Preise), gesperrte Funktionen und eigene Rechnungen zum Download. */
+/** Tenant-Admin: gebuchte Pakete (ohne Preise), gesperrte Funktionen und eigene Rechnungen zum Download. */
 export function TenantPackageInvoices() {
   const { tenant } = useTenant();
   const { t } = useTranslation();

@@ -134,7 +134,7 @@ export function useLocationAutomations(locationId: string | undefined) {
   useEffect(() => { fetchAutomations(); }, [fetchAutomations]);
 
   const createAutomation = async (input: CreateAutomationInput) => {
-    if (!tenant?.id) return { error: new Error("Kein Mandant") };
+    if (!tenant?.id) return { error: new Error("Kein Tenant") };
     const dbInsert: AutomationInsertDB = {
       ...input,
       tenant_id: tenant.id,
@@ -176,7 +176,7 @@ export function useLocationAutomations(locationId: string | undefined) {
   };
 
   const duplicateAutomation = async (automation: LocationAutomationRecord) => {
-    if (!tenant?.id) return { error: new Error("Kein Mandant") };
+    if (!tenant?.id) return { error: new Error("Kein Tenant") };
     const dbInsert: AutomationInsertDB = {
       tenant_id: tenant.id,
       location_id: automation.location_id,
