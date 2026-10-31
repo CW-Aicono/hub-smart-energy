@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import TenantLifecycleActions, { TenantStatusBadge } from "@/components/super-admin/TenantLifecycleActions";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
-type SortKey = "name" | "slug" | "status" | "email" | "created_at";
+type SortKey = "name" | "slug" | "partner" | "status" | "email" | "created_at";
 
 const SuperAdminTenants = () => {
   const { user, loading: authLoading } = useAuth();
@@ -270,7 +270,7 @@ const SuperAdminTenants = () => {
                   <TableRow>
                     <SortableHead label={t("common.name")} sortKey="name" sort={sort} onToggle={toggle} />
                     <SortableHead label="Slug" sortKey="slug" sort={sort} onToggle={toggle} />
-                    <SortableHead label="Partner" sortKey={"partner" as SortKey} sort={sort} onToggle={toggle} />
+                    <SortableHead label="Partner" sortKey="partner" sort={sort} onToggle={toggle} />
                     <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
                     <SortableHead label={t("common.email")} sortKey="email" sort={sort} onToggle={toggle} />
                     <SortableHead label={t("common.created")} sortKey="created_at" sort={sort} onToggle={toggle} />
