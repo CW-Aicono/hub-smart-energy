@@ -1,5 +1,9 @@
 # Änderungsprotokoll (intern)
 
+## v1.27.0
+- AICONO-Abrechnung in Reiter Rechnungen / Verträge & Pakete / Rabattanfragen; Lexware/SEPA/Absender in Werkzeugleiste im Reiter Rechnungen; Filter AICONO → Partner / → Direktkunde.
+- Partnerportal Abrechnung: Reiter „Verkäufe & Rechnungen“ in „Rechnungen“ und „Verträge“ getrennt.
+
 ## v1.26.2
 - Partnerportal Abrechnung in Reiter gegliedert: Übersicht, Verkäufe & Rechnungen, Preise & Margen (bzw. Provision).
 

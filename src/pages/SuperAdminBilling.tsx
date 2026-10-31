@@ -24,6 +24,7 @@ import {
   DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -97,7 +98,7 @@ const SuperAdminBilling = () => {
   });
 
   const [docFilter, setDocFilter] = useState<"all" | "invoice" | "subscription_notice">("all");
-  const [kindFilter, setKindFilter] = useState<"all" | "one_time" | "recurring" | "partner">("all");
+  const [kindFilter, setKindFilter] = useState<"all" | "one_time" | "recurring" | "partner" | "customer">("all");
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("asc"); }
@@ -106,7 +107,7 @@ const SuperAdminBilling = () => {
   const sorted = useMemo(() => {
     const byType = invoices.filter((r: any) =>
       (docFilter === "all" || (r.document_type ?? "invoice") === docFilter) &&
-      (kindFilter === "all" || (kindFilter === "partner" ? !!r.partner_id : (r.invoice_kind ?? "recurring") === kindFilter)));
+      (kindFilter === "all" || (kindFilter === "partner" ? !!r.partner_id : kindFilter === "customer" ? !r.partner_id : (r.invoice_kind ?? "recurring") === kindFilter)));
     const filtered = search.trim()
       ? byType.filter((r: any) => {
           const q = search.toLowerCase();
@@ -265,61 +266,75 @@ const SuperAdminBilling = () => {
               Rechnungen generieren
             </Button>
             <ManualInvoiceDialog />
-            <BillingSenderDialog />
-            <Button variant="outline" disabled={syncing} onClick={handleSyncStatus}>
-              {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-              Status aktualisieren
-            </Button>
-            <Button variant="outline" disabled={lexwareMutation.isPending} onClick={() => {
-              const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && !inv.issued_at && (inv.document_type ?? "invoice") === "invoice" && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
-              if (openIds.length === 0) { toast.info(t("billing.lexware_no_open")); return; }
-              lexwareMutation.mutate(openIds);
-            }}>
-              {lexwareMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-              {t("billing.lexware_send_all")}
-            </Button>
-            <Dialog open={sepaOpen} onOpenChange={setSepaOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline"><Download className="h-4 w-4 mr-2" />{t("billing.sepa_export")}</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{t("billing.sepa_export")}</DialogTitle>
-                  <DialogDescription>Gläubiger-Daten eingeben und SEPA pain.008 XML-Datei erzeugen.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Gläubiger-Name</Label>
-                    <Input value={creditor.name} onChange={(e) => setCreditor(c => ({ ...c, name: e.target.value }))} placeholder="Ihre Firma GmbH" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>IBAN</Label>
-                      <Input value={creditor.iban} onChange={(e) => setCreditor(c => ({ ...c, iban: e.target.value }))} placeholder="DE89 3704 0044 0532 0130 00" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>BIC</Label>
-                      <Input value={creditor.bic} onChange={(e) => setCreditor(c => ({ ...c, bic: e.target.value }))} placeholder="COBADEFFXXX" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Gläubiger-ID</Label>
-                    <Input value={creditor.id} onChange={(e) => setCreditor(c => ({ ...c, id: e.target.value }))} placeholder="DE98ZZZ09999999999" />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setSepaOpen(false)}>{t("common.cancel")}</Button>
-                  <Button onClick={handleSepaExport}><Download className="h-4 w-4 mr-2" />XML exportieren</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </div>
         </header>
 
-        <div className="p-6 space-y-6">
-          <PortalDiscountRequestsCard />
-          <PackageBillingOverviewCard />
-          <LicenseSales />
+        <div className="p-6">
+          <Tabs defaultValue="invoices" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="invoices">Rechnungen</TabsTrigger>
+              <TabsTrigger value="contracts">Verträge &amp; Pakete</TabsTrigger>
+              <TabsTrigger value="discounts">Rabattanfragen</TabsTrigger>
+            </TabsList>
+            <TabsContent value="contracts" className="space-y-6">
+              <PackageBillingOverviewCard />
+              <LicenseSales />
+            </TabsContent>
+            <TabsContent value="discounts" className="space-y-6">
+              <PortalDiscountRequestsCard />
+            </TabsContent>
+            <TabsContent value="invoices" className="space-y-6">
+          <div className="flex flex-wrap gap-2 rounded-lg border bg-muted/30 p-3">
+            <span className="text-sm text-muted-foreground self-center mr-2">Versand &amp; Buchhaltung:</span>
+              <BillingSenderDialog />
+              <Button variant="outline" disabled={syncing} onClick={handleSyncStatus}>
+                {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Status aktualisieren
+              </Button>
+              <Button variant="outline" disabled={lexwareMutation.isPending} onClick={() => {
+                const openIds = invoices.filter((inv: any) => !inv.lexware_invoice_id && !inv.issued_at && (inv.document_type ?? "invoice") === "invoice" && (inv.status === "draft" || inv.status === "sent")).map((inv: any) => inv.id);
+                if (openIds.length === 0) { toast.info(t("billing.lexware_no_open")); return; }
+                lexwareMutation.mutate(openIds);
+              }}>
+                {lexwareMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                {t("billing.lexware_send_all")}
+              </Button>
+              <Dialog open={sepaOpen} onOpenChange={setSepaOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline"><Download className="h-4 w-4 mr-2" />{t("billing.sepa_export")}</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{t("billing.sepa_export")}</DialogTitle>
+                    <DialogDescription>Gläubiger-Daten eingeben und SEPA pain.008 XML-Datei erzeugen.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Gläubiger-Name</Label>
+                      <Input value={creditor.name} onChange={(e) => setCreditor(c => ({ ...c, name: e.target.value }))} placeholder="Ihre Firma GmbH" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>IBAN</Label>
+                        <Input value={creditor.iban} onChange={(e) => setCreditor(c => ({ ...c, iban: e.target.value }))} placeholder="DE89 3704 0044 0532 0130 00" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>BIC</Label>
+                        <Input value={creditor.bic} onChange={(e) => setCreditor(c => ({ ...c, bic: e.target.value }))} placeholder="COBADEFFXXX" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Gläubiger-ID</Label>
+                      <Input value={creditor.id} onChange={(e) => setCreditor(c => ({ ...c, id: e.target.value }))} placeholder="DE98ZZZ09999999999" />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setSepaOpen(false)}>{t("common.cancel")}</Button>
+                    <Button onClick={handleSepaExport}><Download className="h-4 w-4 mr-2" />XML exportieren</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+          </div>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
@@ -395,12 +410,12 @@ const SuperAdminBilling = () => {
               className="pl-8"
             />
           </div>
-          <div className="flex gap-2 mb-4">
+          <div className="flex flex-wrap gap-2">
             {([["all", "Alle"], ["invoice", "Rechnungen"], ["subscription_notice", "Abo-Belege (0 €)"]] as const).map(([v, l]) => (
               <Button key={v} size="sm" variant={docFilter === v ? "default" : "outline"} onClick={() => setDocFilter(v)}>{l}</Button>
             ))}
             <span className="mx-2 border-l" />
-            {([["all", "Alle Arten"], ["recurring", "Monatlich"], ["one_time", "Einmalig"], ["partner", "An Partner"]] as const).map(([v, l]) => (
+            {([["all", "Alle Empfänger"], ["partner", "AICONO → Partner"], ["customer", "AICONO → Direktkunde"], ["recurring", "Monatlich"], ["one_time", "Einmalig"]] as const).map(([v, l]) => (
               <Button key={v} size="sm" variant={kindFilter === v ? "default" : "outline"} onClick={() => setKindFilter(v)}>{l}</Button>
             ))}
           </div>
@@ -497,6 +512,8 @@ const SuperAdminBilling = () => {
               </Table>
             </CardContent>
           </Card>
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Edit Invoice Dialog */}
