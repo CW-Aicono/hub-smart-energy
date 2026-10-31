@@ -984,6 +984,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               <li>{T("manual.acc.billingItem5")}</li>
             </ul>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.automaticSales")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.terms.tenantUnified")}</p>
           </section>
           <section>
             <h4 className="font-semibold mb-2">{T("manual.acc.versionTitle")}</h4>
