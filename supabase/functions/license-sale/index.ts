@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
-const schema = z.object({ tenant_id: z.string().uuid(), product_kind: z.enum(["module","package","unit"]), product_code: z.string().regex(/^[a-z0-9_]{2,64}$/), quantity: z.number().int().min(1).max(100000), cadence: z.enum(["once","monthly","quarterly","halfyearly"]), sale_price: z.number().finite().min(0).max(1000000), starts_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), payment_method: z.enum(["invoice","sepa"]), request_id: z.string().uuid(), price_reason: z.string().trim().max(500).optional() });
+const schema = z.object({ tenant_id: z.string().uuid(), product_kind: z.enum(["module","package","unit"]), product_code: z.string().regex(/^[a-z0-9_]{2,64}$/), quantity: z.number().int().min(1).max(100000), cadence: z.enum(["once","monthly","quarterly","halfyearly"]), sale_price: z.number().finite().min(0).max(1000000), starts_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), payment_method: z.enum(["invoice","sepa"]), request_id: z.string().uuid(), price_reason: z.string().trim().max(500).optional(), term_months: z.number().int().min(1).max(240).nullable().optional(), auto_renew: z.boolean().optional() });
 const endSchema = z.object({ action: z.literal("end"), sale_id: z.string().uuid() });
 Deno.serve(async req => {
   const json = (b: unknown, status=200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type":"application/json" } });
@@ -83,6 +83,7 @@ Deno.serve(async req => {
     const {data,error}=await client.rpc("finalize_license_sale",args);
     if(error){await rollback();return json({error:error.message},400);}
     if(individual) await admin.from("license_sales").update({price_individual:true,price_reason:p.price_reason}).eq("id",data);
+    if(p.term_months!=null||p.auto_renew===false){const {error:termError}=await client.rpc("set_license_sale_term",{p_sale:data,p_term_months:p.term_months??null,p_auto_renew:p.auto_renew??true}); if(termError) return json({id:data,warning:"Laufzeit nicht gespeichert: "+termError.message});}
     return json({id:data});
   } catch(e) { return json({error:(e as Error).message},500); }
 });
