@@ -343,13 +343,10 @@ const SuperAdminBilling = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Offene Beträge</p>
                   <p className="text-2xl font-bold">
-                    {(lexwareSummary
-                      ? (lexwareSummary.open?.openAmount ?? 0)
-                      : stats.openAmount
-                    ).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    {stats.openAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {lexwareSummary ? `${lexwareSummary.open?.count ?? 0} Belege (Lexware)` : `${stats.openCount} Rechnungen`}
+                    {`${stats.openCount} Rechnungen`}
                   </p>
                 </div>
               </CardContent>
@@ -360,13 +357,10 @@ const SuperAdminBilling = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Bezahlt</p>
                   <p className="text-2xl font-bold">
-                    {(lexwareSummary
-                      ? ((lexwareSummary.paid?.totalAmount ?? 0) + (lexwareSummary.paidoff?.totalAmount ?? 0))
-                      : stats.paidAmount
-                    ).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    {stats.paidAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {lexwareSummary ? `${(lexwareSummary.paid?.count ?? 0) + (lexwareSummary.paidoff?.count ?? 0)} Belege (Lexware)` : `${stats.paidCount} Rechnungen`}
+                    {`${stats.paidCount} Rechnungen`}
                   </p>
                 </div>
               </CardContent>
@@ -377,13 +371,10 @@ const SuperAdminBilling = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Überfällig</p>
                   <p className="text-2xl font-bold">
-                    {(lexwareSummary
-                      ? (lexwareSummary.overdue?.openAmount ?? 0)
-                      : stats.overdueAmount
-                    ).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    {stats.overdueAmount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {lexwareSummary ? `${lexwareSummary.overdue?.count ?? 0} Belege (Lexware)` : `${stats.overdueCount} Rechnungen`}
+                    {`${stats.overdueCount} Rechnungen`}
                   </p>
                 </div>
               </CardContent>
