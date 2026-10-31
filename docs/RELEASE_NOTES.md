@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.28.1
+- Beim Anlegen eines Tenants im AICONO Portal kann jetzt die Art gewählt werden: Kommune, Gewerbe/Industrie, Privat oder Sonstige.
+
 ## v1.28.0 – 31.10.2026
 - Einheitliche Bezeichnung: überall „Tenant“ statt „Mandant“ oder „Kunde“; die Rolle heißt jetzt „Tenant-Admin“.
 

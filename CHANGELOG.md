@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## [1.28.1] - 2026-10-31
+- Portal: Beim Anlegen eines Tenants ist die Art (Kommune, Gewerbe/Industrie, Privat, Sonstige) wählbar; Hinweis zur Direkt-AICONO-Zuordnung.
+
 ## v1.28.0
 - Einheitliche Bezeichnung „Tenant/Tenants“ statt „Mandant“/„Kunde“ in AICONO Portal, Partnerportal, Abrechnung und Handbuch; Rolle „Kunden-Admin“ heißt „Tenant-Admin“. Nur Anzeigetexte – Rollenwerte, Pfade und Rechte unverändert. Ladekunden, Vertriebsprojekte und Eichrecht-Links behalten „Kunde“.
 
