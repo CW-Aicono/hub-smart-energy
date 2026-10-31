@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.21.5 – 30.10.2026
+- Portal: „Module & Bundles“ heißt jetzt „Modulpreise (Altverträge)“.
+
 ## v1.21.4 – 30.10.2026
 - Portal: Der Menüpunkt „Lizenzen“ entfällt – Verträge werden über Pakete gebucht.
 
