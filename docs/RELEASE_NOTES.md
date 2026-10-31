@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.23.0 – 31.10.2026
+- Portal: Pakete werden Partnern jetzt als ganze Pakete freigeschaltet. Partner können ihren Kunden nur freigeschaltete Pakete verkaufen.
+
 ## v1.22.0 – 31.10.2026
 - Portal: Kundenseite zeigt statt „Module“ und „Lizenz“ jetzt den Reiter „Pakete“; Zahlungsart und SEPA stehen unter „Abrechnung“.
 
