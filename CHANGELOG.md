@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.26.0
+- Vertragslaufzeiten: `license_sales.term_months`/`auto_renew`, RPC `set_license_sale_term`, `end_license_sale` respektiert Mindestlaufzeit, `generate_due_license_invoices` rechnet befristete Verträge bis Enddatum ab (Migration 0059). UI in LicenseSales (Verkauf + Kalender-Symbol), `src/lib/licenseTerm.ts` + Tests.
+
 ## v1.25.1
 - Partnerportal Abrechnung: „Rabatt bei AICONO anfragen“ eingeklappt.
 
