@@ -6821,6 +6821,7 @@ export type Database = {
       }
       license_sales: {
         Row: {
+          auto_renew: boolean
           cadence: string
           created_at: string
           created_by: string | null
@@ -6840,8 +6841,10 @@ export type Database = {
           sale_price: number
           starts_on: string
           tenant_id: string
+          term_months: number | null
         }
         Insert: {
+          auto_renew?: boolean
           cadence?: string
           created_at?: string
           created_by?: string | null
@@ -6861,8 +6864,10 @@ export type Database = {
           sale_price?: number
           starts_on?: string
           tenant_id: string
+          term_months?: number | null
         }
         Update: {
+          auto_renew?: boolean
           cadence?: string
           created_at?: string
           created_by?: string | null
@@ -6882,6 +6887,7 @@ export type Database = {
           sale_price?: number
           starts_on?: string
           tenant_id?: string
+          term_months?: number | null
         }
         Relationships: [
           {
@@ -16911,6 +16917,10 @@ export type Database = {
         Args: { p_cadence: string; p_day: string }
         Returns: string
       }
+      license_term_end: {
+        Args: { p_months: number; p_start: string }
+        Returns: string
+      }
       merge_duplicate_meter: {
         Args: {
           _actor_user_id?: string
@@ -17081,6 +17091,10 @@ export type Database = {
       }
       run_ems_cron_bundle: { Args: never; Returns: undefined }
       run_meter_power_hourly_backfill_guarded: { Args: never; Returns: number }
+      set_license_sale_term: {
+        Args: { p_auto_renew: boolean; p_sale: string; p_term_months: number }
+        Returns: undefined
+      }
       set_partner_invoice_status: {
         Args: { p_invoice: string; p_status: string }
         Returns: undefined
