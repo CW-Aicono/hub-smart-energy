@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.21.5 – 30.10.2026
+- Portal: Menüpunkt „Module & Bundles“ heißt jetzt „Modulpreise (Altverträge)“ (4 Sprachen).
+
 ## v1.21.4 – 30.10.2026
 - Portal: Menüpunkt „Lizenzen“ entfernt (tenant_licenses leer, Verträge laufen über Pakete/license_sales); alte URL leitet auf Abrechnung um.
 
