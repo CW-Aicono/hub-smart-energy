@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.26.1 – 31.10.2026
+- Partnerportal Branding: Farbauswahl funktioniert wieder, mit Vorschau und Formatprüfung.
+
 ## v1.26.0 – 31.10.2026
 - Vertragslaufzeit je Paketvertrag in Monaten wählbar, mit automatischer Verlängerung oder automatischem Ende; später änderbar durch AICONO und Partner.
 

@@ -26,6 +26,23 @@ interface PartnerRow {
   white_label_enabled: boolean;
 }
 
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+/** Außerhalb der Seite definiert, damit Farbwähler und Textfeld beim Tippen nicht neu aufgebaut werden. */
+function ColorInput({ value, label, onChange }: { value: string | null | undefined; label: string; onChange: (v: string) => void }) {
+  const v = value ?? "";
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="flex items-center gap-2">
+        <Input type="color" value={HEX.test(v) ? v : "#1a365d"} onChange={(e) => onChange(e.target.value)} className="h-10 w-16 p-1 cursor-pointer" />
+        <Input value={v} onChange={(e) => onChange(e.target.value.trim())} placeholder="#1a365d" className="font-mono" />
+      </div>
+      {v && !HEX.test(v) && <p className="text-xs text-destructive">Format: #RRGGBB</p>}
+    </div>
+  );
+}
+
 export default function PartnerBranding() {
   const { partnerId, isPartnerAdmin, loading } = usePartnerAccess();
   const qc = useQueryClient();
@@ -53,6 +70,9 @@ export default function PartnerBranding() {
 
   const save = useMutation({
     mutationFn: async () => {
+      for (const k of ["primary_color", "secondary_color", "accent_color"] as const) {
+        if (form[k] && !HEX.test(form[k]!)) throw new Error("Farben bitte im Format #RRGGBB angeben");
+      }
       const payload = {
         brand_display_name: form.brand_display_name ?? null,
         support_email: form.support_email ?? null,
@@ -97,24 +117,6 @@ export default function PartnerBranding() {
   if (!isPartnerAdmin) return <div className="p-6 text-muted-foreground">Nur Partner-Admins können das Branding bearbeiten.</div>;
   if (!partner) return <div className="p-6 text-muted-foreground">Kein Partner-Kontext.</div>;
 
-  const ColorInput = ({ field, label }: { field: keyof PartnerRow; label: string }) => (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      <div className="flex items-center gap-2">
-        <Input
-          type="color"
-          value={(form[field] as string) || "#1a365d"}
-          onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
-          className="h-10 w-16 p-1 cursor-pointer"
-        />
-        <Input
-          value={(form[field] as string) || ""}
-          onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
-          placeholder="#1a365d"
-        />
-      </div>
-    </div>
-  );
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -196,9 +198,16 @@ export default function PartnerBranding() {
           <CardDescription>Drei Markenfarben — Primärfarbe für Buttons & Links, Sekundär für Akzente, Akzent für Highlights.</CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-4">
-          <ColorInput field="primary_color" label="Primärfarbe" />
-          <ColorInput field="secondary_color" label="Sekundärfarbe" />
-          <ColorInput field="accent_color" label="Akzentfarbe" />
+          <ColorInput label="Primärfarbe" value={form.primary_color} onChange={(v) => setForm((f) => ({ ...f, primary_color: v || null }))} />
+          <ColorInput label="Sekundärfarbe" value={form.secondary_color} onChange={(v) => setForm((f) => ({ ...f, secondary_color: v || null }))} />
+          <ColorInput label="Akzentfarbe" value={form.accent_color} onChange={(v) => setForm((f) => ({ ...f, accent_color: v || null }))} />
+          <div className="md:col-span-3 flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
+            <span className="text-muted-foreground">Vorschau:</span>
+            {(["primary_color", "secondary_color", "accent_color"] as const).map((k) => (
+              <span key={k} className="h-8 w-8 rounded-full border" style={{ backgroundColor: HEX.test(form[k] ?? "") ? form[k]! : "transparent" }} />
+            ))}
+            <span className="text-xs text-muted-foreground">Die Farben gelten im Portal Ihrer Endkunden{partner.white_label_enabled ? "" : ", sobald AICONO White-Label aktiviert"}.</span>
+          </div>
         </CardContent>
       </Card>
 
