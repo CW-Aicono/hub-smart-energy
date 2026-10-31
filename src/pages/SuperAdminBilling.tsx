@@ -412,11 +412,11 @@ const SuperAdminBilling = () => {
           </div>
           <div className="flex flex-wrap gap-2">
             {([["all", "Alle"], ["invoice", "Rechnungen"], ["subscription_notice", "Abo-Belege (0 €)"]] as const).map(([v, l]) => (
-              <Button key={v} size="sm" variant={docFilter === v ? "default" : "outline"} onClick={() => setDocFilter(v)}>{l}</Button>
+              <Button key={v} size="sm" variant="outline" className={docFilter === v ? "border-primary bg-primary/15 text-foreground font-semibold hover:bg-primary/25" : undefined} aria-pressed={docFilter === v} onClick={() => setDocFilter(v)}>{l}</Button>
             ))}
             <span className="mx-2 border-l" />
             {([["all", "Alle Empfänger"], ["partner", "AICONO → Partner"], ["customer", "AICONO → Direktkunde"], ["recurring", "Monatlich"], ["one_time", "Einmalig"]] as const).map(([v, l]) => (
-              <Button key={v} size="sm" variant={kindFilter === v ? "default" : "outline"} onClick={() => setKindFilter(v)}>{l}</Button>
+              <Button key={v} size="sm" variant="outline" className={kindFilter === v ? "border-primary bg-primary/15 text-foreground font-semibold hover:bg-primary/25" : undefined} aria-pressed={kindFilter === v} onClick={() => setKindFilter(v)}>{l}</Button>
             ))}
           </div>
 
