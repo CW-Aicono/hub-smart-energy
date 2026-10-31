@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.24.0
+- Partnerportal Abrechnung: Karte „Freigegeben zum Verkauf“ zeigt die von AICONO freigeschalteten Pakete + Button „Endkunden anlegen“.
+
 ## v1.23.0 – 31.10.2026
 - Portal → Partner: Button „Pakete“ öffnet Paket-Portfolio (Paket-Schalter setzen alle Paketmodule in partner_modules, Entzug behält Module anderer freigeschalteter Pakete, Warnung bei bestehenden Buchungen; Einzelmodule eingeklappt). Partner-Paketbuchung sperrt Pakete außerhalb des Portfolios. src/lib/partnerPortfolio.ts + Tests.
 
