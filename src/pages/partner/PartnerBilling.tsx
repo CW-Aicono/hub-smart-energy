@@ -269,19 +269,34 @@ export default function PartnerBilling() {
         </Badge>
       </header>
 
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="overview">Übersicht</TabsTrigger>
+          {!isCommission && <TabsTrigger value="sales">Verkäufe & Rechnungen</TabsTrigger>}
+          <TabsTrigger value="prices">{isCommission ? "Provision" : "Preise & Margen"}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          {partnerId && <PartnerSalesPortfolioCard partnerId={partnerId} />}
+          {partnerId && <PartnerUsageNoticesCard partnerId={partnerId} />}
+          {partnerId && <PackageBillingOverviewCard partnerId={partnerId} />}
+        </TabsContent>
+
+        {!isCommission && (
+          <TabsContent value="sales" className="space-y-4">
+            <p className="text-sm text-muted-foreground">Neue Pakete verkaufst du beim Endkunden: <strong>Tenants</strong> → Kunde öffnen → Reiter <strong>„Pakete & Verkauf“</strong>.</p>
+            <LicenseSales partnerId={partnerId} canEdit={false} />
+            <PartnerCustomerInvoices partnerId={partnerId} canEdit={isPartnerAdmin} />
+          </TabsContent>
+        )}
+
+        <TabsContent value="prices" className="space-y-4">
       {partnerId && (
         <details className="rounded-lg border bg-card">
           <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Rabatt bei AICONO anfragen</summary>
           <div className="p-3 pt-0"><PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} /></div>
         </details>
       )}
-      {partnerId && <PartnerUsageNoticesCard partnerId={partnerId} />}
-      {partnerId && <PartnerSalesPortfolioCard partnerId={partnerId} />}
-      {partnerId && <PackageBillingOverviewCard partnerId={partnerId} />}
-      {!isCommission && <p className="text-sm text-muted-foreground">Pakete verkaufen: unter <strong>Tenants</strong> den Endkunden öffnen → Reiter <strong>„Pakete & Verkauf“</strong>. Hier siehst du alle Verkäufe im Überblick.</p>}
-      {!isCommission && <LicenseSales partnerId={partnerId} canEdit={false} />}
-      {!isCommission && <PartnerCustomerInvoices partnerId={partnerId} canEdit={isPartnerAdmin} />}
-
       {isCommission ? (
         <Card>
           <CardHeader>
@@ -541,6 +556,8 @@ export default function PartnerBilling() {
           </TabsContent>
         </Tabs>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
