@@ -155,6 +155,7 @@ export const saTranslations: SATranslations = {
   "support.no_sessions": { de: "Keine Support-Sitzungen", en: "No support sessions", es: "Keine Support-Sitzungen", nl: "Keine Support-Sitzungen" },
   "tenant_detail.remote_support": { de: "Remote-Support", en: "Remote Support", es: "Remote-Support", nl: "Remote-Support" },
   "tenant_detail.modules": { de: "Module", en: "Modules", es: "Module", nl: "Module" },
+  "tenant_detail.packages": { de: "Pakete", en: "Packages", es: "Paquetes", nl: "Pakketten" },
   "tenant_detail.license": { de: "Lizenz", en: "License", es: "Lizenz", nl: "Lizenz" },
   "tenant_detail.modules_prices": { de: "Module freischalten & Preise", en: "Enable Modules & Pricing", es: "Module freischalten & Preise", nl: "Module freischalten & Preise" },
   "tenant_detail.global_price": { de: "Globalpreis", en: "Global Price", es: "Globalpreis", nl: "Globalpreis" },

@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.22.0 – 31.10.2026
+- Portal: Kundenseite zeigt statt „Module“ und „Lizenz“ jetzt den Reiter „Pakete“; Zahlungsart und SEPA stehen unter „Abrechnung“.
+
 ## v1.21.5 – 30.10.2026
 - Portal: „Module & Bundles“ heißt jetzt „Modulpreise (Altverträge)“.
 
