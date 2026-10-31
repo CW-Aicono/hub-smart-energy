@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.25.0 – 31.10.2026
+- Partner verkaufen Pakete jetzt an genau einer Stelle: beim Endkunden im Reiter „Pakete & Verkauf“.
+- AICONO sieht je Kunde, was der Partner verkauft hat und wie viele Ladepunkte neu dazugekommen sind.
+
 ## v1.23.0 – 31.10.2026
 - Portal: Pakete werden Partnern jetzt als ganze Pakete freigeschaltet. Partner können ihren Kunden nur freigeschaltete Pakete verkaufen.
 

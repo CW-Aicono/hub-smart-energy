@@ -183,7 +183,7 @@ export default function PartnerTenantDetail() {
         <TabsList>
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
           <TabsTrigger value="locations">Standorte ({locations.length})</TabsTrigger>
-          <TabsTrigger value="modules">Module & Lizenzen</TabsTrigger>
+          <TabsTrigger value="modules">Pakete & Verkauf</TabsTrigger>
           {modules.some((m) => m.module_code === "gain_sharing") && <TabsTrigger value="gain_sharing">Gain-Sharing</TabsTrigger>}
           <TabsTrigger value="activity">Aktivität</TabsTrigger>
         </TabsList>

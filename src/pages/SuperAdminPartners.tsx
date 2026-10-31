@@ -135,6 +135,27 @@ export default function SuperAdminPartners() {
     },
   });
 
+  // Wer verkauft was: Endkunden, aktive Verträge und Ladepunkte je Partner
+  const { data: salesStats = {} } = useQuery({
+    queryKey: ["super-admin-partner-sales-stats"],
+    queryFn: async () => {
+      const db = supabase as any;
+      const [t, s, c] = await Promise.all([
+        db.from("tenants").select("id, partner_id").not("partner_id", "is", null).is("deleted_at", null),
+        db.from("license_sales").select("partner_id").not("partner_id", "is", null).is("ended_on", null),
+        db.from("charge_points").select("tenant_id"),
+      ]);
+      for (const r of [t, s, c]) if (r.error) throw r.error;
+      const tenantPartner: Record<string, string> = {};
+      const out: Record<string, { customers: number; sales: number; cps: number }> = {};
+      const get = (p: string) => (out[p] ??= { customers: 0, sales: 0, cps: 0 });
+      (t.data ?? []).forEach((r: any) => { tenantPartner[r.id] = r.partner_id; get(r.partner_id).customers++; });
+      (s.data ?? []).forEach((r: any) => get(r.partner_id).sales++);
+      (c.data ?? []).forEach((r: any) => { const p = tenantPartner[r.tenant_id]; if (p) get(p).cps++; });
+      return out;
+    },
+  });
+
   const [search, setSearch] = useState("");
   const filteredPartners = partners.filter((p) => {
     if (!search.trim()) return true;
@@ -533,6 +554,7 @@ export default function SuperAdminPartners() {
                 <SortableHead sortKey="slug" sort={partnerSort} onToggle={togglePartnerSort}>Slug</SortableHead>
                 <SortableHead sortKey="contact" sort={partnerSort} onToggle={togglePartnerSort}>Kontakt</SortableHead>
                 <SortableHead sortKey="members" sort={partnerSort} onToggle={togglePartnerSort}><Users className="h-4 w-4 inline" /></SortableHead>
+                <TableHead>Verkauf</TableHead>
                 <SortableHead sortKey="billing_mode" sort={partnerSort} onToggle={togglePartnerSort}>Modell</SortableHead>
                 <SortableHead sortKey="status" sort={partnerSort} onToggle={togglePartnerSort}>Status</SortableHead>
                 <TableHead className="text-right">Aktion</TableHead>
@@ -556,6 +578,7 @@ export default function SuperAdminPartners() {
                     <TableCell className="font-mono text-xs text-muted-foreground">{p.slug}</TableCell>
                     <TableCell className="text-sm">{p.contact_email ?? "–"}</TableCell>
                     <TableCell className="text-center">{count}</TableCell>
+                    <TableCell className="text-xs whitespace-nowrap">{(salesStats[p.id]?.customers ?? 0).toLocaleString("de-DE")} Kunden · {(salesStats[p.id]?.sales ?? 0).toLocaleString("de-DE")} Verträge · {(salesStats[p.id]?.cps ?? 0).toLocaleString("de-DE")} Ladepunkte</TableCell>
                     <TableCell className="text-xs">{p.billing_mode}</TableCell>
                     <TableCell>
                       <Badge variant={p.is_active ? "default" : "secondary"}>

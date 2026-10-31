@@ -1,5 +1,6 @@
 import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
+import { TenantSalesOverviewCard } from "@/components/super-admin/TenantSalesOverviewCard";
 import { LicenseSales } from "@/components/billing/LicenseSales";
 import { PackageBillingSwitch, usePackageBilling } from "@/components/billing/PackageBillingSwitch";
 import { TenantInvoiceOptions } from "@/components/billing/TenantInvoiceOptions";
@@ -858,6 +859,7 @@ const SuperAdminTenantDetail = () => {
             </TabsContent>
 
             <TabsContent value="modules" className="mt-6 space-y-6">
+              {id && <TenantSalesOverviewCard tenantId={id} />}
               {id && <PackageBillingSwitch tenantId={id} />}
               {id && <PackageBookingCard tenantId={id} />}
               {id && <LicenseSales tenantId={id} />}

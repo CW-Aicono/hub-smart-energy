@@ -273,7 +273,8 @@ export default function PartnerBilling() {
       {partnerId && <PartnerUsageNoticesCard partnerId={partnerId} />}
       {partnerId && <PartnerSalesPortfolioCard partnerId={partnerId} />}
       {partnerId && <PackageBillingOverviewCard partnerId={partnerId} />}
-      {!isCommission && <LicenseSales partnerId={partnerId} canEdit={isPartnerAdmin} />}
+      {!isCommission && <p className="text-sm text-muted-foreground">Pakete verkaufen: unter <strong>Tenants</strong> den Endkunden öffnen → Reiter <strong>„Pakete & Verkauf“</strong>. Hier siehst du alle Verkäufe im Überblick.</p>}
+      {!isCommission && <LicenseSales partnerId={partnerId} canEdit={false} />}
       {!isCommission && <PartnerCustomerInvoices partnerId={partnerId} canEdit={isPartnerAdmin} />}
 
       {isCommission ? (
