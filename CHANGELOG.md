@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.22.0 – 31.10.2026
+- Portal → Kunde: Reiter „Module“ → „Pakete“ (Paketabrechnung-Schalter, Paketbuchung, Ladeinfrastruktur-Karte, eingeklappte Funktionsschalter, Modulpreise nur bei Altvertrag eingeklappt). Reiter „Lizenz“ entfernt (tenant_licenses-Formular), Zahlungsart/SEPA in „Abrechnung“ verschoben. Handbuch 4 Sprachen.
+
 ## v1.21.5 – 30.10.2026
 - Portal: Menüpunkt „Module & Bundles“ heißt jetzt „Modulpreise (Altverträge)“ (4 Sprachen).
 
