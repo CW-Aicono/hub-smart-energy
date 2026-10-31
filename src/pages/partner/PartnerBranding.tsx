@@ -206,7 +206,7 @@ export default function PartnerBranding() {
             {(["primary_color", "secondary_color", "accent_color"] as const).map((k) => (
               <span key={k} className="h-8 w-8 rounded-full border" style={{ backgroundColor: HEX.test(form[k] ?? "") ? form[k]! : "transparent" }} />
             ))}
-            <span className="text-xs text-muted-foreground">Die Farben gelten im Portal Ihrer Endkunden{partner.white_label_enabled ? "" : ", sobald AICONO White-Label aktiviert"}.</span>
+            <span className="text-xs text-muted-foreground">Die Farben gelten im Portal Ihrer Tenants{partner.white_label_enabled ? "" : ", sobald AICONO White-Label aktiviert"}.</span>
           </div>
         </CardContent>
       </Card>

@@ -187,7 +187,7 @@ export default function TenantPartnerTransferCard({
               <Textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="z. B. Partner-Status entzogen, Kunde wechselt Partner ..."
+                placeholder="z. B. Partner-Status entzogen, Tenant wechselt Partner ..."
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">Mindestens 5 Zeichen. Wird in der Historie gespeichert.</p>

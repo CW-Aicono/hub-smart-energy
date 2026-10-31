@@ -68,7 +68,7 @@ export function TenantPackageInvoices() {
         if (!summary?.sender) throw new Error(T("senderMissing"));
         const { data: tn } = await db.from("tenants").select("name, contact_person, street, house_number, address, postal_code, city, contact_email, leitweg_id").eq("id", row.tenant_id).maybeSingle();
         const recipient = {
-          name: tn?.name ?? "Kunde", contact: tn?.contact_person ?? null,
+          name: tn?.name ?? "Tenant", contact: tn?.contact_person ?? null,
           street: [tn?.street, tn?.house_number].filter(Boolean).join(" ") || tn?.address || null,
           postalCity: [tn?.postal_code, tn?.city].filter(Boolean).join(" ") || null,
           postalCode: tn?.postal_code ?? null, city: tn?.city ?? null, email: tn?.contact_email ?? null, leitwegId: tn?.leitweg_id ?? null,

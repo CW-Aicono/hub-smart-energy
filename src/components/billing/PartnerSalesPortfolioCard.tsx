@@ -47,11 +47,11 @@ export function PartnerSalesPortfolioCard({ partnerId }: { partnerId: string }) 
         <CardTitle className="flex items-center gap-2 text-base">
           <PackageCheck className="h-4 w-4" /> Freigegeben zum Verkauf ({unlockedCount.toLocaleString("de-DE")} Pakete)
         </CardTitle>
-        <Button asChild size="sm"><Link to="/partner/tenants"><Plus className="mr-1 h-4 w-4" />Endkunden anlegen</Link></Button>
+        <Button asChild size="sm"><Link to="/partner/tenants"><Plus className="mr-1 h-4 w-4" />Tenants anlegen</Link></Button>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Diese Pakete hat AICONO für dich freigeschaltet. Nur sie kannst du deinen Endkunden buchen. Weitere Pakete bitte bei AICONO anfragen.
+          Diese Pakete hat AICONO für dich freigeschaltet. Nur sie kannst du deinen Tenants buchen. Weitere Pakete bitte bei AICONO anfragen.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           {rows.map((p) => (

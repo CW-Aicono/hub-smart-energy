@@ -287,7 +287,7 @@ const SuperAdminTenants = () => {
                       <TableRow key={tenant.id} className="cursor-pointer" onClick={() => navigate(`/super-admin/tenants/${tenant.id}`)}>
                         <TableCell className="font-medium">{tenant.name}</TableCell>
                         <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
-                        <TableCell>{partnerOf(tenant) || <span className="text-muted-foreground">Direktkunde</span>}</TableCell>
+                        <TableCell>{partnerOf(tenant) || <span className="text-muted-foreground">Direkt-Tenant</span>}</TableCell>
                         <TableCell><TenantStatusBadge status={tenant.status} /></TableCell>
                         <TableCell className="text-muted-foreground">{tenant.contact_email || "–"}</TableCell>
                         <TableCell className="text-muted-foreground">{new Date(tenant.created_at).toLocaleDateString("de-DE")}</TableCell>

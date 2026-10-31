@@ -183,10 +183,10 @@ const CreateSupportEntryDialog = () => {
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="space-y-2">
-            <Label>Kunde</Label>
+            <Label>Tenant</Label>
             <Select value={tenantId} onValueChange={setTenantId}>
               <SelectTrigger>
-                <SelectValue placeholder="Kunde wählen" />
+                <SelectValue placeholder="Tenant wählen" />
               </SelectTrigger>
               <SelectContent>
                 {tenants.map((t: any) => (

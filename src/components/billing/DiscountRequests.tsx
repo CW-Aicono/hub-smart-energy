@@ -104,7 +104,7 @@ export function PartnerDiscountRequestsCard({ partnerId, canRequest }: { partner
     },
   });
   const { data: catalog } = useDiscountCatalog();
-  const tenantName = (id: string | null) => (id ? tenants.find((t) => t.id === id)?.name ?? "–" : "Alle meine Kunden");
+  const tenantName = (id: string | null) => (id ? tenants.find((t) => t.id === id)?.name ?? "–" : "Alle meine Tenants");
   // Pakete 1–6 (nur mit Modulen aus dem eigenen Portfolio), Mengenpreise und Remote-Support-Flatrate
   const options = catalog
     ? discountOptions(catalog.packages, catalog.units).filter((o) => {
@@ -145,18 +145,18 @@ export function PartnerDiscountRequestsCard({ partnerId, canRequest }: { partner
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><BadgePercent className="h-5 w-5" />Rabatt bei AICONO anfragen</CardTitle>
         <CardDescription>
-          Ihre Anfrage geht an AICONO. Nach der Freigabe mindert der Rabatt Ihren Einkaufspreis (EK) für die freigegebenen Pakete und Mengenpreise – für einen Kunden oder für alle Ihre Kunden.
+          Ihre Anfrage geht an AICONO. Nach der Freigabe mindert der Rabatt Ihren Einkaufspreis (EK) für die freigegebenen Pakete und Mengenpreise – für einen Tenants oder für alle Ihre Tenants.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {canRequest && (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Kunde</Label>
+              <Label>Tenant</Label>
               <Select value={tenant} onValueChange={setTenant}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all">Alle meine Kunden</SelectItem>
+                  <SelectItem value="__all">Alle meine Tenants</SelectItem>
                   {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -211,7 +211,7 @@ export function PartnerDiscountRequestsCard({ partnerId, canRequest }: { partner
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Datum</TableHead><TableHead>Kunde</TableHead><TableHead>Pakete / Preise</TableHead>
+              <TableHead>Datum</TableHead><TableHead>Tenant</TableHead><TableHead>Pakete / Preise</TableHead>
               <TableHead>Rabatt</TableHead><TableHead>Status</TableHead><TableHead />
             </TableRow>
           </TableHeader>
@@ -263,7 +263,7 @@ export function PortalDiscountRequestsCard() {
   const pending = reqs.filter((r) => r.status === "pending");
   const done = reqs.filter((r) => r.status !== "pending").slice(0, 20);
   const pName = (id: string) => data?.partners.find((p: any) => p.id === id)?.name ?? "–";
-  const tName = (id: string | null) => (id ? data?.tenants.find((t: any) => t.id === id)?.name ?? "–" : "Alle Kunden des Partners");
+  const tName = (id: string | null) => (id ? data?.tenants.find((t: any) => t.id === id)?.name ?? "–" : "Alle Tenants des Partners");
 
   const decide = async (r: DiscountRequest, decision: "approve" | "reject") => {
     const moduleCodes = selected[r.id] ?? r.module_codes;
@@ -283,7 +283,7 @@ export function PortalDiscountRequestsCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><BadgePercent className="h-5 w-5" />Rabatt-Anfragen von Partnern ({pending.length} offen)</CardTitle>
-        <CardDescription>Freigabe ganz oder nur für einzelne Positionen. Freigegebene Rabatte mindern den Partner-EK der gewählten Pakete und Mengenpreise in der Paketabrechnung; ältere Modul-Anfragen werden wie bisher beim Kunden hinterlegt.</CardDescription>
+        <CardDescription>Freigabe ganz oder nur für einzelne Positionen. Freigegebene Rabatte mindern den Partner-EK der gewählten Pakete und Mengenpreise in der Paketabrechnung; ältere Modul-Anfragen werden wie bisher beim Tenant hinterlegt.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && <p className="text-sm text-destructive">Anfragen konnten nicht geladen werden: {(error as Error).message}</p>}
@@ -321,7 +321,7 @@ export function PortalDiscountRequestsCard() {
         })}
         {done.length > 0 && (
           <Table>
-            <TableHeader><TableRow><TableHead>Entschieden</TableHead><TableHead>Partner / Kunde</TableHead><TableHead>Pakete / Preise</TableHead><TableHead>Rabatt</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Entschieden</TableHead><TableHead>Partner / Tenant</TableHead><TableHead>Pakete / Preise</TableHead><TableHead>Rabatt</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
             <TableBody>
               {done.map((r) => (
                 <TableRow key={r.id}>

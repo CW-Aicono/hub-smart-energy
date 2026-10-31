@@ -867,7 +867,7 @@ const SuperAdminTenantDetail = () => {
                 <Card>
                   <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Package className="h-4 w-4" />Ladeinfrastruktur</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Wird automatisch je angelegtem Ladepunkt abgerechnet. Hier freischalten, danach Ladepunkte beim Kunden anlegen.</p>
+                    <p className="text-sm text-muted-foreground">Wird automatisch je angelegtem Ladepunkt abgerechnet. Hier freischalten, danach Ladepunkte beim Tenant anlegen.</p>
                     <div className="flex items-center justify-between gap-4">
                       <p className="text-sm font-medium">Ladeinfrastruktur freigeschaltet</p>
                       <Switch checked={getModuleEnabled("ev_charging")} onCheckedChange={(checked) => toggleModule.mutate({ moduleCode: "ev_charging", enabled: checked })} />

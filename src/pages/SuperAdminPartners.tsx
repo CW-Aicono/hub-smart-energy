@@ -578,7 +578,7 @@ export default function SuperAdminPartners() {
                     <TableCell className="font-mono text-xs text-muted-foreground">{p.slug}</TableCell>
                     <TableCell className="text-sm">{p.contact_email ?? "–"}</TableCell>
                     <TableCell className="text-center">{count}</TableCell>
-                    <TableCell className="text-xs whitespace-nowrap">{(salesStats[p.id]?.customers ?? 0).toLocaleString("de-DE")} Kunden · {(salesStats[p.id]?.sales ?? 0).toLocaleString("de-DE")} Verträge · {(salesStats[p.id]?.cps ?? 0).toLocaleString("de-DE")} Ladepunkte</TableCell>
+                    <TableCell className="text-xs whitespace-nowrap">{(salesStats[p.id]?.customers ?? 0).toLocaleString("de-DE")} Tenants · {(salesStats[p.id]?.sales ?? 0).toLocaleString("de-DE")} Verträge · {(salesStats[p.id]?.cps ?? 0).toLocaleString("de-DE")} Ladepunkte</TableCell>
                     <TableCell className="text-xs">{p.billing_mode}</TableCell>
                     <TableCell>
                       <Badge variant={p.is_active ? "default" : "secondary"}>

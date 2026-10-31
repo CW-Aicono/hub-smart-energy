@@ -285,13 +285,13 @@ export default function PartnerBilling() {
 
         {!isCommission && (
           <TabsContent value="sales" className="space-y-4">
-            <p className="text-sm text-muted-foreground">Neue Pakete verkaufst du beim Endkunden: <strong>Tenants</strong> → Kunde öffnen → Reiter <strong>„Pakete & Verkauf“</strong>.</p>
+            <p className="text-sm text-muted-foreground">Neue Pakete verkaufst du beim Tenants: <strong>Tenants</strong> → Tenant öffnen → Reiter <strong>„Pakete & Verkauf“</strong>.</p>
             <LicenseSales partnerId={partnerId} canEdit={false} />
           </TabsContent>
         )}
         {!isCommission && (
           <TabsContent value="invoices" className="space-y-4">
-            <p className="text-sm text-muted-foreground">Hier findest du deine Rechnungen an Endkunden sowie die Einkaufsrechnungen von AICONO an dich.</p>
+            <p className="text-sm text-muted-foreground">Hier findest du deine Rechnungen an Tenants sowie die Einkaufsrechnungen von AICONO an dich.</p>
             <PartnerCustomerInvoices partnerId={partnerId} canEdit={isPartnerAdmin} />
           </TabsContent>
         )}
@@ -390,7 +390,7 @@ export default function PartnerBilling() {
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
                     <CardTitle className="text-base">Pakete und Mengenpreise</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">Monatliche Nettopreise. Dein Verkaufspreis erscheint in den Endkunden-Entwürfen; ohne eigenen Preis gilt die UVP.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Monatliche Nettopreise. Dein Verkaufspreis erscheint in den Tenants-Entwürfen; ohne eigenen Preis gilt die UVP.</p>
                   </div>
                   <ToggleGroup type="single" value={sector} onValueChange={(v) => v && setSector(v as "kommune" | "industrie")} variant="outline" size="sm">
                     <ToggleGroupItem value="kommune" className="gap-1.5"><Building2 className="h-4 w-4" /> Kommunen</ToggleGroupItem>

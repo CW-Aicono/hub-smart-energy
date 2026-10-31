@@ -158,7 +158,7 @@ export default function PartnerTenants() {
       if (impErr) {
         let msg = impErr.message;
         try { msg = (await (impErr as any)?.context?.json())?.error ?? msg; } catch { /* noop */ }
-        if ((impErr as any)?.context?.status === 403) msg = "Der Kunde hat Remote-Support nicht freigegeben. " + (msg ?? "");
+        if ((impErr as any)?.context?.status === 403) msg = "Der Tenant hat Remote-Support nicht freigegeben. " + (msg ?? "");
         throw new Error(msg);
       }
       if (!imp?.access_token) throw new Error(imp?.error || "Impersonation fehlgeschlagen");

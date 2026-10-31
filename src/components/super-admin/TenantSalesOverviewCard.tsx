@@ -40,13 +40,13 @@ export function TenantSalesOverviewCard({ tenantId }: { tenantId: string }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base"><Eye className="h-4 w-4" />Verkauf & Nutzung im Überblick</CardTitle>
         <CardDescription>
-          {data.partner ? <>Betreut von <Badge variant="secondary">{data.partner.name}</Badge> ({data.partner.billing_mode === "commission" ? "Provision" : "Wiederverkauf"})</> : <>Direktkunde von AICONO</>}
+          {data.partner ? <>Betreut von <Badge variant="secondary">{data.partner.name}</Badge> ({data.partner.billing_mode === "commission" ? "Provision" : "Wiederverkauf"})</> : <>Direkt-Tenant von AICONO</>}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Aktive Verträge</p><p className="text-xl font-bold">{active.length.toLocaleString("de-DE")}</p></div>
-          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Verkaufspreis an Kunde / EK AICONO</p><p className="text-xl font-bold">{eur(saleSum)} / {eur(ekSum)}</p></div>
+          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Verkaufspreis an Tenant / EK AICONO</p><p className="text-xl font-bold">{eur(saleSum)} / {eur(ekSum)}</p></div>
           <div className="rounded-md border p-3">
             <p className="text-xs text-muted-foreground flex items-center gap-1"><PlugZap className="h-3 w-3" />Ladepunkte (werden automatisch abgerechnet)</p>
             <p className="text-xl font-bold">{data.cpTotal.toLocaleString("de-DE")}</p>
@@ -54,7 +54,7 @@ export function TenantSalesOverviewCard({ tenantId }: { tenantId: string }) {
           </div>
         </div>
         <div className="overflow-x-auto"><Table>
-          <TableHeader><TableRow><TableHead>Verkauft am</TableHead><TableHead>Produkt</TableHead><TableHead className="text-right">Menge</TableHead><TableHead className="text-right">Preis Kunde</TableHead><TableHead className="text-right">EK AICONO</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Verkauft am</TableHead><TableHead>Produkt</TableHead><TableHead className="text-right">Menge</TableHead><TableHead className="text-right">Preis Tenant</TableHead><TableHead className="text-right">EK AICONO</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
           <TableBody>
             {data.sales.map((s) => (
               <TableRow key={s.id}>
