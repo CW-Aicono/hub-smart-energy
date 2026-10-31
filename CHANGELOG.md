@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.27.2
+- AICONO Portal Mandantenliste: Spalte „Partner“ (sortier- und durchsuchbar, sonst „Direktkunde“).
+
 ## v1.27.1
 - Abrechnungsfilter: ausgewählte Filterknöpfe mit gut lesbarer heller Schrift und Rahmen.
 
