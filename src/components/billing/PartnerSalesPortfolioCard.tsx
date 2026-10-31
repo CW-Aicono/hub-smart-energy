@@ -13,6 +13,9 @@ const fmtEur = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits:
 export function PartnerSalesPortfolioCard({ partnerId }: { partnerId: string }) {
   const { data } = useQuery({
     queryKey: ["partner-sales-portfolio", partnerId],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const db = supabase as any;
       const [pm, pk, links, units] = await Promise.all([
