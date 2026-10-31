@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { PackageBillingOverviewCard, PartnerUsageNoticesCard } from "@/components/billing/PackagePricing";
+import { PartnerSalesPortfolioCard } from "@/components/billing/PartnerSalesPortfolioCard";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
@@ -270,6 +271,7 @@ export default function PartnerBilling() {
 
       {partnerId && <PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} />}
       {partnerId && <PartnerUsageNoticesCard partnerId={partnerId} />}
+      {partnerId && <PartnerSalesPortfolioCard partnerId={partnerId} />}
       {partnerId && <PackageBillingOverviewCard partnerId={partnerId} />}
       {!isCommission && <LicenseSales partnerId={partnerId} canEdit={isPartnerAdmin} />}
       {!isCommission && <PartnerCustomerInvoices partnerId={partnerId} canEdit={isPartnerAdmin} />}
