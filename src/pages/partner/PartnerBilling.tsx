@@ -272,7 +272,8 @@ export default function PartnerBilling() {
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
-          {!isCommission && <TabsTrigger value="sales">Verkäufe & Rechnungen</TabsTrigger>}
+          {!isCommission && <TabsTrigger value="invoices">Rechnungen</TabsTrigger>}
+          {!isCommission && <TabsTrigger value="sales">Verträge</TabsTrigger>}
           <TabsTrigger value="prices">{isCommission ? "Provision" : "Preise & Margen"}</TabsTrigger>
         </TabsList>
 
@@ -286,6 +287,11 @@ export default function PartnerBilling() {
           <TabsContent value="sales" className="space-y-4">
             <p className="text-sm text-muted-foreground">Neue Pakete verkaufst du beim Endkunden: <strong>Tenants</strong> → Kunde öffnen → Reiter <strong>„Pakete & Verkauf“</strong>.</p>
             <LicenseSales partnerId={partnerId} canEdit={false} />
+          </TabsContent>
+        )}
+        {!isCommission && (
+          <TabsContent value="invoices" className="space-y-4">
+            <p className="text-sm text-muted-foreground">Hier findest du deine Rechnungen an Endkunden sowie die Einkaufsrechnungen von AICONO an dich.</p>
             <PartnerCustomerInvoices partnerId={partnerId} canEdit={isPartnerAdmin} />
           </TabsContent>
         )}
