@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.26.2
+- Partnerportal Abrechnung in Reiter gegliedert: Übersicht, Verkäufe & Rechnungen, Preise & Margen (bzw. Provision).
+
 ## v1.26.1
 - Partner-Branding: Farbfelder außerhalb der Seite definiert (wurden bei jeder Eingabe neu aufgebaut → Farbwähler schloss, Tippen brach ab), #RRGGBB-Prüfung, Vorschau.
 

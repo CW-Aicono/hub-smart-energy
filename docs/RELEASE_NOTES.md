@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.26.2 – 31.10.2026
+- Partnerportal: Abrechnungsseite übersichtlicher mit drei Reitern – Übersicht, Verkäufe & Rechnungen, Preise & Margen.
+
 ## v1.26.1 – 31.10.2026
 - Partnerportal Branding: Farbauswahl funktioniert wieder, mit Vorschau und Formatprüfung.
 
