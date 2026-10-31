@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.28.0
+- Einheitliche Bezeichnung „Tenant/Tenants“ statt „Mandant“/„Kunde“ in AICONO Portal, Partnerportal, Abrechnung und Handbuch; Rolle „Kunden-Admin“ heißt „Tenant-Admin“. Nur Anzeigetexte – Rollenwerte, Pfade und Rechte unverändert. Ladekunden, Vertriebsprojekte und Eichrecht-Links behalten „Kunde“.
+
 ## v1.27.4
 - Automatische Paketverkaufsrechnungen mit angemeldetem Portal-/Partnernutzer geprüft: monatlicher Direktverkauf und einmaliger Partnerverkauf erstellen sofort getrennte Entwürfe; täglicher Folgelauf aktiv und erfolgreich. Verkaufsbutton benennt Rechnungserstellung; Handbuch und Hilfe-Version in vier Sprachen ergänzt. Keine Änderungen an Freigabe, Versand oder Preisen.
 
