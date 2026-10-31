@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.27.4
+- Automatische Paketverkaufsrechnungen mit angemeldetem Portal-/Partnernutzer geprüft: monatlicher Direktverkauf und einmaliger Partnerverkauf erstellen sofort getrennte Entwürfe; täglicher Folgelauf aktiv und erfolgreich. Verkaufsbutton benennt Rechnungserstellung; Handbuch und Hilfe-Version in vier Sprachen ergänzt. Keine Änderungen an Freigabe, Versand oder Preisen.
+
 ## v1.27.3
 - Abrechnungskacheln Offen/Bezahlt/Überfällig rechnen nur noch aus AICONO-Rechnungen, nicht mehr aus der Lexware-Belegsumme. Staging: AICONO-Rechnungszähler 2026 auf 0 gesetzt.
 

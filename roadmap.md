@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Automatische Paketverkaufsrechnungen (31.10.)
-- [ ] Partner- und AICONO-Verkäufe erzeugen automatisch Rechnungsentwürfe, einmalig und wiederkehrend; Doppelabrechnung verhindern und Abläufe prüfen.
+- [x] v1.27.4: Automatische Entwürfe bei monatlichem AICONO-Verkauf und einmaligem Partnerverkauf angemeldet geprüft; täglicher Folgelauf aktiv und erfolgreich. Rechnungserstellung im Buchungsbutton und Handbuch verdeutlicht; Freigabe/Versand bleiben manuell.
 
 ## Ladestatus (30.10.)
 - [x] v1.16.1: Alle OCPP-Zustände getrennt anzeigen; Stationsmeldungen nicht durch offene Sitzungen überschreiben. 23 Tests erfolgreich, angemeldete ELMI-Detailansicht und neun Zustände in öffentlicher Prüfansicht verifiziert; vier Sprachen gepflegt. Keine Stationskonfiguration oder Fernbefehle geändert.

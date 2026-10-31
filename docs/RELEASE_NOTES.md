@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.27.4 – 31.10.2026
+- Paketverkauf erzeugt sofort Rechnungsentwürfe für AICONO und Partner; einmalige und automatische Folgerechnungen sind geprüft. Der Buchungsbutton heißt „Buchen & Rechnung erstellen“. Prüfung, Freigabe und Versand bleiben manuell.
+
 ## v1.27.2 – 31.10.2026
 - AICONO Portal: Mandantenübersicht zeigt den zugehörigen Partner.
 
