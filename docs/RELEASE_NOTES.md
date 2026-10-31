@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.27.0 – 31.10.2026
+- Abrechnung im AICONO Portal und im Partnerportal klarer gegliedert: Rechnungen, Verträge und Rabatte in eigenen Reitern; Rechnungen an Partner und an Direktkunden getrennt filterbar.
+
 ## v1.26.2 – 31.10.2026
 - Partnerportal: Abrechnungsseite übersichtlicher mit drei Reitern – Übersicht, Verkäufe & Rechnungen, Preise & Margen.
 
