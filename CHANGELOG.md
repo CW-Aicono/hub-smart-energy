@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.25.1
+- Partnerportal Abrechnung: „Rabatt bei AICONO anfragen“ eingeklappt.
+
 ## v1.25.0
 - AICONO-Portal Kunde → Pakete: Karte „Verkauf & Nutzung im Überblick“ (Partner, Verträge mit Kundenpreis/EK, Ladepunkte, „+X neu in diesem Monat“).
 - AICONO-Portal Partnerliste: Spalte „Verkauf“ (Kunden, aktive Verträge, Ladepunkte).

@@ -269,7 +269,12 @@ export default function PartnerBilling() {
         </Badge>
       </header>
 
-      {partnerId && <PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} />}
+      {partnerId && (
+        <details className="rounded-lg border bg-card">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Rabatt bei AICONO anfragen</summary>
+          <div className="p-3 pt-0"><PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} /></div>
+        </details>
+      )}
       {partnerId && <PartnerUsageNoticesCard partnerId={partnerId} />}
       {partnerId && <PartnerSalesPortfolioCard partnerId={partnerId} />}
       {partnerId && <PackageBillingOverviewCard partnerId={partnerId} />}

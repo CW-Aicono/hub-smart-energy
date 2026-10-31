@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.25.1 – 31.10.2026
+- Partnerportal: „Rabatt bei AICONO anfragen“ ist unter Abrechnung eingeklappt und öffnet per Klick.
+
 ## v1.25.0 – 31.10.2026
 - Partner verkaufen Pakete jetzt an genau einer Stelle: beim Endkunden im Reiter „Pakete & Verkauf“.
 - AICONO sieht je Kunde, was der Partner verkauft hat und wie viele Ladepunkte neu dazugekommen sind.
