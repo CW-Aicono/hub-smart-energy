@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.27.3
+- Abrechnungskacheln Offen/Bezahlt/Überfällig rechnen nur noch aus AICONO-Rechnungen, nicht mehr aus der Lexware-Belegsumme. Staging: AICONO-Rechnungszähler 2026 auf 0 gesetzt.
+
 ## v1.27.2
 - AICONO Portal Mandantenliste: Spalte „Partner“ (sortier- und durchsuchbar, sonst „Direktkunde“).
 
