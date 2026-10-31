@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.25.0
+- AICONO-Portal Kunde → Pakete: Karte „Verkauf & Nutzung im Überblick“ (Partner, Verträge mit Kundenpreis/EK, Ladepunkte, „+X neu in diesem Monat“).
+- AICONO-Portal Partnerliste: Spalte „Verkauf“ (Kunden, aktive Verträge, Ladepunkte).
+- Partnerportal: Paketverkauf nur noch im Tenant-Reiter „Pakete & Verkauf“; Abrechnung zeigt Verkäufe nur lesend.
+
 ## v1.24.0
 - Partnerportal Abrechnung: Karte „Freigegeben zum Verkauf“ zeigt die von AICONO freigeschalteten Pakete + Button „Endkunden anlegen“.
 
