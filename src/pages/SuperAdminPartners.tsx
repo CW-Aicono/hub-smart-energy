@@ -563,8 +563,8 @@ export default function SuperAdminPartners() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right space-x-1 whitespace-nowrap">
-                      <Button variant="outline" size="sm" onClick={() => setModulesPartner(p)} title="Modul-Portfolio des Partners">
-                        <Package className="h-3.5 w-3.5 mr-1" /> Module
+                      <Button variant="outline" size="sm" onClick={() => setModulesPartner(p)} title="Paket-Portfolio des Partners">
+                        <Package className="h-3.5 w-3.5 mr-1" /> Pakete
                       </Button>
                       {needsInvite ? (
                         <Button variant="outline" size="sm" onClick={() => openInviteDialog(p, "new")}>
