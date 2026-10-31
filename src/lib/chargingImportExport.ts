@@ -544,7 +544,7 @@ export async function executeNfcImport(records: NfcImportRecord[], tenantId: str
   let failed = 0;
   for (const r of records) {
     try {
-      // Existiert dieser Tag bereits in diesem Mandanten?
+      // Existiert dieser Tag bereits in diesem Tenants?
       const { data: existing, error: selErr } = await supabase
         .from("charging_user_rfid_tags")
         .select("id, user_id")

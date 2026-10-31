@@ -78,7 +78,7 @@ export function useLocationDlmConfig(locationId: string | undefined) {
 
   const saveMutation = useMutation({
     mutationFn: async (input: DlmConfigInput) => {
-      if (!tenant?.id || !locationId) throw new Error("Kein Mandant/Standort");
+      if (!tenant?.id || !locationId) throw new Error("Kein Tenant/Standort");
       const existing = configQuery.data;
       if (existing) {
         const { error } = await (supabase as any)

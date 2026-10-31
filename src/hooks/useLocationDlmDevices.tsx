@@ -53,7 +53,7 @@ export function useLocationDlmDevices(locationId: string | undefined) {
 
   const addMutation = useMutation({
     mutationFn: async (input: DlmDeviceInput) => {
-      if (!tenant?.id || !locationId) throw new Error("Kein Mandant/Standort");
+      if (!tenant?.id || !locationId) throw new Error("Kein Tenant/Standort");
       const current = listQuery.data ?? [];
       const nextPrio = input.priority ?? (current.length > 0
         ? Math.max(...current.map((d) => d.priority)) + 10

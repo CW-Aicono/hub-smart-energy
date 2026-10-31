@@ -20,7 +20,7 @@ export function usePackageBilling(tenantId: string) {
   } });
 }
 
-/** Schalter „Abrechnung nach Paketen“ je Mandant (nur AICONO-Portal). */
+/** Schalter „Abrechnung nach Paketen“ je Tenant (nur AICONO-Portal). */
 export function PackageBillingSwitch({ tenantId }: { tenantId: string }) {
   const { t } = useTranslation(); const T = (k: string) => t(`license.${k}` as any);
   const qc = useQueryClient();

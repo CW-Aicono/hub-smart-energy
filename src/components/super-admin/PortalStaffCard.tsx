@@ -17,7 +17,7 @@ type StaffRole = "super_admin" | "portal_technical" | "portal_commercial";
 const ROLES: { role: StaffRole; label: string; desc: string; Icon: typeof Cpu }[] = [
   { role: "super_admin", label: "Admin", desc: "Vollzugriff und Benutzerverwaltung", Icon: ShieldCheck },
   { role: "portal_technical", label: "Technisch", desc: "Technische Infrastruktur, Support und Roadmap", Icon: Cpu },
-  { role: "portal_commercial", label: "Kaufmännisch", desc: "Kunden, Abrechnung, Lizenzen und Preise", Icon: Briefcase },
+  { role: "portal_commercial", label: "Kaufmännisch", desc: "Tenants, Abrechnung, Lizenzen und Preise", Icon: Briefcase },
 ];
 
 interface Staff {
@@ -29,7 +29,7 @@ interface Staff {
  * Portal-Rollen der Teammitglieder. Serverseitig geschützt:
  * RPC portal_set_user_roles (nur super_admin, Selbst-/Letzter-Admin-Schutz),
  * Trigger guard_privileged_roles + guard_last_portal_admin auf user_roles.
- * Ändert ausschließlich Portal-Rollen – Partner-/Mandantenrollen bleiben unberührt.
+ * Ändert ausschließlich Portal-Rollen – Partner-/Tenant-Rollen bleiben unberührt.
  */
 export default function PortalStaffCard() {
   const qc = useQueryClient();

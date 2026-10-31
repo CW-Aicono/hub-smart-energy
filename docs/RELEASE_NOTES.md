@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.28.0 – 31.10.2026
+- Einheitliche Bezeichnung: überall „Tenant“ statt „Mandant“ oder „Kunde“; die Rolle heißt jetzt „Tenant-Admin“.
+
 ## v1.27.4 – 31.10.2026
 - Paketverkauf erzeugt sofort Rechnungsentwürfe für AICONO und Partner; einmalige und automatische Folgerechnungen sind geprüft. Der Buchungsbutton heißt „Buchen & Rechnung erstellen“. Prüfung, Freigabe und Versand bleiben manuell.
 

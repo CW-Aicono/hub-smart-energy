@@ -133,7 +133,7 @@ export default function SuperAdminChargePoints() {
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Ladepunkte</h1>
                 <p className="text-sm text-muted-foreground">
-                  Gesamtübersicht aller Ladepunkte über alle Mandanten — für den Service-Zugriff
+                  Gesamtübersicht aller Ladepunkte über alle Tenants — für den Service-Zugriff
                 </p>
               </div>
             </div>
@@ -149,7 +149,7 @@ export default function SuperAdminChargePoints() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Suchen (Name, OCPP-ID, Mandant, Adresse)"
+                placeholder="Suchen (Name, OCPP-ID, Tenant, Adresse)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -158,10 +158,10 @@ export default function SuperAdminChargePoints() {
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
                 <SelectTrigger className="w-[240px]">
-                  <SelectValue placeholder="Alle Mandanten" />
+                  <SelectValue placeholder="Alle Tenants" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle Mandanten</SelectItem>
+                  <SelectItem value="all">Alle Tenants</SelectItem>
                   {tenants.map((t: any) => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
@@ -208,7 +208,7 @@ export default function SuperAdminChargePoints() {
                   <TableHeader>
                     <TableRow>
                       <SortableHead sortKey="name" sort={sort} onToggle={toggle}>Name</SortableHead>
-                      <SortableHead sortKey="tenant_id" sort={sort} onToggle={toggle}>Mandant</SortableHead>
+                      <SortableHead sortKey="tenant_id" sort={sort} onToggle={toggle}>Tenant</SortableHead>
                       <TableHead>Stecker</TableHead>
                       <TableHead>Status</TableHead>
                       <SortableHead sortKey="ocpp_id" sort={sort} onToggle={toggle}>OCPP-ID</SortableHead>
@@ -262,7 +262,7 @@ export default function SuperAdminChargePoints() {
                             <RowActions
                               items={[
                                 { label: "Details & OCPP-Log", icon: ScrollText, onClick: () => setDetail(cp) },
-                                { label: "Zum Mandanten", icon: ExternalLink, onClick: () => navigate(`/super-admin/tenants/${cp.tenant_id}`) },
+                                { label: "Zum Tenants", icon: ExternalLink, onClick: () => navigate(`/super-admin/tenants/${cp.tenant_id}`) },
                               ]}
                             />
                           </TableCell>
@@ -285,7 +285,7 @@ export default function SuperAdminChargePoints() {
           {detail && (
             <div className="space-y-6 mt-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-muted-foreground">Mandant</span><div>{tenantName(detail.tenant_id)}</div></div>
+                <div><span className="text-muted-foreground">Tenant</span><div>{tenantName(detail.tenant_id)}</div></div>
                 <div><span className="text-muted-foreground">OCPP-ID</span><div className="font-mono text-xs">{detail.ocpp_id || "—"}</div></div>
                 <div><span className="text-muted-foreground">Hersteller / Modell</span><div>{[detail.vendor, detail.model].filter(Boolean).join(" / ") || "—"}</div></div>
                 <div><span className="text-muted-foreground">Max. Leistung</span><div>{fmtKw(detail.max_power_kw)}</div></div>

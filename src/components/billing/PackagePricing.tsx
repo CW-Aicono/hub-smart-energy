@@ -212,7 +212,7 @@ export function PackageBillingOverviewCard({ partnerId }: { partnerId?: string }
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <div>
           <CardTitle className="text-base">Monatsübersicht nach Paketen</CardTitle>
-          <CardDescription>{anySwitched ? "Kunden mit „Abrechnung nach Paketen“: Grundlage der Monatsrechnung. Übrige Kunden: nur Anzeige." : "Grundlage für die Rechnung AICONO → Partner. Nur Anzeige, die Monatsrechnung bleibt unverändert."}</CardDescription>
+          <CardDescription>{anySwitched ? "Tenants mit „Abrechnung nach Paketen“: Grundlage der Monatsrechnung. Übrige Tenants: nur Anzeige." : "Grundlage für die Rechnung AICONO → Partner. Nur Anzeige, die Monatsrechnung bleibt unverändert."}</CardDescription>
         </div>
         <Input type="month" className="w-40" value={month} onChange={(e) => setMonth(e.target.value)} />
       </CardHeader>
@@ -221,7 +221,7 @@ export function PackageBillingOverviewCard({ partnerId }: { partnerId?: string }
           <div className="space-y-4">
             <div className="overflow-x-auto"><Table>
               <TableHeader><TableRow>
-                <TableHead>Endkunde</TableHead><TableHead>Pakete</TableHead><TableHead className="text-right">Liegenschaften</TableHead>
+                <TableHead>Tenant</TableHead><TableHead>Pakete</TableHead><TableHead className="text-right">Liegenschaften</TableHead>
                 <TableHead className="text-right">Ladepunkte</TableHead><TableHead className="text-right">Abgerechnet</TableHead><TableHead className="text-right">Intern</TableHead>
                 <TableHead>Änderung zum Vormonat</TableHead>
                 <TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead>
@@ -256,7 +256,7 @@ export function PackageBillingOverviewCard({ partnerId }: { partnerId?: string }
             </Table></div>
             <div className="text-sm space-y-1">
               {(data?.partners ?? []).map((p) => (
-                <div key={p.partner_id} className="flex flex-wrap justify-between gap-2 font-medium"><span>Summe {p.partner_name} ({p.tenants} Kunden)</span><span>UVP {eur(p.uvp)} · EK {eur(p.ek)}</span></div>
+                <div key={p.partner_id} className="flex flex-wrap justify-between gap-2 font-medium"><span>Summe {p.partner_name} ({p.tenants} Tenants)</span><span>UVP {eur(p.uvp)} · EK {eur(p.ek)}</span></div>
               ))}
             </div>
           </div>

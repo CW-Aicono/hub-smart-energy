@@ -74,7 +74,7 @@ export function useRoamingSettings() {
 
   const upsert = useMutation({
     mutationFn: async (patch: Partial<RoamingSettings>) => {
-      if (!tenantId) throw new Error("Kein Mandant geladen");
+      if (!tenantId) throw new Error("Kein Tenant geladen");
       const existing = query.data;
       if (existing) {
         const { error } = await supabase
@@ -121,7 +121,7 @@ export function useRoamingPartners() {
 
   const add = useMutation({
     mutationFn: async (p: Partial<RoamingPartner> & { name: string }) => {
-      if (!tenantId) throw new Error("Kein Mandant geladen");
+      if (!tenantId) throw new Error("Kein Tenant geladen");
       const { error } = await supabase
         .from("roaming_partners")
         .insert({ tenant_id: tenantId, ...p });

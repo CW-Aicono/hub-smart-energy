@@ -129,7 +129,7 @@ const SuperAdminBundles = () => {
                       {bundle.bookable === false && <Badge variant="outline" className="text-xs font-normal">Altvertrag – nicht mehr buchbar</Badge>}
                     </CardTitle>
                     {bundle.description && <p className="text-sm text-muted-foreground mt-1">{bundle.description}</p>}
-                    {bundle.bookable === false && <p className="text-xs text-muted-foreground mt-1">Mandanten mit bestehender Buchung werden unverändert weiter abgerechnet.</p>}
+                    {bundle.bookable === false && <p className="text-xs text-muted-foreground mt-1">Tenants mit bestehender Buchung werden unverändert weiter abgerechnet.</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-lg font-semibold">{Number(bundle.price_monthly).toFixed(2)} €/Mo</span>

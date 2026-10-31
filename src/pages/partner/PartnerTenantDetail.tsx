@@ -244,7 +244,7 @@ export default function PartnerTenantDetail() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base"><Package className="h-4 w-4" /> Ladeinfrastruktur</CardTitle>
-                  <CardDescription>Wird automatisch je angelegtem Ladepunkt abgerechnet. Hier freischalten, danach Ladepunkte beim Kunden anlegen.</CardDescription>
+                  <CardDescription>Wird automatisch je angelegtem Ladepunkt abgerechnet. Hier freischalten, danach Ladepunkte beim Tenant anlegen.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex items-center justify-between gap-4">

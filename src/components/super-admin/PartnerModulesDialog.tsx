@@ -75,7 +75,7 @@ export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChang
     } else {
       const { count } = await db.from("tenant_package_bookings").select("id, tenants!inner(partner_id)", { count: "exact", head: true })
         .eq("package_code", code).is("cancelled_at", null).eq("tenants.partner_id", partnerId);
-      if ((count ?? 0) > 0 && !window.confirm(`${count} Kunde(n) dieses Partners haben das Paket gebucht. Bestehende Buchungen bleiben, neue Buchungen sind dann gesperrt. Trotzdem entziehen?`)) return;
+      if ((count ?? 0) > 0 && !window.confirm(`${count} Tenant(n) dieses Partners haben das Paket gebucht. Bestehende Buchungen bleiben, neue Buchungen sind dann gesperrt. Trotzdem entziehen?`)) return;
       await run(code, modulesToRevoke(code, data.links, local).map((m) => ({ code: m, on: false })));
     }
   };
@@ -88,7 +88,7 @@ export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChang
         <DialogHeader>
           <DialogTitle>Paket-Portfolio für {partnerName ?? "Partner"}</DialogTitle>
           <DialogDescription>
-            Nur hier freigeschaltete Pakete kann der Partner seinen Kunden verkaufen. Das Basispaket ist immer enthalten.
+            Nur hier freigeschaltete Pakete kann der Partner seinen Tenants verkaufen. Das Basispaket ist immer enthalten.
           </DialogDescription>
         </DialogHeader>
         {loadError && <p className="text-sm text-destructive">Portfolio konnte nicht geladen werden: {(loadError as Error).message}</p>}

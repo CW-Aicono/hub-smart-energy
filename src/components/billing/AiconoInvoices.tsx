@@ -45,7 +45,7 @@ async function loadRecipient(inv: any): Promise<{ recipient: InvoiceRecipient; e
   const { data: t } = await db.from("tenants").select("name, contact_person, street, house_number, address, postal_code, city, contact_email, leitweg_id").eq("id", inv.tenant_id).maybeSingle();
   return {
     recipient: {
-      name: t?.name ?? "Kunde",
+      name: t?.name ?? "Tenant",
       contact: t?.contact_person ? `z. Hd. ${t.contact_person}` : null,
       street: [t?.street, t?.house_number].filter(Boolean).join(" ") || t?.address || null,
       postalCity: [t?.postal_code, t?.city].filter(Boolean).join(" ") || null,
@@ -228,7 +228,7 @@ export function ManualInvoiceDialog() {
   const net = lines.reduce((s, l) => s + Math.round(num(l.quantity) * num(l.unit_price) * 100) / 100, 0);
 
   const save = async () => {
-    if (!tenantId) return toast.error(target === "partner" ? "Bitte Partner und zugehörigen Kunden wählen" : "Bitte Kunden wählen");
+    if (!tenantId) return toast.error(target === "partner" ? "Bitte Partner und zugehörigen Tenants wählen" : "Bitte Tenants wählen");
     const p_lines = lines.filter((l) => l.label.trim()).map((l) => ({ label: l.label.trim(), quantity: num(l.quantity), unit_price: num(l.unit_price) }));
     if (p_lines.length === 0) return toast.error("Mindestens eine Position angeben");
     setSaving(true);
@@ -257,7 +257,7 @@ export function ManualInvoiceDialog() {
                 <Label>Rechnung an</Label>
                 <Select value={target} onValueChange={(v: any) => { setTarget(v); setTenantId(""); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="tenant">Kunde</SelectItem><SelectItem value="partner">Partner</SelectItem></SelectContent>
+                  <SelectContent><SelectItem value="tenant">Tenant</SelectItem><SelectItem value="partner">Partner</SelectItem></SelectContent>
                 </Select>
               </div>
               {target === "partner" && (
@@ -270,9 +270,9 @@ export function ManualInvoiceDialog() {
                 </div>
               )}
               <div className="space-y-1 col-span-2">
-                <Label>{target === "partner" ? "Betrifft Kunde des Partners" : "Kunde"}</Label>
+                <Label>{target === "partner" ? "Betrifft Tenant des Partners" : "Tenant"}</Label>
                 <Select value={tenantId} onValueChange={setTenantId}>
-                  <SelectTrigger><SelectValue placeholder="Kunde wählen" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Tenant wählen" /></SelectTrigger>
                   <SelectContent>{(target === "partner" ? partnerTenants : (tenants as any[])).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>

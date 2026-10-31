@@ -254,7 +254,7 @@ const SuperAdminBilling = () => {
                 queryClient.invalidateQueries({ queryKey: ["super-admin-invoices"] });
                 toast.success(`Rechnungen generiert: ${data?.invoices_created ?? 0} neu, ${data?.invoices_updated ?? 0} aktualisiert`);
                 if (Array.isArray(data?.warnings) && data.warnings.length) {
-                  toast.warning(`Achtung: Offene Direktrechnung an Kunden eines Wiederverkaufs-Partners: ${data.warnings.join(", ")}. Diese Kunden rechnet der Partner selbst ab – Entwurf prüfen und ggf. löschen.`, { duration: 20000 });
+                  toast.warning(`Achtung: Offene Direktrechnung an Tenants eines Wiederverkaufs-Partners: ${data.warnings.join(", ")}. Diese Tenants rechnet der Partner selbst ab – Entwurf prüfen und ggf. löschen.`, { duration: 20000 });
                 }
               } catch (err: any) {
                 toast.error(`Fehler: ${err.message}`);
@@ -395,7 +395,7 @@ const SuperAdminBilling = () => {
           <div className="relative max-w-sm mb-4">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Rechnung suchen (Mandant, Nr., Status)…"
+              placeholder="Rechnung suchen (Tenant, Nr., Status)…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-8"
@@ -406,7 +406,7 @@ const SuperAdminBilling = () => {
               <Button key={v} size="sm" variant="outline" className={docFilter === v ? "border-primary bg-primary/15 text-foreground font-semibold hover:bg-primary/25" : undefined} aria-pressed={docFilter === v} onClick={() => setDocFilter(v)}>{l}</Button>
             ))}
             <span className="mx-2 border-l" />
-            {([["all", "Alle Empfänger"], ["partner", "AICONO → Partner"], ["customer", "AICONO → Direktkunde"], ["recurring", "Monatlich"], ["one_time", "Einmalig"]] as const).map(([v, l]) => (
+            {([["all", "Alle Empfänger"], ["partner", "AICONO → Partner"], ["customer", "AICONO → Direkt-Tenant"], ["recurring", "Monatlich"], ["one_time", "Einmalig"]] as const).map(([v, l]) => (
               <Button key={v} size="sm" variant="outline" className={kindFilter === v ? "border-primary bg-primary/15 text-foreground font-semibold hover:bg-primary/25" : undefined} aria-pressed={kindFilter === v} onClick={() => setKindFilter(v)}>{l}</Button>
             ))}
           </div>
@@ -444,7 +444,7 @@ const SuperAdminBilling = () => {
                             <Badge variant="outline" className="ml-2 text-xs">Einmalig</Badge>
                           )}
                           {inv.source_ref?.startsWith("monthly:partner-sum:") && (
-                            <Badge variant="outline" className="ml-2 text-xs" title="Eine Rechnung je Partner und Monat, gegliedert nach Kunde">Sammelrechnung</Badge>
+                            <Badge variant="outline" className="ml-2 text-xs" title="Eine Rechnung je Partner und Monat, gegliedert nach Tenant">Sammelrechnung</Badge>
                           )}
                           {inv.document_type === "credit_note" && (
                             <Badge variant="outline" className="ml-2 text-xs" title="Provisionsgutschrift an den Partner">Gutschrift</Badge>

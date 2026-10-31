@@ -64,7 +64,7 @@ export function TenantInfoSettings() {
           <Input id="tenant-name" value={form.name} onChange={(e) => handleChange("name", e.target.value)} placeholder={t("tenantInfo.namePlaceholder" as any)} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="tenant-type">Art des Mandanten</Label>
+          <Label htmlFor="tenant-type">Art des Tenants</Label>
           <Select value={form.tenant_type} onValueChange={(v) => setForm((prev) => ({ ...prev, tenant_type: v as TenantType }))}>
             <SelectTrigger id="tenant-type"><SelectValue /></SelectTrigger>
             <SelectContent>

@@ -97,7 +97,7 @@ export default function SuperAdminSidebar() {
       area: "overview",
       items: [
         { to: "/super-admin", icon: LayoutDashboard, label: t("nav.dashboard") },
-        { to: "/super-admin/tenants", icon: Building2, label: "Kunden" },
+        { to: "/super-admin/tenants", icon: Building2, label: "Tenants" },
         { to: "/super-admin/partners", icon: Briefcase, label: "Partner" },
         { to: "/super-admin/board", icon: BoardIcon, label: "C-Level Dashboard" },
         { to: "/super-admin/statistics", icon: BarChart3, label: t("nav.statistics") },

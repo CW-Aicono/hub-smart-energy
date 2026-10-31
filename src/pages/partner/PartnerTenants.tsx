@@ -137,7 +137,7 @@ export default function PartnerTenants() {
   };
 
   const handleStartRemoteSupport = async (tenantId: string) => {
-    // Eigener Mandant: direkt öffnen, keine Remote-Sitzung nötig.
+    // Eigener Tenant: direkt öffnen, keine Remote-Sitzung nötig.
     if (ownTenantId && ownTenantId === tenantId) {
       setAreaPreference("ems");
       navigate("/", { replace: true });
@@ -158,7 +158,7 @@ export default function PartnerTenants() {
       if (impErr) {
         let msg = impErr.message;
         try { msg = (await (impErr as any)?.context?.json())?.error ?? msg; } catch { /* noop */ }
-        if ((impErr as any)?.context?.status === 403) msg = "Der Kunde hat Remote-Support nicht freigegeben. " + (msg ?? "");
+        if ((impErr as any)?.context?.status === 403) msg = "Der Tenant hat Remote-Support nicht freigegeben. " + (msg ?? "");
         throw new Error(msg);
       }
       if (!imp?.access_token) throw new Error(imp?.error || "Impersonation fehlgeschlagen");
@@ -185,7 +185,7 @@ export default function PartnerTenants() {
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Meine Tenants</h1>
-          <p className="text-muted-foreground">Alle Mandanten, die diesem Partner zugeordnet sind.</p>
+          <p className="text-muted-foreground">Alle Tenants, die diesem Partner zugeordnet sind.</p>
         </div>
         {canCreate && (
           <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) resetForm(); }}>
@@ -218,14 +218,14 @@ export default function PartnerTenants() {
                 </div>
                 <div className="border-t my-2" />
                 <p className="text-xs text-muted-foreground">
-                  Optional: Kunden-Admin direkt einladen. Lassen Sie die Felder leer, wenn die Einladung später erfolgen soll.
+                  Optional: Tenant-Admin direkt einladen. Lassen Sie die Felder leer, wenn die Einladung später erfolgen soll.
                 </p>
                 <div className="space-y-2">
-                  <Label>E-Mail Kunden-Admin</Label>
+                  <Label>E-Mail Tenant-Admin</Label>
                   <Input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@firma.de" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Name Kunden-Admin</Label>
+                  <Label>Name Tenant-Admin</Label>
                   <Input value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Max Mustermann" />
                 </div>
               </div>

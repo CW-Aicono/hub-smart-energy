@@ -40,7 +40,7 @@ export default function TenantLifecycleActions({ tenant }: Props) {
         <Button
           variant="ghost"
           size="icon"
-          title="Mandant sperren"
+          title="Tenant sperren"
           onClick={(e) => {
             e.stopPropagation();
             setReason("");
@@ -54,7 +54,7 @@ export default function TenantLifecycleActions({ tenant }: Props) {
         <Button
           variant="ghost"
           size="icon"
-          title="Mandant reaktivieren"
+          title="Tenant reaktivieren"
           onClick={(e) => {
             e.stopPropagation();
             reactivateTenant.mutate(tenant.id);
@@ -81,9 +81,9 @@ export default function TenantLifecycleActions({ tenant }: Props) {
       <AlertDialog open={suspendOpen} onOpenChange={setSuspendOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mandant „{tenant.name}" sperren?</AlertDialogTitle>
+            <AlertDialogTitle>Tenant „{tenant.name}" sperren?</AlertDialogTitle>
             <AlertDialogDescription>
-              Gesperrte Mandanten können sich nicht mehr anmelden. Der Zugang kann jederzeit
+              Gesperrte Tenants können sich nicht mehr anmelden. Der Zugang kann jederzeit
               reaktiviert werden. Optionaler Grund wird Admins angezeigt.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -108,9 +108,9 @@ export default function TenantLifecycleActions({ tenant }: Props) {
       <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mandant „{tenant.name}" archivieren?</AlertDialogTitle>
+            <AlertDialogTitle>Tenant „{tenant.name}" archivieren?</AlertDialogTitle>
             <AlertDialogDescription>
-              Der Mandant wird als „gelöscht" markiert und kann sich nicht mehr anmelden.
+              Der Tenant wird als „gelöscht" markiert und kann sich nicht mehr anmelden.
               Datensätze bleiben erhalten und können bei Bedarf wiederhergestellt werden.
               Für eine endgültige Löschung nutzen Sie den Löschen-Button.
             </AlertDialogDescription>

@@ -351,7 +351,7 @@ function SettlementsCard({ contract, baselines }: { contract: SavingsContract; b
               <SortableHead sortKey="total" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Einsparung (€)</SortableHead>
               <SortableHead sortKey="aicono" sort={settlementSort} onToggle={toggleSettlementSort} align="right">AICONO (€)</SortableHead>
               <SortableHead sortKey="partner" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Partner (€)</SortableHead>
-              <SortableHead sortKey="tenant" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Mandant (€)</SortableHead>
+              <SortableHead sortKey="tenant" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Tenant (€)</SortableHead>
               <TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -431,7 +431,7 @@ export default function SavingsShareTab({ tenantId, moduleEnabled }: SavingsShar
         <CardHeader><CardTitle>Modul nicht aktiv</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Das Modul „Gain-Sharing (Einsparbeteiligung)" ist für diesen Mandanten nicht aktiviert.
+            Das Modul „Gain-Sharing (Einsparbeteiligung)" ist für diesen Tenants nicht aktiviert.
             Aktivieren Sie es im Tab „Module", um Verträge und Abrechnungen anzulegen.
           </p>
         </CardContent>

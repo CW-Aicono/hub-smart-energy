@@ -27,13 +27,13 @@ export default function AreaChooser({
       Icon: ShieldCheck,
       title: "AICONO Portal",
       sub: "Plattform",
-      text: "Partner, Mandanten, Module, Lizenzen und Systemüberwachung.",
+      text: "Partner, Tenants, Module, Lizenzen und Systemüberwachung.",
     },
     partner: {
       Icon: Briefcase,
       title: "Partner-Portal",
       sub: "Kaufmännisch",
-      text: `Mandanten, Abrechnung, Reporting und Gain-Sharing${partnerName ? ` für ${partnerName}` : ""}.`,
+      text: `Tenants, Abrechnung, Reporting und Gain-Sharing${partnerName ? ` für ${partnerName}` : ""}.`,
     },
     ems: {
       Icon: Cpu,
