@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { isPackageUnlocked } from "@/lib/partnerPortfolio";
 import { packageSaleCatalog, listPrice, isIndividualPrice } from "@/lib/packageSaleCatalog";
 import { enterpriseHint } from "@/lib/packageSuggestion";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,13 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
     const results = await Promise.all([db.from("pricing_packages").select("code,name,uvp,ek,always_active,requires_package,requires_any_other").eq("active", true).order("sort"), db.from("pricing_unit_prices").select("code,name,uvp,ek,new_sale_uvp,partner_available")]);
     for (const r of results) if (r.error) throw r.error;
     const defs = results[0].data ?? [];
-    return packageSaleCatalog(defs, results[1].data ?? [], !!partnerId).map(p => ({ ...p, def: defs.find((d: any) => d.code === p.code) }));
+    let portfolio: string[] | null = null, links: any[] = [];
+    if (partnerId) {
+      const [pm, ln] = await Promise.all([db.from("partner_modules").select("module_code").eq("partner_id", partnerId), db.from("pricing_package_modules").select("package_code,module_code")]);
+      if (pm.error) throw pm.error; if (ln.error) throw ln.error;
+      portfolio = (pm.data ?? []).map((r: any) => r.module_code); links = ln.data ?? [];
+    }
+    return packageSaleCatalog(defs, results[1].data ?? [], !!partnerId).map(p => ({ ...p, def: defs.find((d: any) => d.code === p.code), locked: !!portfolio && p.kind === "package" && !isPackageUnlocked(p.code, links, portfolio) }));
   } });
   // Bestand des gewählten Kunden für die Voraussetzungsprüfung
   const { data: state } = useQuery({ queryKey: ["license-sale-state", tenant], enabled: open && !!tenant, queryFn: async () => {
@@ -87,7 +94,7 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
     </TableBody></Table></div>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{T("sell")}</DialogTitle></DialogHeader><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="sm:col-span-2 space-y-1"><Label>{T("customer")}</Label><Select value={tenant} onValueChange={setTenant} disabled={!!tenantId}><SelectTrigger><SelectValue placeholder={T("choose")} /></SelectTrigger><SelectContent>{tenants.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-      <div className="sm:col-span-2 space-y-1"><Label>{T("product")}</Label><Select value={product} onValueChange={v => { setProduct(v); const p: any = catalog.find((x: any) => `${x.kind}:${x.code}` === v); setQuantity("1"); if (p?.onceOnly) setCadence("once"); }}><SelectTrigger><SelectValue placeholder={T("choose")} /></SelectTrigger><SelectContent>{catalog.map((p: any) => <SelectItem key={`${p.kind}:${p.code}`} value={`${p.kind}:${p.code}`}>{p.name} · {eur(listPrice(p, hasPartner))}</SelectItem>)}</SelectContent></Select>{catalogError && <p className="text-destructive">{(catalogError as Error).message}</p>}
+      <div className="sm:col-span-2 space-y-1"><Label>{T("product")}</Label><Select value={product} onValueChange={v => { setProduct(v); const p: any = catalog.find((x: any) => `${x.kind}:${x.code}` === v); setQuantity("1"); if (p?.onceOnly) setCadence("once"); }}><SelectTrigger><SelectValue placeholder={T("choose")} /></SelectTrigger><SelectContent>{catalog.map((p: any) => <SelectItem key={`${p.kind}:${p.code}`} value={`${p.kind}:${p.code}`} disabled={p.locked}>{p.name} · {p.locked ? "Nicht in deinem Partner-Portfolio – Freischaltung bei AICONO anfragen" : eur(listPrice(p, hasPartner))}</SelectItem>)}</SelectContent></Select>{catalogError && <p className="text-destructive">{(catalogError as Error).message}</p>}
         <p className="text-xs text-muted-foreground flex gap-1"><Info className="h-3 w-3 mt-0.5 shrink-0" />{T("autoCounted")}</p>
         {prereq && <p className="text-sm text-destructive">{prereq}</p>}
         {showP6Hint && <p className="text-sm text-muted-foreground">{T("p6Cheaper")}</p>}
