@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.26.0 – 31.10.2026
+- Vertragslaufzeit je Paketvertrag in Monaten wählbar, mit automatischer Verlängerung oder automatischem Ende; später änderbar durch AICONO und Partner.
+
 ## v1.25.1 – 31.10.2026
 - Partnerportal: „Rabatt bei AICONO anfragen“ ist unter Abrechnung eingeklappt und öffnet per Klick.
 

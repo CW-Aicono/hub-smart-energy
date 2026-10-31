@@ -414,6 +414,13 @@
       "when": 1793389652649,
       "tag": "0058_lock_pricing_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1793450370403,
+      "tag": "0059_license_sale_terms",
+      "breakpoints": true
     }
   ]
 }
