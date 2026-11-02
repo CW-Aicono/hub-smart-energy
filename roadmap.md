@@ -1,5 +1,9 @@
 # Roadmap
 
+## Befristeter Paketrabatt (02.11.)
+- [ ] Prozent-Rabatt mit Zeitraum bei Paketbuchung, Vorschau und Folgerechnungen konsistent; EK und Altverträge unverändert.
+- [ ] Ladeinfrastruktur-Hinweis gliedern; vier Sprachen, Tests, Handbuch und Version pflegen.
+
 ## Test-Tenant Bolan löschen (02.11.)
 - [x] Bolan GmbH I Test auf Nutzerwunsch gelöscht; keine Rechnungen, Paketbuchungen oder Benutzerprofile mehr vorhanden.
 
