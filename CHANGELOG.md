@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.34.0 – 2026-11-02
+- Buchbare Ladepunkt-/Liegenschaftsmengen, Preisvorschau mit Menge und Partner-Rabatt, Freischaltung über bestehende sichere Modulwege.
+- Migration 0067: explizite Kapazitätsbuchungen aktivieren feste Obergrenzen; Basis-Liegenschaft und Enterprise berücksichtigt, Alt-Tenants unverändert.
+- Nutzungslauf und Nachberechnung vermeiden doppelte Abrechnung expliziter Mengenverträge; Handbuch in vier Sprachen aktualisiert.
+
 ## Testdatenbereinigung – 2026-11-02
 - Auf Nutzerwunsch im betroffenen Partner-Portal einen Endkunden- und sieben Einkaufs-Rechnungsentwürfe entfernt; sechs Paket-/Zusatzleistungsbuchungen von Bolan GmbH I Test samt sechs Abrechnungsereignissen gelöscht. Tenant und Freischaltungen unverändert; keine Verhaltensänderung oder neue Version.
 
