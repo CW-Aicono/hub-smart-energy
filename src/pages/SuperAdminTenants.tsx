@@ -41,7 +41,6 @@ const SuperAdminTenants = () => {
   const [adminEmail, setAdminEmail] = useState("");
   const [adminName, setAdminName] = useState("");
   const [newPartnerId, setNewPartnerId] = useState<string>("");
-  const [newType, setNewType] = useState<string>("kommune");
   const [creating, setCreating] = useState(false);
 
   const { data: partnerOptions = [] } = useQuery({
@@ -166,7 +165,6 @@ const SuperAdminTenants = () => {
     setAdminEmail("");
     setAdminName("");
     setNewPartnerId("");
-    setNewType("kommune");
   };
 
   return (
