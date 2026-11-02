@@ -442,6 +442,13 @@
       "when": 1793614705744,
       "tag": "0062_half_month_billing_partner_discount",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1793615196741,
+      "tag": "0063_partner_master_data",
+      "breakpoints": true
     }
   ]
 }
