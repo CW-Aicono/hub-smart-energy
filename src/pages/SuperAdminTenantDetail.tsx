@@ -736,7 +736,7 @@ const SuperAdminTenantDetail = () => {
                           contact_person: tenantInfoForm.contact_person.trim() || null,
                           contact_email: tenantInfoForm.contact_email.trim() || null,
                           is_aicono_member: tenantInfoForm.is_aicono_member,
-                          is_kommune: tenantInfoForm.is_kommune,
+                          is_kommune: false,
                           partner_id: tenantInfoForm.partner_id ? tenantInfoForm.partner_id : null,
                           support_owner: tenantInfoForm.partner_id ? "partner" : "platform",
                         }).eq("id", tenant!.id);
