@@ -114,8 +114,8 @@ const SuperAdminTenants = () => {
           contact_email: newEmail || adminEmail,
           partner_id: newPartnerId ? newPartnerId : null,
           support_owner: newPartnerId ? "partner" : "platform",
-          tenant_type: newType,
-          is_kommune: newType === "kommune",
+          tenant_type: "gewerbe_industrie",
+          is_kommune: false,
         })
         .select()
         .single();
@@ -224,18 +224,6 @@ const SuperAdminTenants = () => {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">„Direkt AICONO“ legt den Tenant als Direkt-Tenant der AICONO an.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Art des Tenants *</Label>
-                    <Select value={newType} onValueChange={setNewType}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="kommune">Kommune</SelectItem>
-                        <SelectItem value="gewerbe_industrie">Gewerbe / Industrie</SelectItem>
-                        <SelectItem value="privat">Privat</SelectItem>
-                        <SelectItem value="sonstige">Sonstige</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
                 </div>
 
