@@ -274,7 +274,7 @@ export default function PartnerBilling() {
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
           {!isCommission && <TabsTrigger value="invoices">Rechnungen</TabsTrigger>}
-          {!isCommission && <TabsTrigger value="sales">Verträge</TabsTrigger>}
+          {!isCommission && <TabsTrigger value="sales">Pakete</TabsTrigger>}
           <TabsTrigger value="prices">{isCommission ? "Provision" : "Preise & Margen"}</TabsTrigger>
         </TabsList>
 
