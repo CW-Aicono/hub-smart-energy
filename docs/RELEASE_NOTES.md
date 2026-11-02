@@ -1,6 +1,7 @@
 # Versionshinweise
 
 ## v1.31.0 – 02.11.2026
+- Beim Paket buchen werden die nutzungsabhängigen Preise angezeigt, z. B. 8,00 € je Ladepunkt und Monat.
 - Die Partner-Stammdaten erscheinen automatisch als Absender auf neuen Rechnungen des Partners an seine Tenants.
 - Partner-Portal: neuer Menüpunkt „Partner-Einstellungen“ mit Stammdaten (Firma, Anschrift, Steuernummer, USt-IdNr., Handelsregister, Bankverbindung) und Branding.
 

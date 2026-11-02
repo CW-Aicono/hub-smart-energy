@@ -1,6 +1,7 @@
 # Änderungsprotokoll (intern)
 
 ## v1.31.0 – 2026-11-02
+- Paket buchen: Hinweisbox mit nutzungsabhängigen Preisen (Ladepunkt je Monat, weitere Liegenschaft, Ladevorgang; VK + EK bei Partner-Tenants).
 - Partner-Abrechnung: Reiter „Verträge“ heißt jetzt „Pakete“.
 - Stammdaten-Speichern übernimmt die Daten in `partner_billing_settings.settings` (Absender der Partner-Rechnungen an Tenants, PDF-Fußzeile + ZUGFeRD); Präfix/Zahlungsziel/USt bleiben, festgeschriebene Rechnungen unverändert (sender_snapshot).
 - Partner-Portal: neuer Menüpunkt „Partner-Einstellungen“ (/partner/settings) mit Tabs Stammdaten und Branding; /partner/branding leitet um. Neue Spalten in `partners` (Migration 0063): legal_name, tax_number, vat_id, trade_register, managing_director, website, bank_name, iban, bic; Anschrift in billing_address.
