@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
-const schema = z.object({ tenant_id: z.string().uuid(), product_kind: z.enum(["module","package","unit"]), product_code: z.string().regex(/^[a-z0-9_]{2,64}$/), quantity: z.number().int().min(1).max(100000), cadence: z.enum(["once","monthly","quarterly","halfyearly"]), sale_price: z.number().finite().min(0).max(1000000), starts_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), payment_method: z.enum(["invoice","sepa"]), request_id: z.string().uuid(), price_reason: z.string().trim().max(500).optional(), term_months: z.number().int().min(1).max(240).nullable().optional(), auto_renew: z.boolean().optional() });
+const schema = z.object({ tenant_id: z.string().uuid(), product_kind: z.enum(["module","package","unit"]), product_code: z.string().regex(/^[a-z0-9_]{2,64}$/), quantity: z.number().int().min(1).max(100000), cadence: z.enum(["once","monthly","quarterly","halfyearly"]), sale_price: z.number().finite().min(0).max(1000000), starts_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), payment_method: z.enum(["invoice","sepa"]), request_id: z.string().uuid(), price_reason: z.string().trim().max(500).optional(), term_months: z.number().int().min(1).max(240).nullable().optional(), auto_renew: z.boolean().optional(), customer_discount_pct: z.number().finite().min(0).max(100).optional() });
 const endSchema = z.object({ action: z.literal("end"), sale_id: z.string().uuid() });
 Deno.serve(async req => {
   const json = (b: unknown, status=200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type":"application/json" } });
@@ -54,10 +54,14 @@ Deno.serve(async req => {
     const {data:portal}=await client.rpc("can_portal_write",{_uid:user.id,_area:"commercial"});
     const {data:partner}=t.partner_id ? await client.rpc("can_manage_partner_billing",{p_partner:t.partner_id}):{data:false};
     if(!portal&&!partner) return json({error:"Keine Berechtigung"},403);
-    // Listenpreis: Direktkunde UVP, Partnerkunde (Wiederverkauf) EK. Abweichung nur mit Begründung.
-    let listPrice: number | null = null;
-    if(p.product_kind==="package"){const {data:d}=await admin.from("pricing_packages").select("uvp,ek").eq("code",p.product_code).maybeSingle(); if(d) listPrice=Number(t.partner_id?d.ek:d.uvp);}
-    else if(p.product_kind==="unit"){const {data:u}=await admin.from("pricing_unit_prices").select("uvp,ek,new_sale_uvp").eq("code",p.product_code).maybeSingle(); if(u) listPrice=Number(t.partner_id?u.ek:(u.new_sale_uvp??u.uvp));}
+    // Listenpreis = Endkundenpreis (VK/UVP), auch bei Partnerkunden; der Partner zahlt AICONO separat den EK.
+    // Partnerrabatt nur für Partnerkunden: Prozent auf den VK, EK bleibt unverändert. Abweichung nur mit Begründung.
+    const pct = t.partner_id ? (p.customer_discount_pct ?? 0) : 0;
+    if(!t.partner_id && (p.customer_discount_pct ?? 0) > 0) return json({error:"Endkundenrabatt nur für Partnerkunden"},400);
+    let vk: number | null = null;
+    if(p.product_kind==="package"){const {data:d}=await admin.from("pricing_packages").select("uvp").eq("code",p.product_code).maybeSingle(); if(d) vk=Number(d.uvp);}
+    else if(p.product_kind==="unit"){const {data:u}=await admin.from("pricing_unit_prices").select("uvp,new_sale_uvp").eq("code",p.product_code).maybeSingle(); if(u) vk=Number(u.new_sale_uvp??u.uvp);}
+    const listPrice = vk==null ? null : Math.round(vk*(1-pct/100)*100)/100;
     const individual = listPrice!=null && Math.abs(listPrice-p.sale_price)>0.004;
     if(individual && (p.price_reason??"").length<5) return json({error:"Abweichender Preis: Begründung (mind. 5 Zeichen) angeben"},400);
     const args={p_tenant:p.tenant_id,p_kind:p.product_kind,p_code:p.product_code,p_quantity:p.quantity,p_cadence:p.cadence,p_price:p.sale_price,p_start:p.starts_on,p_payment:p.payment_method,p_request:p.request_id};
@@ -82,7 +86,7 @@ Deno.serve(async req => {
     }
     const {data,error}=await client.rpc("finalize_license_sale",args);
     if(error){await rollback();return json({error:error.message},400);}
-    if(individual) await admin.from("license_sales").update({price_individual:true,price_reason:p.price_reason}).eq("id",data);
+    await admin.from("license_sales").update({customer_discount_pct:pct,list_sale_price:vk,...(individual?{price_individual:true,price_reason:p.price_reason}:{})}).eq("id",data);
     if(p.term_months!=null||p.auto_renew===false){const {error:termError}=await client.rpc("set_license_sale_term",{p_sale:data,p_term_months:p.term_months??null,p_auto_renew:p.auto_renew??true}); if(termError) return json({id:data,warning:"Laufzeit nicht gespeichert: "+termError.message});}
     return json({id:data});
   } catch(e) { return json({error:(e as Error).message},500); }
