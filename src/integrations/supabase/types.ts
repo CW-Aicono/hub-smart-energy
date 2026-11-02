@@ -10447,6 +10447,8 @@ export type Database = {
         Row: {
           accent_color: string | null
           ai_analysis_mode: string
+          bank_name: string | null
+          bic: string | null
           billing_address: Json
           billing_mode: string
           brand_display_name: string | null
@@ -10455,10 +10457,13 @@ export type Database = {
           contact_phone: string | null
           created_at: string
           custom_domain: string | null
+          iban: string | null
           id: string
           is_active: boolean
+          legal_name: string | null
           lexware_contact_id: string | null
           logo_url: string | null
+          managing_director: string | null
           name: string
           notes: string | null
           primary_color: string | null
@@ -10466,12 +10471,18 @@ export type Database = {
           slug: string
           subdomain: string | null
           support_email: string | null
+          tax_number: string | null
+          trade_register: string | null
           updated_at: string
+          vat_id: string | null
+          website: string | null
           white_label_enabled: boolean
         }
         Insert: {
           accent_color?: string | null
           ai_analysis_mode?: string
+          bank_name?: string | null
+          bic?: string | null
           billing_address?: Json
           billing_mode?: string
           brand_display_name?: string | null
@@ -10480,10 +10491,13 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           custom_domain?: string | null
+          iban?: string | null
           id?: string
           is_active?: boolean
+          legal_name?: string | null
           lexware_contact_id?: string | null
           logo_url?: string | null
+          managing_director?: string | null
           name: string
           notes?: string | null
           primary_color?: string | null
@@ -10491,12 +10505,18 @@ export type Database = {
           slug: string
           subdomain?: string | null
           support_email?: string | null
+          tax_number?: string | null
+          trade_register?: string | null
           updated_at?: string
+          vat_id?: string | null
+          website?: string | null
           white_label_enabled?: boolean
         }
         Update: {
           accent_color?: string | null
           ai_analysis_mode?: string
+          bank_name?: string | null
+          bic?: string | null
           billing_address?: Json
           billing_mode?: string
           brand_display_name?: string | null
@@ -10505,10 +10525,13 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           custom_domain?: string | null
+          iban?: string | null
           id?: string
           is_active?: boolean
+          legal_name?: string | null
           lexware_contact_id?: string | null
           logo_url?: string | null
+          managing_director?: string | null
           name?: string
           notes?: string | null
           primary_color?: string | null
@@ -10516,7 +10539,11 @@ export type Database = {
           slug?: string
           subdomain?: string | null
           support_email?: string | null
+          tax_number?: string | null
+          trade_register?: string | null
           updated_at?: string
+          vat_id?: string | null
+          website?: string | null
           white_label_enabled?: boolean
         }
         Relationships: []

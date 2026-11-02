@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.31.0 – 2026-11-02
+- Partner-Portal: neuer Menüpunkt „Partner-Einstellungen“ (/partner/settings) mit Tabs Stammdaten und Branding; /partner/branding leitet um. Neue Spalten in `partners` (Migration 0063): legal_name, tax_number, vat_id, trade_register, managing_director, website, bank_name, iban, bic; Anschrift in billing_address.
+
 ## v1.30.0 – 2026-11-02
 - Paket buchen: Mehrfachauswahl (P1 zuerst gebucht, Voraussetzungen berücksichtigen Mitauswahl), Tabelle VK/Rabatt/Endkundenpreis/EK/Marge, Vertragsliste mit EK und Marge.
 - Preisfehler behoben: Partnerverkäufe wurden mit EK als Endkundenpreis vorbelegt; jetzt VK (UVP), EK bleibt `purchase_price`.
