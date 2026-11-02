@@ -1,7 +1,8 @@
 # Änderungsprotokoll (intern)
 
 ## v1.29.0 – 2026-11-02
-- Eigene Abrechnung unter der Paketauswahl: freie Posten, einmalige/monatliche/quartalsweise/halbjährliche Entwürfe über den bestehenden täglichen Rechnungslauf; keine Paketfreischaltungen oder EK-Rechnung für eigene Partnerleistungen. Migration 0060 erweitert bestehende Verträge und bewahrt Katalogabrechnung.
+- Eigene Abrechnung unter der Paketauswahl: freie Posten, einmalige/monatliche/quartalsweise/halbjährliche Entwürfe über den bestehenden täglichen Rechnungslauf; keine Paketfreischaltungen oder EK-Rechnung für eigene Partnerleistungen. Migrationen 0060/0061 erweitern bestehende Verträge, bewahren Katalogabrechnung und berücksichtigen den partiellen Rechnungsindex.
+- QA: 39 Tests erfolgreich; angemeldete Direkt-Tenant-Erstellung mit zwei Posten und 248,34 € Entwurf geprüft, nächste Periode 01.12.; Prüfdaten entfernt, nichts versendet. Partner-Erstellung und zukünftiger Kalendertag nicht Ende-zu-Ende geprüft.
 - Freie Rechnung: optionale Paketauswahl, darunter eigene Posten; Handbuch und Hilfe-Version in DE/EN/ES/NL aktualisiert.
 
 ## [1.28.1] - 2026-10-31
