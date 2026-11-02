@@ -27,3 +27,4 @@
 
 - Package booking quotes use `bookingPrice` for two-way percentage/VK synchronization and the selected `starts_on` in preview and submission; preserve immediate entitlements and draft creation — prevents stale discount metadata and date mismatches without changing activation policy.
 - Catalog invoice drafts group by tenant, partner, shared request UUID prefix and billing start inside `bill_catalog_license_sale`, retaining sale-level billing events and per-line periods; PDF preview uses current parties for drafts and frozen snapshots for issued documents without issuing — combines batch bookings safely and preserves immutable invoices.
+- Explicit capacity uses unit `license_sales` quantities and database creation/restoration guards; managed flags remain enabled once activated, while usage billing excludes capacity contracts — enforces purchased limits without duplicate invoices or reinterpreting legacy tenants.

@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.34.0 – 02.11.2026
+- Ladepunkte und weitere Liegenschaften mit gewünschter Menge buchen; Preise und Rabatt werden berücksichtigt.
+- Gebuchte Mengen sind feste Obergrenzen; zusätzliche Kapazität ist nachbuchbar. Basis enthält eine Liegenschaft, Enterprise unbegrenzte Liegenschaften.
+- Mengen stehen auf dem gemeinsamen Rechnungsentwurf, ohne doppelte Nutzungsabrechnung; bisherige Tenants bleiben unverändert.
+
 ## v1.33.0 – 02.11.2026
 - Gleichzeitig gebuchte Pakete und Zusatzleistungen je Tenant stehen auf einer gemeinsamen Rechnung, mit Leistungszeitraum je Position.
 - In der Partner-Abrechnung öffnet das Augen-Symbol die PDF-Vorschau direkt im EMS, ohne Freigabe oder Versand.

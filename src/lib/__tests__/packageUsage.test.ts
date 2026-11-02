@@ -8,6 +8,15 @@ const units = { extra_location: { uvp: 39, ek: 29 }, charge_point: { uvp: 8, ek:
 const base: UsageInput = { month: "2026-11", partner: true, tenantCreatedAt: "2026-01-05", packages: [{ code: "p1_monitoring", start: "2026-01-01", end: null, viaContract: false }], defs, units, locations: 1, chargePoints: 0, billedSessions: 0, remoteSupport: [], supportSessions: [], setupViaContract: false, discounts: [] };
 const ek = (i: Partial<UsageInput>) => computeTenantMonth({ ...base, ...i }).ek;
 describe("package usage billing", () => {
+  it("does not bill booked charge points twice in the monthly usage run", () => {
+    const r = computeTenantMonth({ ...base, chargePoints: 6, capacityContracts: [{code: "charge_point", start: "2026-11-02", end: null, viaContract: true}] });
+    expect(r.billableEk).toBe(74);
+    expect(backCharge(r, {}, units, "2026-11")).toEqual([]);
+  });
+  it("does not bill booked extra locations twice", () => {
+    const r = computeTenantMonth({ ...base, locations: 4, capacityContracts: [{code: "extra_location", start: "2026-11-02", end: null, viaContract: true}] });
+    expect(r.billableEk).toBe(74);
+  });
   it("6 charge points cost 6 × 6 EUR EK", () => expect(ek({ chargePoints: 6 })).toBe(74 + 36));
   it("extra site adds 29 EUR EK", () => expect(ek({ locations: 2 })).toBe(74 + 29));
   it("package 6 waives extra sites", () => expect(ek({ locations: 5, packages: [...base.packages, { code: "p6_enterprise", start: "2026-01-01", end: null, viaContract: false }] })).toBe(74 + 149));

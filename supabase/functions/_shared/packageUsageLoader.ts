@@ -54,6 +54,7 @@ export async function loadUsage(admin: any, tenants: { id: string; partner_id: s
       supportSessions: support.filter((s: any) => s.tenant_id === t.id),
       setupViaContract: ts.some((s: any) => s.product_kind === "unit" && s.product_code === "setup"),
       discounts: disc,
+      capacityContracts: ts.filter((s: any) => s.product_kind === "unit" && ["charge_point", "extra_location"].includes(s.product_code)).map((s: any) => ({ code: s.product_code, start: s.starts_on, end: s.ended_on, viaContract: true })),
     });
   }
   return { results, units: unitMap };
