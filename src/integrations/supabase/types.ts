@@ -6825,6 +6825,7 @@ export type Database = {
           cadence: string
           created_at: string
           created_by: string | null
+          custom_lines: Json | null
           ended_on: string | null
           id: string
           label: string
@@ -6848,6 +6849,7 @@ export type Database = {
           cadence?: string
           created_at?: string
           created_by?: string | null
+          custom_lines?: Json | null
           ended_on?: string | null
           id?: string
           label: string
@@ -6871,6 +6873,7 @@ export type Database = {
           cadence?: string
           created_at?: string
           created_by?: string | null
+          custom_lines?: Json | null
           ended_on?: string | null
           id?: string
           label?: string
@@ -16258,6 +16261,10 @@ export type Database = {
         Args: { p_days?: number }
         Returns: number
       }
+      bill_catalog_license_sale: {
+        Args: { p_sale: string; p_start: string; p_supplement?: boolean }
+        Returns: undefined
+      }
       bill_license_sale: {
         Args: { p_sale: string; p_start: string; p_supplement?: boolean }
         Returns: undefined
@@ -16474,6 +16481,17 @@ export type Database = {
       }
       convert_floor_to_building: {
         Args: { p_floor_id: string }
+        Returns: string
+      }
+      create_custom_invoice_sale: {
+        Args: {
+          p_cadence: string
+          p_lines: Json
+          p_payment: string
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
         Returns: string
       }
       create_license_sale: {

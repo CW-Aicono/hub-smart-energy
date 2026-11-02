@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { type AiconoBillingSettings, type InvoiceRecipient } from "@/lib/aiconoInvoicePdf";
 import { buildEInvoicePdf, downloadBlob } from "@/lib/eInvoicePdf";
 import { packageSaleCatalog } from "@/lib/packageSaleCatalog";
+import { InvoiceLineEditor } from "./InvoiceLineEditor";
+import { parseCustomInvoiceLines } from "@/lib/customInvoice";
 
 const db = supabase as any;
 
@@ -228,9 +230,10 @@ export function ManualInvoiceDialog() {
   const net = lines.reduce((s, l) => s + Math.round(num(l.quantity) * num(l.unit_price) * 100) / 100, 0);
 
   const save = async () => {
-    if (!tenantId) return toast.error(target === "partner" ? "Bitte Partner und zugehörigen Tenants wählen" : "Bitte Tenants wählen");
-    const p_lines = lines.filter((l) => l.label.trim()).map((l) => ({ label: l.label.trim(), quantity: num(l.quantity), unit_price: num(l.unit_price) }));
-    if (p_lines.length === 0) return toast.error("Mindestens eine Position angeben");
+    if (!tenantId) return toast.error(target === "partner" ? "Bitte Partner und zugehörigen Tenant wählen" : "Bitte Tenant wählen");
+    const parsed = parseCustomInvoiceLines(lines);
+    if (!parsed.success) return toast.error("Bitte alle Positionen mit Bezeichnung, Menge und Nettopreis ausfüllen");
+    const p_lines = parsed.data;
     setSaving(true);
     const { error } = await db.rpc("create_manual_aicono_invoice", {
       p_tenant_id: tenantId, p_partner_id: target === "partner" ? partnerId : null, p_period_start: from, p_period_end: to || from, p_lines,
@@ -246,7 +249,7 @@ export function ManualInvoiceDialog() {
     <>
       <Button variant="outline" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />Neue Rechnung</Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Freie Rechnung erstellen</DialogTitle>
             <DialogDescription>Wird als Entwurf angelegt. Preise netto, die Umsatzsteuer wird im PDF ausgewiesen.</DialogDescription>
@@ -280,22 +283,14 @@ export function ManualInvoiceDialog() {
               <div className="space-y-1"><Label>Leistung bis</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
             </div>
             <div className="space-y-2">
-              <Label>Positionen</Label>
-              {lines.map((l, i) => (
-                <div key={i} className="grid grid-cols-[1fr_5rem_7rem_2.5rem] gap-2">
-                  <Select value="" onValueChange={(v) => { const o = catalog.find((c) => c.key === v); if (o) setLines((ls) => ls.map((x, j) => j === i ? { ...x, label: o.label, unit_price: o.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }) } : x)); }}>
-                    <SelectTrigger className="col-span-4 min-w-0"><SelectValue placeholder="Paket / Zusatzleistung" /></SelectTrigger>
+              <Label>Paket / Zusatzleistung (optional)</Label>
+                  <Select value="" onValueChange={(v) => { const o = catalog.find((c) => c.key === v); if (o) setLines((ls) => { const line = { label: o.label, quantity: "1", unit_price: o.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }) }; return ls.length === 1 && !ls[0].label && !ls[0].unit_price ? [line] : [...ls, line]; }); }}>
+                    <SelectTrigger className="min-w-0"><SelectValue placeholder="Paket / Zusatzleistung" /></SelectTrigger>
                     <SelectContent>
                       {catalog.map((c) => <SelectItem key={c.key} value={c.key}>{c.group}: {c.label} ({c.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €)</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Input className="flex-1" placeholder="Bezeichnung" value={l.label} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
-                  <Input className="w-20" placeholder="Menge" value={l.quantity} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, quantity: e.target.value } : x))} />
-                  <Input className="w-28" placeholder="Preis €" value={l.unit_price} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, unit_price: e.target.value } : x))} />
-                  <Button variant="ghost" size="icon" disabled={lines.length === 1} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              ))}
-              <Button variant="ghost" size="sm" onClick={() => setLines((ls) => [...ls, { label: "", quantity: "1", unit_price: "" }])}><Plus className="h-4 w-4 mr-1" />Position</Button>
+              <InvoiceLineEditor lines={lines} onChange={setLines} />
               <p className="text-sm text-right">Summe netto: <strong>{net.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</strong></p>
             </div>
           </div>
