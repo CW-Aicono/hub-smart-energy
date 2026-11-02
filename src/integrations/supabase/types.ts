@@ -6826,9 +6826,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           custom_lines: Json | null
+          customer_discount_pct: number
           ended_on: string | null
           id: string
           label: string
+          list_sale_price: number | null
           next_period: string | null
           partner_id: string | null
           payment_method: string
@@ -6850,9 +6852,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           custom_lines?: Json | null
+          customer_discount_pct?: number
           ended_on?: string | null
           id?: string
           label: string
+          list_sale_price?: number | null
           next_period?: string | null
           partner_id?: string | null
           payment_method?: string
@@ -6874,9 +6878,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           custom_lines?: Json | null
+          customer_discount_pct?: number
           ended_on?: string | null
           id?: string
           label?: string
+          list_sale_price?: number | null
           next_period?: string | null
           partner_id?: string | null
           payment_method?: string

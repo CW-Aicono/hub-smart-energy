@@ -435,6 +435,13 @@
       "when": 1793613398383,
       "tag": "0061_custom_invoice_conflict_target",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1793614705744,
+      "tag": "0062_half_month_billing_partner_discount",
+      "breakpoints": true
     }
   ]
 }
