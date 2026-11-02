@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## Testdatenbereinigung – 2026-11-02
+- Auf Nutzerwunsch im betroffenen Partner-Portal einen Endkunden- und sieben Einkaufs-Rechnungsentwürfe entfernt; sechs Paket-/Zusatzleistungsbuchungen von Bolan GmbH I Test samt sechs Abrechnungsereignissen gelöscht. Tenant und Freischaltungen unverändert; keine Verhaltensänderung oder neue Version.
+
 ## v1.33.0 – 2026-11-02
 - Migration 0066 bündelt Katalogpositionen gleicher Tenant-Buchung und Abrechnungsstart; EK und VK getrennt, Event-Idempotenz und unveränderliche ausgestellte Belege erhalten.
 - Partner-Rechnungen: PDF-Vorschau per Augen-Symbol, ohne Festschreiben/Versand; PDF.js rendert vollständiges PDF innerhalb des EMS, aktuelle Stammdaten bei Entwürfen, Snapshots bei ausgestellten Belegen. Leistungszeitraum je Position im PDF.
