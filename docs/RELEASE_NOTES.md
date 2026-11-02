@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.35.1 – 02.11.2026
+- Für Partner freigeschaltete Pakete erscheinen ohne Neuladen in der Paketauswahl ihrer Tenants.
+- Auch im AICONO Portal berücksichtigt die Auswahl die Freigaben des Partners des gewählten Tenants; Paketvoraussetzungen bleiben erhalten.
+
 ## v1.35.0 – 02.11.2026
 - Rabatt in Prozent wahlweise dauerhaft oder für einen Zeitraum bei der Paketbuchung vergeben. Nach Ablauf gilt automatisch der VK ohne Rabatt; der Partner-EK bleibt gleich.
 - Vorschau und Rechnungen berücksichtigen den Zeitraum im Halbmonatsraster.

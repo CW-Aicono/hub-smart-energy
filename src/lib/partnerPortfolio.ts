@@ -1,6 +1,18 @@
 /** Paket-Portfolio eines Partners: ein Paket gilt als freigeschaltet, wenn alle seine Module im Partner-Portfolio liegen. */
 export interface PackageModuleLink { package_code: string; module_code: string }
 
+/** Portfolio changes must bypass the dashboard's five-minute catalog cache. */
+export const partnerCatalogRefresh = {
+  staleTime: 0,
+  refetchOnMount: "always" as const,
+  refetchOnWindowFocus: true,
+  refetchInterval: 15_000,
+};
+
+export function saleCatalogPartner(partnerId: string | undefined, tenant: { partner_id: string | null } | undefined): string | undefined {
+  return partnerId ?? tenant?.partner_id ?? undefined;
+}
+
 export function packageModules(code: string, links: PackageModuleLink[]): string[] {
   return links.filter((l) => l.package_code === code).map((l) => l.module_code);
 }

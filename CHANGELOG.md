@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.35.1 – 2026-11-02
+- Partner-Paketauswahl umgeht den fünfminütigen Dashboard-Cache: Aktualisierung beim Öffnen/Fokus und alle 15 Sekunden im offenen Dialog; Freigaben invalidieren abhängige Ansichten.
+- Portal-Buchungsfenster berücksichtigt das Partnerportfolio des ausgewählten Tenants; entzogene Pakete nicht mehr als ausgewählt übermitteln. Serverseitige Rechte, Voraussetzungen und Preise unverändert.
+- Handbuch und Versionshistorie in vier Sprachen aktualisiert.
+
 ## v1.35.0 – 2026-11-02
 - Befristeter Prozent-Rabatt bei Paketbuchung: Beginn/Ende im Halbmonatsraster, automatische Rückkehr zum gespeicherten VK; EK und Altverträge unverändert.
 - Rabattmetadaten vor erster Entwurfserstellung atomar gespeichert; Vorschau und Folgeabrechnung rechnen identisch, Gruppierung/Entwurfsstatus bleiben erhalten.
