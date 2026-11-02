@@ -1,8 +1,8 @@
 # Roadmap
 
 ## Buchbare Mengen für Tenant-Pakete (02.11.)
-- [ ] Mengenwahl für Ladepunkte und weitere Liegenschaften, mit korrektem VK/EK, Rechnung und Freischaltungen; bestehende Nutzungstarife vor Doppelabrechnung schützen.
-- [ ] Tests, angemeldete Prüfung, Handbuch in vier Sprachen und Version aktualisieren.
+- [x] v1.34.0: Mengenwahl für Ladepunkte und weitere Liegenschaften, mit korrektem VK/EK, gemeinsamer Rechnung und Freischaltungen; feste Obergrenzen und Schutz vor Doppelabrechnung, Alt-Tenants unverändert.
+- [x] 67 Tests erfolgreich; angemeldete Buchung von 4 Ladepunkten + 2 weiteren Liegenschaften mit 10 % Rabatt geprüft (99 € VK / 82 € EK), Prüfbuchungen/Entwürfe/Freischaltungen danach entfernt. Handbuch in vier Sprachen, Version und Hinweise aktualisiert; nichts versendet.
 
 ## Testdaten Bolan zurücksetzen (02.11.)
 - [x] Einen Endkunden- und sieben Einkaufs-Rechnungsentwürfe sowie sechs Bolan-Paket-/Zusatzleistungsbuchungen mit Abrechnungsereignissen entfernt; Tenant und Freischaltungen erhalten, keine App-Verhaltensänderung.
