@@ -1,5 +1,8 @@
 # Roadmap
 
+## Testdaten Bolan zurücksetzen (02.11.)
+- [ ] Rechnungen im betroffenen Partner-Portal und Paketbuchungen von Bolan GmbH I Test entfernen; Ergebnis prüfen.
+
 ## Gemeinsame Paket-Rechnung und EMS-Vorschau (02.11.)
 - [x] v1.33.0: Gleichzeitig gebuchte Pakete je Tenant in einem Entwurf zusammenfassen, Wiederholungen ohne Duplikate; Migration 0066 angewandt und geprüft.
 - [x] PDF-Rechnungsvorschau im EMS per Augen-Symbol vor Freigabe/Versand, angemeldet mit Bolan geprüft; sechs Positionen, 825,00 € netto, weiterhin Entwurf und unversendet. Partner-Absender noch unvollständig, Versandprüfung bleibt gesperrt wie bisher.
