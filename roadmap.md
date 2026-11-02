@@ -1,5 +1,8 @@
 # Roadmap
 
+## Test-Tenant Bolan löschen (02.11.)
+- [x] Bolan GmbH I Test auf Nutzerwunsch gelöscht; keine Rechnungen, Paketbuchungen oder Benutzerprofile mehr vorhanden.
+
 ## Buchbare Mengen für Tenant-Pakete (02.11.)
 - [x] v1.34.0: Mengenwahl für Ladepunkte und weitere Liegenschaften, mit korrektem VK/EK, gemeinsamer Rechnung und Freischaltungen; feste Obergrenzen und Schutz vor Doppelabrechnung, Alt-Tenants unverändert.
 - [x] 67 Tests erfolgreich; angemeldete Buchung von 4 Ladepunkten + 2 weiteren Liegenschaften mit 10 % Rabatt geprüft (99 € VK / 82 € EK), Prüfbuchungen/Entwürfe/Freischaltungen danach entfernt. Handbuch in vier Sprachen, Version und Hinweise aktualisiert; nichts versendet.

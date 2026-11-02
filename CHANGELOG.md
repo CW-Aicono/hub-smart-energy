@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## Test-Tenant gelöscht – 2026-11-02
+- Auf ausdrücklichen Nutzerwunsch Bolan GmbH I Test gelöscht; zuvor keine Rechnungen, Paketbuchungen oder Benutzerprofile vorhanden. Keine Änderung am App-Verhalten.
+
 ## v1.34.0 – 2026-11-02
 - Buchbare Ladepunkt-/Liegenschaftsmengen, Preisvorschau mit Menge und Partner-Rabatt, Freischaltung über bestehende sichere Modulwege.
 - Migration 0067: explizite Kapazitätsbuchungen aktivieren feste Obergrenzen; Basis-Liegenschaft und Enterprise berücksichtigt, Alt-Tenants unverändert.
