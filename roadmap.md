@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Testdaten Bolan zurücksetzen (02.11.)
-- [ ] Rechnungen im betroffenen Partner-Portal und Paketbuchungen von Bolan GmbH I Test entfernen; Ergebnis prüfen.
+- [x] Einen Endkunden- und sieben Einkaufs-Rechnungsentwürfe sowie sechs Bolan-Paket-/Zusatzleistungsbuchungen mit Abrechnungsereignissen entfernt; Tenant und Freischaltungen erhalten, keine App-Verhaltensänderung.
 
 ## Gemeinsame Paket-Rechnung und EMS-Vorschau (02.11.)
 - [x] v1.33.0: Gleichzeitig gebuchte Pakete je Tenant in einem Entwurf zusammenfassen, Wiederholungen ohne Duplikate; Migration 0066 angewandt und geprüft.
