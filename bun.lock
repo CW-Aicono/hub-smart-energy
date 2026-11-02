@@ -88,6 +88,7 @@
         "zod": "^3.25.76",
       },
       "devDependencies": {
+        "@electric-sql/pglite": "^0.5.14",
         "@eslint/js": "^9.32.0",
         "@lovable.dev/vite-plugin-dev-server-bridge": "^1.0.2",
         "@lovable.dev/vite-plugin-hmr-gate": "^1.8.0",
@@ -313,6 +314,8 @@
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.10.2", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@drizzle-team/brocli/-/brocli-0.10.2.tgz", {}, "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="],
 
     "@e965/xlsx": ["@e965/xlsx@0.20.3", "", { "bin": { "xlsx": "bin/xlsx.njs" } }, "sha512-703RN/3OdsRD5mtse2HBX7Um7xwaP9tlswEG6svOtjqokXoX7rJdQj7DyabD2I+xk22RgaIIU+R6BHgkpZGB/w=="],
+
+    "@electric-sql/pglite": ["@electric-sql/pglite@0.5.14", "", {}, "sha512-aAQe7iArcFB2w1xtx91l3l9trxhMzD6aZf+WnosSHNhwgp70EJz80Igw/bHnW14fUEFYWPBoQ1sGom8Xc0Jttg=="],
 
     "@esbuild-kit/core-utils": ["@esbuild-kit/core-utils@3.3.2", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@esbuild-kit/core-utils/-/core-utils-3.3.2.tgz", { "dependencies": { "esbuild": "~0.18.20", "source-map-support": "^0.5.21" } }, "sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ=="],
 
