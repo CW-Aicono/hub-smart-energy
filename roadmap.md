@@ -1,5 +1,8 @@
 # Roadmap
 
+## Individuelle Rechnungsposten (02.11.)
+- [ ] Unter der Paketauswahl eigene Rechnungsposten und individuelle Abrechnungen ermöglichen; bestehende Paketverträge und Freigabeabläufe unverändert lassen.
+
 ## Automatische Paketverkaufsrechnungen (31.10.)
 - [x] v1.27.4: Automatische Entwürfe bei monatlichem AICONO-Verkauf und einmaligem Partnerverkauf angemeldet geprüft; täglicher Folgelauf aktiv und erfolgreich. Rechnungserstellung im Buchungsbutton und Handbuch verdeutlicht; Freigabe/Versand bleiben manuell.
 
