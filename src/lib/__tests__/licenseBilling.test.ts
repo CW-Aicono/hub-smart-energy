@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { licenseAmount, licensePeriodEnd, saleSchema, discountedPrice } from "../licenseBilling";
+import { licenseAmount, licensePeriodEnd, saleSchema, discountedPrice, bookingPrice } from "../licenseBilling";
 describe("license billing rules", () => {
   const sale = { tenant: "11111111-1111-4111-8111-111111111111", kind: "package", code: "p1_monitoring", quantity: 1, cadence: "monthly", price: 99, payment: "invoice" };
   it("accepts new package bookings", () => expect(saleSchema.safeParse(sale).success).toBe(true));
@@ -17,6 +17,10 @@ describe("license billing rules", () => {
   it("bills a start on the 16th as half a month", () => expect(licenseAmount(100, 1, "2026-11-16", "2026-11-30", "monthly")).toBe(50));
   it("bills a start on the 15th as a full month", () => expect(licenseAmount(100, 1, "2026-11-15", "2026-11-30", "monthly")).toBe(100));
   it("partner discount is a percentage of the VK", () => expect(discountedPrice(99, 10)).toBe(89.1));
+  it("editing VK updates the displayed percentage instead of leaving it at zero", () => expect(bookingPrice(99, "0", "89,10")).toEqual({ amount: 89.1, pct: 10, individual: false }));
+  it("percentage entry automatically calculates VK", () => expect(bookingPrice(99, "12,5")).toEqual({ amount: 86.63, pct: 12.5, individual: false }));
+  it("a chosen future package start controls the half-month invoice", () => expect(licenseAmount(bookingPrice(99, "10").amount, 1, "2026-12-16", licensePeriodEnd("2026-12-16", "monthly"), "monthly")).toBe(44.55));
+  it("surcharges remain individual prices, not negative discounts", () => expect(bookingPrice(99, "0", "110")).toEqual({ amount: 110, pct: 0, individual: true }));
   it("separates illustrative resale and wholesale amounts", () => expect(licenseAmount(6, 2, "2026-11-01", "2026-11-30", "monthly")).toBe(12));
   it("handles leap February", () => expect(licenseAmount(29, 1, "2028-02-29", "2028-02-29", "monthly")).toBe(14.5));
   it("handles year rollover", () => expect(licensePeriodEnd("2026-12-30", "quarterly")).toBe("2026-12-31"));

@@ -26,3 +26,11 @@ export function licenseAmount(price: number, quantity: number, from: string, to:
 export function discountedPrice(vk: number, pct: number) {
   return Math.round(vk * (1 - Math.min(100, Math.max(0, pct)) / 100) * 100) / 100;
 }
+/** One source for editable percentage discounts and manually entered VK. */
+export function bookingPrice(vk: number, discount: string, price?: string) {
+  const pct = Math.min(100, Math.max(0, Number(discount.replace(",", ".")) || 0));
+  const manual = price !== undefined && price !== "";
+  const amount = manual ? Number(price.replace(",", ".")) || 0 : discountedPrice(vk, pct);
+  const effectivePct = manual && vk > 0 ? Math.round(Math.min(100, Math.max(0, (1 - amount / vk) * 100)) * 100) / 100 : pct;
+  return { amount, pct: effectivePct, individual: manual && Math.abs(amount - discountedPrice(vk, effectivePct)) > 0.004 };
+}
