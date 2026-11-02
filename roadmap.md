@@ -1,5 +1,9 @@
 # Roadmap
 
+## Partner-Freigaben in Tenant-Paketauswahl (02.11.)
+- [x] v1.35.1: Neue Partner-Freigaben beim Öffnen/Fokus und alle 15 Sekunden im offenen Buchungsfenster aktualisieren; Portal-Auswahl nach Partner des ausgewählten Tenants eingrenzen.
+- [x] 13 Tests erfolgreich; angemeldet bei Bolan Test Monitoring + Analyse auswählbar, Vorschau 148 €, Auswahl nach Aktualisierung erhalten. Handbuch in vier Sprachen gepflegt; keine Buchung oder Rechnung ausgelöst.
+
 ## Befristeter Paketrabatt (02.11.)
 - [x] v1.35.0: Prozent-Rabatt dauerhaft oder mit Zeitraum im Halbmonatsraster; Vorschau und Folgerechnungen konsistent, EK und Altverträge unverändert.
 - [x] Ladeinfrastruktur-Hinweis mit Preisen, Stichpunkten und Bestandsdetails; vier Sprachen, Handbuch und Version gepflegt.

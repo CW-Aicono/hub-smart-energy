@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -33,14 +33,16 @@ async function setModule(partnerId: string, code: string, on: boolean) {
 
 /** Portal-Admin schaltet Pakete für einen Partner frei; im Hintergrund werden die Paketmodule ins Partner-Portfolio übernommen. */
 export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChange }: Props) {
+  const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   const [local, setLocal] = useState<string[]>([]);
   const { data, error: loadError, refetch } = useQuery({
     queryKey: ["partner-portfolio-admin", partnerId],
     enabled: open && !!partnerId,
     queryFn: async () => {
+      if (!partnerId) throw new Error("Partner fehlt");
       const [pm, pk, links] = await Promise.all([
-        db.from("partner_modules").select("module_code").eq("partner_id", partnerId!),
+        db.from("partner_modules").select("module_code").eq("partner_id", partnerId),
         db.from("pricing_packages").select("code,name,always_active,active,sort").eq("active", true).order("sort"),
         db.from("pricing_package_modules").select("package_code,module_code"),
       ]);
@@ -64,6 +66,11 @@ export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChang
     } finally {
       setBusy(null);
       refetch();
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["license-sale-catalog", partnerId] }),
+        qc.invalidateQueries({ queryKey: ["partner-sales-portfolio", partnerId] }),
+        qc.invalidateQueries({ queryKey: ["partner-own-modules", partnerId] }),
+      ]);
     }
   };
 
@@ -94,7 +101,7 @@ export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChang
         {loadError && <p className="text-sm text-destructive">Portfolio konnte nicht geladen werden: {(loadError as Error).message}</p>}
         <div className="divide-y">
           {(data?.packages ?? []).map((p) => {
-            const st = packagePortfolioState(p.code, data!.links, local);
+            const st = packagePortfolioState(p.code, data?.links ?? [], local);
             return (
               <div key={p.code} className="flex items-center justify-between gap-4 py-2">
                 <span className="text-sm flex items-center gap-2">{p.name}{st === "partial" && <Badge variant="outline">teilweise</Badge>}</span>

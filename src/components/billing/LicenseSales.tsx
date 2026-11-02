@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { isPackageUnlocked } from "@/lib/partnerPortfolio";
+import { isPackageUnlocked, partnerCatalogRefresh, saleCatalogPartner } from "@/lib/partnerPortfolio";
 import { packageSaleCatalog, listPrice, isIndividualPrice } from "@/lib/packageSaleCatalog";
 import { enterpriseHint } from "@/lib/packageSuggestion";
 import { Button } from "@/components/ui/button";
@@ -56,17 +56,18 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
   const calendarLocale = { de, en: enGB, es, nl }[language];
   const { data: sales = [], error: salesError } = useQuery({ queryKey: ["license-sales", partnerId, tenantId], queryFn: async () => { let q = db.from("license_sales").select("*, tenants(name)").order("created_at", { ascending: false }); if (partnerId) q = q.eq("partner_id", partnerId); if (tenantId) q = q.eq("tenant_id", tenantId); const { data, error } = await q; if (error) throw error; return data || []; } });
   const { data: tenants = [] } = useQuery({ queryKey: ["license-sale-tenants", partnerId], enabled: open, queryFn: async () => { let q = db.from("tenants").select("id,name,partner_id").is("deleted_at", null).order("name"); if (partnerId) q = q.eq("partner_id", partnerId); const { data, error } = await q; if (error) throw error; return data || []; } });
-  const { data: catalog = [], error: catalogError } = useQuery({ queryKey: ["license-sale-catalog", partnerId], enabled: open, queryFn: async () => {
+  const catalogPartnerId = saleCatalogPartner(partnerId, tenants.find((x: any) => x.id === tenant));
+  const { data: catalog = [], error: catalogError, isFetching: catalogFetching } = useQuery({ ...partnerCatalogRefresh, queryKey: ["license-sale-catalog", catalogPartnerId], enabled: open, queryFn: async () => {
     const results = await Promise.all([db.from("pricing_packages").select("code,name,uvp,ek,always_active,requires_package,requires_any_other").eq("active", true).order("sort"), db.from("pricing_unit_prices").select("code,name,uvp,ek,new_sale_uvp,partner_available")]);
     for (const r of results) if (r.error) throw r.error;
     const defs = results[0].data ?? [];
     let portfolio: string[] | null = null, links: any[] = [];
-    if (partnerId) {
-      const [pm, ln] = await Promise.all([db.from("partner_modules").select("module_code").eq("partner_id", partnerId), db.from("pricing_package_modules").select("package_code,module_code")]);
+    if (catalogPartnerId) {
+      const [pm, ln] = await Promise.all([db.from("partner_modules").select("module_code").eq("partner_id", catalogPartnerId), db.from("pricing_package_modules").select("package_code,module_code")]);
       if (pm.error) throw pm.error; if (ln.error) throw ln.error;
       portfolio = (pm.data ?? []).map((r: any) => r.module_code); links = ln.data ?? [];
     }
-    return packageSaleCatalog(defs, results[1].data ?? [], !!partnerId).map(p => ({ ...p, def: defs.find((d: any) => d.code === p.code), locked: !!portfolio && (p.kind === "package" ? !isPackageUnlocked(p.code, links, portfolio) : p.code === "charge_point" ? !isPackageUnlocked("p4_charging", links, portfolio) : p.code === "extra_location" ? !portfolio.includes("locations") : false) }));
+    return packageSaleCatalog(defs, results[1].data ?? [], !!catalogPartnerId).map(p => ({ ...p, def: defs.find((d: any) => d.code === p.code), locked: !!portfolio && (p.kind === "package" ? !isPackageUnlocked(p.code, links, portfolio) : p.code === "charge_point" ? !isPackageUnlocked("p4_charging", links, portfolio) : p.code === "extra_location" ? !portfolio.includes("locations") : false) }));
   } });
   const { data: usageUnits = [] } = useQuery({ queryKey: ["license-usage-units"], enabled: open, queryFn: async () => { const { data, error } = await db.from("pricing_unit_prices").select("code,name,unit,uvp,ek,new_sale_uvp").in("code", ["charge_point", "extra_location", "charging_session"]); if (error) throw error; return data ?? []; } });
   // Bestand des gewählten Kunden für die Voraussetzungsprüfung
@@ -79,7 +80,7 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
     ]);
     return { packages: [...(s.data ?? []).map((x: any) => x.product_code), ...(b.data ?? []).map((x: any) => x.package_code)] as string[], locations: l.count ?? 0, chargePoints: c.count ?? 0 };
   } });
-  const selectedItems: any[] = catalog.filter((p: any) => products.includes(`${p.kind}:${p.code}`));
+  const selectedItems: any[] = catalog.filter((p: any) => !p.locked && products.includes(`${p.kind}:${p.code}`));
   const hasPartner = !!(tenants.find((x: any) => x.id === tenant)?.partner_id ?? partnerId);
   const keyOf = (p: any) => `${p.kind}:${p.code}`;
   const [quantities, setQuantities] = useState<Record<string, string>>({});
@@ -166,7 +167,7 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
     <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{T(customMode ? "customBilling" : "sell")}</DialogTitle></DialogHeader><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="sm:col-span-2 space-y-1"><Label>{T("customer")}</Label><Select value={tenant} onValueChange={setTenant} disabled={!!tenantId}><SelectTrigger><SelectValue placeholder={T("choose")} /></SelectTrigger><SelectContent>{tenants.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
       <div className="sm:col-span-2 space-y-1"><Label>{T("product")}</Label>
-        {!customMode && <div className="rounded-md border divide-y max-h-64 overflow-y-auto">{catalog.map((p: any) => { const key = keyOf(p); const on = products.includes(key); return <label key={key} className={`flex items-center gap-3 px-3 py-2 text-sm ${p.locked ? "opacity-50" : "cursor-pointer"}`}><Checkbox checked={on} disabled={p.locked} onCheckedChange={(v) => togglePick(key, !!v)} /><span className="flex-1">{p.name}</span><span className="text-muted-foreground whitespace-nowrap">{p.locked ? "Freischaltung bei AICONO anfragen" : `VK ${eur(listPrice(p, hasPartner))}${hasPartner ? ` · EK ${eur(p.ek)}` : ""}`}</span></label>; })}</div>}
+        {!customMode && <div className="rounded-md border divide-y max-h-64 overflow-y-auto">{catalog.map((p: any) => { const key = keyOf(p); const on = !p.locked && products.includes(key); return <label key={key} className={`flex items-center gap-3 px-3 py-2 text-sm ${p.locked ? "opacity-50" : "cursor-pointer"}`}><Checkbox checked={on} disabled={p.locked || catalogFetching} onCheckedChange={(v) => togglePick(key, !!v)} /><span className="flex-1">{p.name}</span><span className="text-muted-foreground whitespace-nowrap">{p.locked ? "Freischaltung bei AICONO anfragen" : `VK ${eur(listPrice(p, hasPartner))}${hasPartner ? ` · EK ${eur(p.ek)}` : ""}`}</span></label>; })}</div>}
         {!customMode && catalogError && <p className="text-destructive">{(catalogError as Error).message}</p>}
         <div className="flex items-center gap-2 pt-3 pb-2"><Switch id="custom-invoice-mode" checked={customMode} onCheckedChange={setCustomMode} /><Label htmlFor="custom-invoice-mode">{T("customBilling")}</Label></div>
         {!customMode && <>
@@ -192,7 +193,7 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
       <div className="space-y-1"><Label>{T("afterTerm")}</Label><div className="flex items-center gap-2 h-10"><Switch checked={autoRenew} disabled={!term} onCheckedChange={setAutoRenew} /><span className="text-sm">{autoRenew ? T("renews") : T("endsAuto")}</span></div></div>
       </>}
       <div className="sm:col-span-2 text-sm border-t pt-3 space-y-1"><p>{T("start")}: {new Date(billingStart + "T00:00:00").toLocaleDateString("de-DE")} – {new Date(licensePeriodEnd(billingStart,cadence) + "T00:00:00").toLocaleDateString("de-DE")}</p>{!customMode && term && termValid(term) && <p>{autoRenew ? T("minTermUntil") : T("endsOn")}: {new Date(termEnd(billingStart, Number(term)) + "T00:00:00").toLocaleDateString("de-DE")}</p>}<p>{T("draft")}: {eur(customMode ? (parsedCustom.success ? parsedCustom.data.reduce((sum, line) => sum + licenseAmount(line.unit_price, line.quantity, today, licensePeriodEnd(today,cadence),cadence), 0) : 0) : draftTotal)}</p><p className="text-xs text-muted-foreground">{T("halfMonthHint")}</p></div>
-    </div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{T("cancel")}</Button><Button disabled={busy || !tenant || (customMode ? !parsedCustom.success : !selectedItems.length || !windowValid || !quantityValid || !termValid(term) || prereqs.length > 0 || (anyIndividual && reason.trim().length < 5))} onClick={save}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{T("confirm")}</Button></DialogFooter></DialogContent></Dialog>
+    </div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{T("cancel")}</Button><Button disabled={busy || !tenant || (customMode ? !parsedCustom.success : catalogFetching || !!catalogError || !selectedItems.length || !windowValid || !quantityValid || !termValid(term) || prereqs.length > 0 || (anyIndividual && reason.trim().length < 5))} onClick={save}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{T("confirm")}</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={!!termSale} onOpenChange={(v) => !v && setTermSale(null)}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>{T("termEdit")}{termSale ? ` – ${termSale.label}` : ""}</DialogTitle></DialogHeader><div className="space-y-3">
       <p className="text-sm text-muted-foreground">{T("start")}: {termSale ? new Date(termSale.starts_on + "T00:00:00").toLocaleDateString("de-DE") : ""}</p>
       <div className="space-y-1"><Label>{T("termMonths")}</Label><Input inputMode="numeric" placeholder={T("unlimited")} value={editTerm} onChange={e => setEditTerm(e.target.value.replace(/\D/g, ""))} /></div>
