@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "@/hooks/useTranslation";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
 import { LicenseSales } from "@/components/billing/LicenseSales";
 import { useParams, Link } from "react-router-dom";
@@ -31,6 +32,7 @@ const statusColor: Record<string, string> = {
 };
 
 export default function PartnerTenantDetail() {
+  const { t } = useTranslation();
   const { tenantId } = useParams<{ tenantId: string }>();
   const { partnerId, permissions, isPartnerAdmin, loading: accessLoading } = usePartnerAccess();
   const qc = useQueryClient();
@@ -244,7 +246,7 @@ export default function PartnerTenantDetail() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base"><Package className="h-4 w-4" /> Ladeinfrastruktur</CardTitle>
-                  <CardDescription>Wird automatisch je angelegtem Ladepunkt abgerechnet. Hier freischalten, danach Ladepunkte beim Tenant anlegen.</CardDescription>
+                  <CardDescription>{t("manual.billing.capacity134")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex items-center justify-between gap-4">
