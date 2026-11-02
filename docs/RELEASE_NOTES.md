@@ -1,6 +1,7 @@
 # Versionshinweise
 
 ## v1.31.0 – 02.11.2026
+- Die Partner-Stammdaten erscheinen automatisch als Absender auf neuen Rechnungen des Partners an seine Tenants.
 - Partner-Portal: neuer Menüpunkt „Partner-Einstellungen“ mit Stammdaten (Firma, Anschrift, Steuernummer, USt-IdNr., Handelsregister, Bankverbindung) und Branding.
 
 ## v1.30.0 – 02.11.2026

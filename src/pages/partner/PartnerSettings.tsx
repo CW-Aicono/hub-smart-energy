@@ -71,6 +71,24 @@ function MasterDataForm() {
       };
       const { error } = await supabase.from("partners").update(payload as any).eq("id", partnerId!);
       if (error) throw error;
+      // Rechnungsabsender der Partner-Rechnungen an Tenants mitführen (bestehende Einstellungen wie Präfix/Zahlungsziel bleiben).
+      const { data: cur } = await supabase.from("partner_billing_settings").select("settings").eq("partner_id", partnerId!).maybeSingle();
+      const reg = payload.trade_register ?? "";
+      const cut = reg.lastIndexOf(",");
+      const a = (payload.billing_address ?? {}) as Address;
+      const sender = {
+        ...((cur?.settings as Record<string, unknown>) ?? {}),
+        company_name: payload.legal_name ?? data!.name,
+        street: a.street ?? "", postal_code: a.zip ?? "", city: a.city ?? "", country: a.country ?? "",
+        email: payload.contact_email ?? "", phone: payload.contact_phone ?? "", website: payload.website ?? "",
+        tax_number: payload.tax_number ?? "", vat_id: payload.vat_id ?? "", managing_director: payload.managing_director ?? "",
+        register_court: reg ? (cut > 0 ? reg.slice(0, cut).trim() : "Handelsregister") : "",
+        register_number: reg ? (cut > 0 ? reg.slice(cut + 1).trim() : reg) : "",
+        bank_name: payload.bank_name ?? "", iban: payload.iban ?? "", bic: payload.bic ?? "",
+      };
+      const { error: sErr } = await supabase.from("partner_billing_settings")
+        .upsert({ partner_id: partnerId!, settings: sender, updated_at: new Date().toISOString() } as any);
+      if (sErr) throw new Error("Stammdaten gespeichert, Rechnungsabsender nicht: " + sErr.message);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["partner-master-data", partnerId] });
@@ -94,7 +112,7 @@ function MasterDataForm() {
       <Card>
         <CardHeader>
           <CardTitle>Unternehmen & Kontakt</CardTitle>
-          <CardDescription>Wird auf Rechnungen und Dokumenten an Ihre Tenants verwendet.</CardDescription>
+          <CardDescription>Wird beim Speichern als Absender Ihrer Rechnungen an Tenants übernommen (Kopf, Fußzeile und E-Rechnung). Bereits festgeschriebene Rechnungen bleiben unverändert.</CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-4">
           {F({ label: "Firmenname (rechtlich)", k: "legal_name", placeholder: data.name })}
