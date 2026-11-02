@@ -28,7 +28,8 @@ export default function PartnerBilling() {
   const { partnerId, loading, permissions, isPartnerAdmin } = usePartnerAccess();
   const canEditPrices = permissions.viewBilling;
   const qc = useQueryClient();
-  const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
+  // Keine Unterscheidung Kommune/Industrie mehr: immer Industrie-Preise
+  const sector = "industrie" as "kommune" | "industrie";
 
   const { data: partner } = useQuery({
     queryKey: ["partner-billing-info", partnerId],
@@ -392,10 +393,6 @@ export default function PartnerBilling() {
                     <CardTitle className="text-base">Pakete und Mengenpreise</CardTitle>
                     <p className="text-xs text-muted-foreground mt-1">Monatliche Nettopreise. Dein Verkaufspreis erscheint in den Tenants-Entwürfen; ohne eigenen Preis gilt die UVP.</p>
                   </div>
-                  <ToggleGroup type="single" value={sector} onValueChange={(v) => v && setSector(v as "kommune" | "industrie")} variant="outline" size="sm">
-                    <ToggleGroupItem value="kommune" className="gap-1.5"><Building2 className="h-4 w-4" /> Kommunen</ToggleGroupItem>
-                    <ToggleGroupItem value="industrie" className="gap-1.5"><Factory className="h-4 w-4" /> Industrie</ToggleGroupItem>
-                  </ToggleGroup>
                 </div>
               </CardHeader>
               <CardContent>
@@ -436,20 +433,6 @@ export default function PartnerBilling() {
               <CardHeader>
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-base">Einkauf & Verkauf je Modul (Altverträge)</CardTitle>
-                  <ToggleGroup
-                    type="single"
-                    value={sector}
-                    onValueChange={(v) => v && setSector(v as "kommune" | "industrie")}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <ToggleGroupItem value="kommune" className="gap-1.5">
-                      <Building2 className="h-4 w-4" /> Kommunen
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="industrie" className="gap-1.5">
-                      <Factory className="h-4 w-4" /> Industrie
-                    </ToggleGroupItem>
-                  </ToggleGroup>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
