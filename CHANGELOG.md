@@ -1,5 +1,9 @@
 # Änderungsprotokoll (intern)
 
+## v1.29.0 – 2026-11-02
+- Eigene Abrechnung unter der Paketauswahl: freie Posten, einmalige/monatliche/quartalsweise/halbjährliche Entwürfe über den bestehenden täglichen Rechnungslauf; keine Paketfreischaltungen oder EK-Rechnung für eigene Partnerleistungen. Migration 0060 erweitert bestehende Verträge und bewahrt Katalogabrechnung.
+- Freie Rechnung: optionale Paketauswahl, darunter eigene Posten; Handbuch und Hilfe-Version in DE/EN/ES/NL aktualisiert.
+
 ## [1.28.1] - 2026-10-31
 - Portal: Beim Anlegen eines Tenants ist die Art (Kommune, Gewerbe/Industrie, Privat, Sonstige) wählbar; Hinweis zur Direkt-AICONO-Zuordnung.
 

@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.29.0 – 02.11.2026
+- Unter der Paketauswahl sind eigene Rechnungsposten mit Bezeichnung, Menge und Nettopreis möglich – einmalig oder regelmäßig monatlich, quartalsweise oder halbjährlich. Rechnungen entstehen als Entwürfe zur Prüfung; bestehende Paketverträge bleiben unverändert.
+- „Neue Rechnung“ kombiniert auf Wunsch Pakete und eigene Posten in einem einzelnen Entwurf.
+
 ## v1.28.1
 - Beim Anlegen eines Tenants im AICONO Portal kann jetzt die Art gewählt werden: Kommune, Gewerbe/Industrie, Privat oder Sonstige.
 
