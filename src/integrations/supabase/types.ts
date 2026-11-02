@@ -6827,6 +6827,8 @@ export type Database = {
           created_by: string | null
           custom_lines: Json | null
           customer_discount_pct: number
+          discount_ends_on: string | null
+          discount_starts_on: string | null
           ended_on: string | null
           id: string
           label: string
@@ -6853,6 +6855,8 @@ export type Database = {
           created_by?: string | null
           custom_lines?: Json | null
           customer_discount_pct?: number
+          discount_ends_on?: string | null
+          discount_starts_on?: string | null
           ended_on?: string | null
           id?: string
           label: string
@@ -6879,6 +6883,8 @@ export type Database = {
           created_by?: string | null
           custom_lines?: Json | null
           customer_discount_pct?: number
+          discount_ends_on?: string | null
+          discount_starts_on?: string | null
           ended_on?: string | null
           id?: string
           label?: string
@@ -16621,6 +16627,24 @@ export type Database = {
         }
         Returns: string
       }
+      finalize_license_sale_discount: {
+        Args: {
+          p_cadence: string
+          p_code: string
+          p_discount?: number
+          p_discount_from?: string
+          p_discount_to?: string
+          p_kind: string
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_reason?: string
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
+        Returns: string
+      }
       find_duplicate_meters: {
         Args: never
         Returns: {
@@ -17005,6 +17029,19 @@ export type Database = {
           meter_id: string
           reading_at: string
         }[]
+      }
+      license_discount_period_amount: {
+        Args: {
+          p_cadence: string
+          p_end: string
+          p_from: string
+          p_list: number
+          p_quantity: number
+          p_sale: number
+          p_start: string
+          p_to: string
+        }
+        Returns: number
       }
       license_period_amount: {
         Args: {

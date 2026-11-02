@@ -484,6 +484,13 @@
       "when": 1793630960733,
       "tag": "0068_protect_capacity_management_flags",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1793640262098,
+      "tag": "0069_temporary_package_discounts",
+      "breakpoints": true
     }
   ]
 }
