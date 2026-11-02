@@ -24,6 +24,7 @@ import PartnerBilling from "@/pages/partner/PartnerBilling";
 import PartnerSalesCatalog from "@/pages/partner/PartnerSalesCatalog";
 import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
 import PartnerBranding from "@/pages/partner/PartnerBranding";
+import PartnerSettings from "./pages/partner/PartnerSettings";
 import PartnerReporting from "@/pages/partner/PartnerReporting";
 import PartnerTenantDetail from "@/pages/partner/PartnerTenantDetail";
 import PartnerSavingsShare from "@/pages/partner/PartnerSavingsShare";
@@ -340,7 +341,8 @@ const App = () => (
                       <Route path="/partner/reporting" element={<PartnerLayout><PartnerReporting /></PartnerLayout>} />
                       <Route path="/partner/billing" element={<PartnerLayout><PartnerBilling /></PartnerLayout>} />
                       <Route path="/partner/savings-share" element={<PartnerLayout><PartnerSavingsShare /></PartnerLayout>} />
-                      <Route path="/partner/branding" element={<PartnerLayout><PartnerBranding /></PartnerLayout>} />
+                      <Route path="/partner/branding" element={<Navigate to="/partner/settings?tab=branding" replace />} />
+                      <Route path="/partner/settings" element={<PartnerLayout><PartnerSettings /></PartnerLayout>} />
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />
                       <Route path="/partner/sales/rules" element={<PartnerLayout><PartnerSalesRules /></PartnerLayout>} />
