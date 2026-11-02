@@ -449,6 +449,13 @@
       "when": 1793615196741,
       "tag": "0063_partner_master_data",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1793616274755,
+      "tag": "0064_user_invitations_tenant_cascade",
+      "breakpoints": true
     }
   ]
 }
