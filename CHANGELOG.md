@@ -1,5 +1,11 @@
 # Änderungsprotokoll (intern)
 
+## v1.33.0 – 2026-11-02
+- Migration 0066 bündelt Katalogpositionen gleicher Tenant-Buchung und Abrechnungsstart; EK und VK getrennt, Event-Idempotenz und unveränderliche ausgestellte Belege erhalten.
+- Partner-Rechnungen: PDF-Vorschau per Augen-Symbol, ohne Festschreiben/Versand; PDF.js rendert vollständiges PDF innerhalb des EMS, aktuelle Stammdaten bei Entwürfen, Snapshots bei ausgestellten Belegen. Leistungszeitraum je Position im PDF.
+- Sechs verifizierte Entwürfe der Bolan-Test-Buchung in einen Entwurf zusammengefasst; keine Preise oder Paketaktivierungen verändert.
+- Handbuch/Versionshistorie in DE/EN/ES/NL aktualisiert.
+
 ## v1.32.0 – 2026-11-02
 - Paketbuchung: Startdatum per Shadcn-Kalender; Vorschau, Laufzeit und starts_on synchronisiert. Migration 0065 erlaubt gewählte endliche Startdaten, unveränderte Berechtigungen und Portfolio-Prüfungen.
 - Prozent-Rabatt je Position editierbar, manuell geänderter Endkunden-VK aktualisiert Rabatt; allgemeiner Rabatt entfernt Preisüberschreibungen. EK bleibt unverändert.

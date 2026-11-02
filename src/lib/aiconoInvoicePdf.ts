@@ -14,7 +14,7 @@ export interface AiconoBillingSettings {
 
 export interface InvoiceRecipient { name: string; contact?: string | null; street?: string | null; postalCity?: string | null; country?: string | null; postalCode?: string | null; city?: string | null; vatId?: string | null; email?: string | null; leitwegId?: string | null }
 
-export interface InvoiceLine { label: string; quantity: number; unitPrice: number; amount: number }
+export interface InvoiceLine { label: string; quantity: number; unitPrice: number; amount: number; periodStart?: string; periodEnd?: string }
 
 const eur = (n: number) => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 const dDE = (s?: string | null) => (s ? new Date(s.length === 10 ? s + "T00:00:00" : s).toLocaleDateString("de-DE") : "–");
@@ -34,7 +34,7 @@ export function normalizeInvoiceLines(raw: unknown, fallbackAmount: number): Inv
     const quantity = Number(li?.quantity ?? 1) || 1;
     const unitPrice = li?.unit_price != null ? Number(li.unit_price) : amount / quantity;
     const label = String(li?.label ?? li?.description ?? li?.name ?? li?.code ?? "Position");
-    return { label, quantity, unitPrice, amount };
+    return { label, quantity, unitPrice, amount, ...(li?.period_start ? { periodStart: String(li.period_start), periodEnd: String(li.period_end ?? li.period_start) } : {}) };
   });
   if (lines.length === 0 && fallbackAmount > 0) lines.push({ label: "Leistung lt. Vereinbarung", quantity: 1, unitPrice: fallbackAmount, amount: fallbackAmount });
   return lines;
@@ -116,7 +116,7 @@ export async function buildAiconoInvoicePdf(opts: {
   doc.setFont("helvetica", "normal"); doc.setTextColor(0);
   const lines = normalizeInvoiceLines(inv.line_items, Number(inv.amount));
   lines.forEach((li, i) => {
-    const wrapped = doc.splitTextToSize(li.label, 90) as string[];
+    const wrapped = doc.splitTextToSize(li.periodStart ? `${li.label}\n${dDE(li.periodStart)} – ${dDE(li.periodEnd)}` : li.label, 90) as string[];
     if (y + wrapped.length * 4.5 > 245) { doc.addPage(); y = 25; }
     doc.text(String(i + 1), ml + 2, y);
     doc.text(wrapped, ml + 14, y);
