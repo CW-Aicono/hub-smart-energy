@@ -428,6 +428,13 @@
       "when": 1793613070457,
       "tag": "0060_custom_invoice_recurring_sales",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1793613398383,
+      "tag": "0061_custom_invoice_conflict_target",
+      "breakpoints": true
     }
   ]
 }
