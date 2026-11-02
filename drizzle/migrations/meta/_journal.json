@@ -470,6 +470,13 @@
       "when": 1793627996626,
       "tag": "0066_combined_package_invoices",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793630608394,
+      "tag": "0067_booked_capacity_limits",
+      "breakpoints": true
     }
   ]
 }

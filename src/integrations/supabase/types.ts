@@ -15554,6 +15554,7 @@ export type Database = {
           auto_logout_enabled: boolean
           auto_logout_minutes: number
           branding: Json
+          charge_point_capacity_managed: boolean
           city: string | null
           contact_email: string | null
           contact_person: string | null
@@ -15566,6 +15567,7 @@ export type Database = {
           is_kommune: boolean
           leitweg_id: string | null
           lexware_contact_id: string | null
+          location_capacity_managed: boolean
           logo_url: string | null
           name: string
           onboarding_completed: boolean
@@ -15606,6 +15608,7 @@ export type Database = {
           auto_logout_enabled?: boolean
           auto_logout_minutes?: number
           branding?: Json
+          charge_point_capacity_managed?: boolean
           city?: string | null
           contact_email?: string | null
           contact_person?: string | null
@@ -15618,6 +15621,7 @@ export type Database = {
           is_kommune?: boolean
           leitweg_id?: string | null
           lexware_contact_id?: string | null
+          location_capacity_managed?: boolean
           logo_url?: string | null
           name: string
           onboarding_completed?: boolean
@@ -15658,6 +15662,7 @@ export type Database = {
           auto_logout_enabled?: boolean
           auto_logout_minutes?: number
           branding?: Json
+          charge_point_capacity_managed?: boolean
           city?: string | null
           contact_email?: string | null
           contact_person?: string | null
@@ -15670,6 +15675,7 @@ export type Database = {
           is_kommune?: boolean
           leitweg_id?: string | null
           lexware_contact_id?: string | null
+          location_capacity_managed?: boolean
           logo_url?: string | null
           name?: string
           onboarding_completed?: boolean
@@ -16301,6 +16307,10 @@ export type Database = {
       bill_license_sale: {
         Args: { p_sale: string; p_start: string; p_supplement?: boolean }
         Returns: undefined
+      }
+      booked_tenant_capacity: {
+        Args: { p_code: string; p_tenant: string }
+        Returns: number
       }
       bootstrap_cron_settings: {
         Args: { p_key: string; p_url: string }
