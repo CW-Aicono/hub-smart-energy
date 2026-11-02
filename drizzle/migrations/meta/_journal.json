@@ -421,6 +421,13 @@
       "when": 1793450370403,
       "tag": "0059_license_sale_terms",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1793613070457,
+      "tag": "0060_custom_invoice_recurring_sales",
+      "breakpoints": true
     }
   ]
 }
