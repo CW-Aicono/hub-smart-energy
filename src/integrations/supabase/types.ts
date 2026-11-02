@@ -8876,6 +8876,48 @@ export type Database = {
         }
         Relationships: []
       }
+      meter_power_readings_5min_p_202702: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       meter_power_readings_5min_p_default: {
         Row: {
           bucket: string
