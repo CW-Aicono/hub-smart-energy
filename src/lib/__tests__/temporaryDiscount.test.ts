@@ -35,6 +35,9 @@ describe("temporary package discount", () => {
   it("prices a cross-window quarterly period once per half-month", () => {
     expect(discountPeriodAmount(90, 100, 1, "2026-11-02", "2026-12-31", "quarterly", "2026-11-16", "2026-12-15")).toBe(190);
   });
+  it("restores the regular price within a half-yearly invoice", () => {
+    expect(discountPeriodAmount(90, 100, 1, "2027-01-01", "2027-06-30", "halfyearly", "2027-01-01", "2027-02-15")).toBe(585);
+  });
   it("preserves permanent legacy prices without a discount window", async () => {
     expect(discountPeriodAmount(90,100,1,"2026-11-02","2026-11-30","monthly")).toBe(90);
     expect(Number((await db.query<{amount:string}>("select license_discount_period_amount(90,100,1,'2026-11-02','2026-11-30','monthly',null,null) amount")).rows[0]?.amount)).toBe(90);
