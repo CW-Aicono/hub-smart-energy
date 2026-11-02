@@ -1,6 +1,7 @@
 # Änderungsprotokoll (intern)
 
 ## v1.31.0 – 2026-11-02
+- Tenant löschen: `user_invitations.tenant_id` FK jetzt ON DELETE CASCADE (Migration 0064) – offene Einladungen blockieren das Löschen nicht mehr.
 - Paket buchen: Hinweisbox mit nutzungsabhängigen Preisen (Ladepunkt je Monat, weitere Liegenschaft, Ladevorgang; VK + EK bei Partner-Tenants).
 - Partner-Abrechnung: Reiter „Verträge“ heißt jetzt „Pakete“.
 - Stammdaten-Speichern übernimmt die Daten in `partner_billing_settings.settings` (Absender der Partner-Rechnungen an Tenants, PDF-Fußzeile + ZUGFeRD); Präfix/Zahlungsziel/USt bleiben, festgeschriebene Rechnungen unverändert (sender_snapshot).
