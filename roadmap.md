@@ -1,5 +1,10 @@
 # Roadmap
 
+## Gemeinsame Paket-Rechnung und EMS-Vorschau (02.11.)
+- [x] v1.33.0: Gleichzeitig gebuchte Pakete je Tenant in einem Entwurf zusammenfassen, Wiederholungen ohne Duplikate; Migration 0066 angewandt und geprüft.
+- [x] PDF-Rechnungsvorschau im EMS per Augen-Symbol vor Freigabe/Versand, angemeldet mit Bolan geprüft; sechs Positionen, 825,00 € netto, weiterhin Entwurf und unversendet. Partner-Absender noch unvollständig, Versandprüfung bleibt gesperrt wie bisher.
+- [x] 44 Tests erfolgreich (echte SQL-Funktion lokal: Bündelung, EK/VK, Wiederholungen, ausgestellte Rechnungen, Folgeperioden); Handbuch in vier Sprachen und Versionshinweise aktualisiert. Keine zusätzliche reale Paketbuchung ausgelöst.
+
 ## Paketstart und prozentualer VK-Rabatt (02.11.)
 - [x] v1.32.0: Startdatum auswählbar, Vorschau und Buchung verwenden dasselbe Datum.
 - [x] Rabatt je Position editierbar und mit Endkunden-VK synchronisiert; globaler Rabatt aktualisiert auch bearbeitete Preise.

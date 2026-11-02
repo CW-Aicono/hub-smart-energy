@@ -26,3 +26,4 @@
 - Individual recurring invoice items use `license_sales.custom_lines` and the existing daily billing event loop; catalog sales delegate to the preserved catalog billing function, while partner-owned custom services never create AICONO wholesale invoices — avoids duplicate billing and package entitlement changes.
 
 - Package booking quotes use `bookingPrice` for two-way percentage/VK synchronization and the selected `starts_on` in preview and submission; preserve immediate entitlements and draft creation — prevents stale discount metadata and date mismatches without changing activation policy.
+- Catalog invoice drafts group by tenant, partner, shared request UUID prefix and billing start inside `bill_catalog_license_sale`, retaining sale-level billing events and per-line periods; PDF preview uses current parties for drafts and frozen snapshots for issued documents without issuing — combines batch bookings safely and preserves immutable invoices.

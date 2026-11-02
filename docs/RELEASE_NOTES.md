@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.33.0 – 02.11.2026
+- Gleichzeitig gebuchte Pakete und Zusatzleistungen je Tenant stehen auf einer gemeinsamen Rechnung, mit Leistungszeitraum je Position.
+- In der Partner-Abrechnung öffnet das Augen-Symbol die PDF-Vorschau direkt im EMS, ohne Freigabe oder Versand.
+- Bereits ausgestellte Rechnungen bleiben unverändert.
+
 ## v1.32.0 – 02.11.2026
 - Startdatum bei Paketbuchungen frei im Kalender wählbar, mit aktualisierter Preisvorschau im Halbmonatsraster.
 - Rabatt in Prozent je Position eingeben: Endkunden-VK und Marge berechnen sich automatisch. Auch manuelle Preisänderungen aktualisieren den Rabatt; der EK bleibt unverändert.
