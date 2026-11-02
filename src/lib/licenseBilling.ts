@@ -7,14 +7,22 @@ export function licensePeriodEnd(day: string, cadence: BillingCadence) {
   const d = new Date(`${day}T00:00:00Z`), months = cadenceMonths[cadence];
   return new Date(Date.UTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / months) * months + months, 0)).toISOString().slice(0, 10);
 }
+/** Halbmonatsraster: 1.–15. und 16.–Monatsende; jede angebrochene Hälfte = halber Monatspreis (keine taggenaue Abrechnung). */
 export function licenseAmount(price: number, quantity: number, from: string, to: string, cadence: BillingCadence) {
   if (cadence === "once") return Math.round(price * quantity * 100) / 100;
   const start = new Date(`${from}T00:00:00Z`), end = new Date(`${to}T00:00:00Z`);
   let m = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1)), result = 0;
   while (m <= end) {
     const z = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 0));
-    result += price * quantity * ((Math.min(z.getTime(), end.getTime()) - Math.max(m.getTime(), start.getTime())) / 86400000 + 1) / z.getUTCDate();
+    const s = new Date(Math.max(m.getTime(), start.getTime())).getUTCDate();
+    const e = new Date(Math.min(z.getTime(), end.getTime())).getUTCDate();
+    const halves = (s <= 15 ? 1 : 0) + (e >= 16 ? 1 : 0);
+    result += price * quantity * halves / 2;
     m = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1));
   }
   return Math.round(result * 100) / 100;
+}
+/** Endkundenpreis nach Partnerrabatt in Prozent auf den VK. */
+export function discountedPrice(vk: number, pct: number) {
+  return Math.round(vk * (1 - Math.min(100, Math.max(0, pct)) / 100) * 100) / 100;
 }

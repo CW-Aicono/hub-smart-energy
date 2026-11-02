@@ -19,9 +19,9 @@ export function packageSaleCatalog(packages: CatalogPackage[], units: CatalogUni
     ...units.filter(u => allowed.includes(u.code) && (!partner || u.partner_available !== false)).map(u => ({ kind: "unit" as const, code: u.code, name: u.code === "setup" ? "Einrichtung (einmalig)" : u.code === "remote_support" ? "Remote-Support-Flatrate" : u.code === "charge_point" ? "Ladeinfrastruktur je Ladepunkt" : u.name, uvp: Number(u.new_sale_uvp ?? u.uvp), ek: Number(u.ek), onceOnly: u.code === "setup" })),
   ];
 }
-/** Prefilled list price: direct customer pays the UVP, a reselling partner the EK. */
+/** Prefilled end-customer price (VK = UVP) for direct and partner customers; partners pay AICONO the EK separately. */
 export function listPrice(p: Pick<SaleProduct, "uvp" | "ek">, hasPartner: boolean) {
-  return hasPartner ? p.ek : p.uvp;
+  return p.uvp;
 }
 export function isIndividualPrice(price: number, list: number) {
   return Math.abs(price - list) > 0.004;
