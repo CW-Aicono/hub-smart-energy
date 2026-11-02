@@ -24,3 +24,5 @@
 
 - Monthly package invoices are routed by partner billing model in `_shared/partnerInvoiceFlows.ts` (direct, reseller collective invoice per partner/month, commission credit note); issued invoices are corrected only via cancellation RPCs and every invoice PDF embeds ZUGFeRD XML via `src/lib/eInvoicePdf.ts` — one routing source, immutable issued documents, e-invoice duty.
 - Individual recurring invoice items use `license_sales.custom_lines` and the existing daily billing event loop; catalog sales delegate to the preserved catalog billing function, while partner-owned custom services never create AICONO wholesale invoices — avoids duplicate billing and package entitlement changes.
+
+- Package booking quotes use `bookingPrice` for two-way percentage/VK synchronization and the selected `starts_on` in preview and submission; preserve immediate entitlements and draft creation — prevents stale discount metadata and date mismatches without changing activation policy.

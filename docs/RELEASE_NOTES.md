@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.32.0 – 02.11.2026
+- Startdatum bei Paketbuchungen frei im Kalender wählbar, mit aktualisierter Preisvorschau im Halbmonatsraster.
+- Rabatt in Prozent je Position eingeben: Endkunden-VK und Marge berechnen sich automatisch. Auch manuelle Preisänderungen aktualisieren den Rabatt; der EK bleibt unverändert.
+
 ## v1.31.0 – 02.11.2026
 - Beim Paket buchen werden die nutzungsabhängigen Preise angezeigt, z. B. 8,00 € je Ladepunkt und Monat.
 - Die Partner-Stammdaten erscheinen automatisch als Absender auf neuen Rechnungen des Partners an seine Tenants.

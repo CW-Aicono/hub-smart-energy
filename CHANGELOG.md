@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.32.0 – 2026-11-02
+- Paketbuchung: Startdatum per Shadcn-Kalender; Vorschau, Laufzeit und starts_on synchronisiert. Migration 0065 erlaubt gewählte endliche Startdaten, unveränderte Berechtigungen und Portfolio-Prüfungen.
+- Prozent-Rabatt je Position editierbar, manuell geänderter Endkunden-VK aktualisiert Rabatt; allgemeiner Rabatt entfernt Preisüberschreibungen. EK bleibt unverändert.
+- Handbuch/Versionshistorie in DE/EN/ES/NL aktualisiert.
+
 ## v1.31.0 – 2026-11-02
 - Tenant löschen: `user_invitations.tenant_id` FK jetzt ON DELETE CASCADE (Migration 0064) – offene Einladungen blockieren das Löschen nicht mehr.
 - Paket buchen: Hinweisbox mit nutzungsabhängigen Preisen (Ladepunkt je Monat, weitere Liegenschaft, Ladevorgang; VK + EK bei Partner-Tenants).
