@@ -9,7 +9,7 @@ describe("package booking catalog", () => {
   it("offers one-time setup at 200 EUR", () => { const p = packageSaleCatalog(packages, units).find(p => p.code === "setup"); expect(p?.uvp).toBe(200); expect(p?.onceOnly).toBe(true); });
   it("manual invoices still list charge points at 8 EUR", () => expect(packageSaleCatalog(packages, units, false, true).find(p => p.code === "charge_point")?.uvp).toBe(8));
   it("prefills UVP for direct customers", () => expect(listPrice({ uvp: 99, ek: 74 }, false)).toBe(99));
-  it("prefills EK for reselling partners", () => expect(listPrice({ uvp: 99, ek: 74 }, true)).toBe(74));
+  it("prefills the VK (UVP) for partner end customers too", () => expect(listPrice({ uvp: 99, ek: 74 }, true)).toBe(99));
   it("flags a changed price as individual", () => expect(isIndividualPrice(90, 99)).toBe(true));
   it("does not flag the list price", () => expect(isIndividualPrice(99, 99)).toBe(false));
 });

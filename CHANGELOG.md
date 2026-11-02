@@ -1,5 +1,12 @@
 # Änderungsprotokoll (intern)
 
+## v1.30.0 – 2026-11-02
+- Paket buchen: Mehrfachauswahl (P1 zuerst gebucht, Voraussetzungen berücksichtigen Mitauswahl), Tabelle VK/Rabatt/Endkundenpreis/EK/Marge, Vertragsliste mit EK und Marge.
+- Preisfehler behoben: Partnerverkäufe wurden mit EK als Endkundenpreis vorbelegt; jetzt VK (UVP), EK bleibt `purchase_price`.
+- Partner-Endkundenrabatt in % auf VK (`license_sales.customer_discount_pct`, `list_sale_price`); EK unverändert.
+- Halbmonatsraster statt taggenauer Anteile (`license_period_amount`, `licenseAmount`), Migration 0062.
+- Kommune/Industrie entfernt: alle Tenants `is_kommune=false`, Default false, Auswahl beim Anlegen und Partner-Preisliste-Umschalter entfernt.
+
 ## v1.29.0 – 2026-11-02
 - Eigene Abrechnung unter der Paketauswahl: freie Posten, einmalige/monatliche/quartalsweise/halbjährliche Entwürfe über den bestehenden täglichen Rechnungslauf; keine Paketfreischaltungen oder EK-Rechnung für eigene Partnerleistungen. Migrationen 0060/0061 erweitern bestehende Verträge, bewahren Katalogabrechnung und berücksichtigen den partiellen Rechnungsindex.
 - QA: 39 Tests erfolgreich; angemeldete Direkt-Tenant-Erstellung mit zwei Posten und 248,34 € Entwurf geprüft, nächste Periode 01.12.; Prüfdaten entfernt, nichts versendet. Partner-Erstellung und zukünftiger Kalendertag nicht Ende-zu-Ende geprüft.

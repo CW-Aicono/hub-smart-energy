@@ -1,5 +1,11 @@
 # Versionshinweise
 
+## v1.30.0 – 02.11.2026
+- Mehrere Pakete gleichzeitig buchbar, mit klarer Preisübersicht (VK, Rabatt, Endkundenpreis, EK, Marge).
+- Partner können Endkunden einen Rabatt in Prozent auf den VK geben.
+- Abrechnung im Halbmonatsraster statt taggenau.
+- Keine Unterscheidung mehr zwischen Kommune und Industrie.
+
 ## v1.29.0 – 02.11.2026
 - Unter der Paketauswahl sind eigene Rechnungsposten mit Bezeichnung, Menge und Nettopreis möglich – einmalig oder regelmäßig monatlich, quartalsweise oder halbjährlich. Rechnungen entstehen als Entwürfe zur Prüfung; bestehende Paketverträge bleiben unverändert.
 - „Neue Rechnung“ kombiniert auf Wunsch Pakete und eigene Posten in einem einzelnen Entwurf.
