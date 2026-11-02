@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.35.0 – 2026-11-02
+- Befristeter Prozent-Rabatt bei Paketbuchung: Beginn/Ende im Halbmonatsraster, automatische Rückkehr zum gespeicherten VK; EK und Altverträge unverändert.
+- Rabattmetadaten vor erster Entwurfserstellung atomar gespeichert; Vorschau und Folgeabrechnung rechnen identisch, Gruppierung/Entwurfsstatus bleiben erhalten.
+- Ladeinfrastruktur-Hinweis mit Preisübersicht, kurzen Stichpunkten und aufklappbaren Bestandsregeln; Handbuch in vier Sprachen aktualisiert.
+
 ## Test-Tenant gelöscht – 2026-11-02
 - Auf ausdrücklichen Nutzerwunsch Bolan GmbH I Test gelöscht; zuvor keine Rechnungen, Paketbuchungen oder Benutzerprofile vorhanden. Keine Änderung am App-Verhalten.
 

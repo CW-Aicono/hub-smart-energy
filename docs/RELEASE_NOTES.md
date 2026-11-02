@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.35.0 – 02.11.2026
+- Rabatt in Prozent wahlweise dauerhaft oder für einen Zeitraum bei der Paketbuchung vergeben. Nach Ablauf gilt automatisch der VK ohne Rabatt; der Partner-EK bleibt gleich.
+- Vorschau und Rechnungen berücksichtigen den Zeitraum im Halbmonatsraster.
+- Ladeinfrastruktur zeigt Preise und Buchungsregeln übersichtlich statt als langen Fließtext.
+
 ## v1.34.0 – 02.11.2026
 - Ladepunkte und weitere Liegenschaften mit gewünschter Menge buchen; Preise und Rabatt werden berücksichtigt.
 - Gebuchte Mengen sind feste Obergrenzen; zusätzliche Kapazität ist nachbuchbar. Basis enthält eine Liegenschaft, Enterprise unbegrenzte Liegenschaften.

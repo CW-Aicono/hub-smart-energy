@@ -34,3 +34,25 @@ export function bookingPrice(vk: number, discount: string, price?: string) {
   const effectivePct = manual && vk > 0 ? Math.round(Math.min(100, Math.max(0, (1 - amount / vk) * 100)) * 100) / 100 : pct;
   return { amount, pct: effectivePct, individual: manual && Math.abs(amount - discountedPrice(vk, effectivePct)) > 0.004 };
 }
+
+export function discountWindowValid(from: string, to: string, start: string) {
+  const a = new Date(`${from}T00:00:00Z`), b = new Date(`${to}T00:00:00Z`);
+  return Number.isFinite(a.getTime()) && Number.isFinite(b.getTime()) && a.toISOString().slice(0, 10) === from && b.toISOString().slice(0, 10) === to && from >= start && to >= from && [1, 16].includes(a.getUTCDate()) && (b.getUTCDate() === 15 || b.getUTCDate() === new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 1, 0)).getUTCDate());
+}
+
+/** Discount windows use whole half-months; never apply both rates to one half. */
+export function discountPeriodAmount(sale: number, list: number, quantity: number, from: string, to: string, cadence: BillingCadence, discountFrom?: string, discountTo?: string) {
+  if (!discountFrom || !discountTo) return licenseAmount(sale, quantity, from, to, cadence);
+  if (cadence === "once") return licenseAmount(from >= discountFrom && from <= discountTo ? sale : list, quantity, from, to, cadence);
+  const start = new Date(`${from}T00:00:00Z`), end = new Date(`${to}T00:00:00Z`);
+  let month = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1)), amount = 0;
+  while (month <= end) {
+    for (const day of [1, 16]) {
+      const half = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), day));
+      const last = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + (day === 16 ? 1 : 0), day === 16 ? 0 : 15));
+      if (half <= end && last >= start) amount += ((half.toISOString().slice(0, 10) <= discountTo && last.toISOString().slice(0, 10) >= discountFrom) ? sale : list) * quantity / 2;
+    }
+    month = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 1));
+  }
+  return Math.round(amount * 100) / 100;
+}
