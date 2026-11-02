@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.31.0 – 02.11.2026
+- Partner-Portal: neuer Menüpunkt „Partner-Einstellungen“ mit Stammdaten (Firma, Anschrift, Steuernummer, USt-IdNr., Handelsregister, Bankverbindung) und Branding.
+
 ## v1.30.0 – 02.11.2026
 - Mehrere Pakete gleichzeitig buchbar, mit klarer Preisübersicht (VK, Rabatt, Endkundenpreis, EK, Marge).
 - Partner können Endkunden einen Rabatt in Prozent auf den VK geben.
