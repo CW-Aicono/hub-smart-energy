@@ -1,5 +1,12 @@
 # Roadmap
 
+## Abrechnung v1.30.0 (02.11.)
+- [x] Kommune/Industrie entfernt, alle Tenants Industrie
+- [x] Mehrere Pakete gleichzeitig buchbar
+- [x] Partner-Endkundenrabatt (% auf VK)
+- [x] VK/EK/Marge detailliert; Partner-VK-Vorbelegung korrigiert
+- [x] Halbmonatsraster statt taggenau
+
 ## Individuelle Rechnungsposten (02.11.)
 - [x] v1.29.0: Eigene Posten unter Paketauswahl; einmalige/monatliche/quartalsweise/halbjährliche Entwürfe im bestehenden täglichen Lauf. 39 Tests erfolgreich, angemeldete Erstellung mit zwei Posten (248,34 € anteilig; nächste Periode 01.12.) und Anzeige im Portal geprüft. Prüfdaten entfernt; keine Rechnung versendet. Künftiger Kalendertag und Partner-Erstellung nicht Ende-zu-Ende geprüft.
 
