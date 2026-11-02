@@ -477,6 +477,13 @@
       "when": 1793630608394,
       "tag": "0067_booked_capacity_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793630960733,
+      "tag": "0068_protect_capacity_management_flags",
+      "breakpoints": true
     }
   ]
 }
