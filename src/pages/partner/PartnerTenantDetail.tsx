@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
 import { LicenseSales } from "@/components/billing/LicenseSales";
+import { CapacitySummary } from "@/components/billing/CapacitySummary";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -246,7 +247,7 @@ export default function PartnerTenantDetail() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base"><Package className="h-4 w-4" /> Ladeinfrastruktur</CardTitle>
-                  <CardDescription>{t("manual.billing.capacity134")}</CardDescription>
+                  <CapacitySummary />
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex items-center justify-between gap-4">

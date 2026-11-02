@@ -1,5 +1,10 @@
 # Roadmap
 
+## Befristeter Paketrabatt (02.11.)
+- [x] v1.35.0: Prozent-Rabatt dauerhaft oder mit Zeitraum im Halbmonatsraster; Vorschau und Folgerechnungen konsistent, EK und Altverträge unverändert.
+- [x] Ladeinfrastruktur-Hinweis mit Preisen, Stichpunkten und Bestandsdetails; vier Sprachen, Handbuch und Version gepflegt.
+- [x] Angemeldete Probebuchung: Remote-Support 10 % vom 16.–30.11.; 141,55 € Endkunden-Entwurf und unverändert 112 € EK in Rechnungsliste geprüft. Probebuchung und zwei Prüfentwürfe entfernt, nichts versendet.
+
 ## Test-Tenant Bolan löschen (02.11.)
 - [x] Bolan GmbH I Test auf Nutzerwunsch gelöscht; keine Rechnungen, Paketbuchungen oder Benutzerprofile mehr vorhanden.
 
