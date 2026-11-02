@@ -25,7 +25,7 @@ async function add(n: number, price: number, ek: number, cadence = "monthly", ba
 describe("combined booking invoice SQL", () => {
   it("combines simultaneously booked packages and setup into ONE customer invoice with separate EK", async () => {
     await add(1,99,74); await add(2,79,59); await add(3,200,150,"once");
-    const {rows} = await db.query<any>("select amount,jsonb_array_length(line_items) lines,period_end from partner_customer_invoices");
+    const {rows} = await db.query<any>("select amount,jsonb_array_length(line_items) lines,period_end::text from partner_customer_invoices");
     expect(rows).toEqual([{amount:"378",lines:3,period_end:"2026-11-30"}]);
     const wholesale = await db.query<any>("select amount from tenant_invoices"); expect(wholesale.rows).toEqual([{amount:"283"}]);
   });
