@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Paketstart und prozentualer VK-Rabatt (02.11.)
-- [ ] Startdatum auswählbar, Vorschau und Buchung verwenden dasselbe Datum.
-- [ ] Rabatt je Position editierbar und mit Endkunden-VK synchronisiert; globaler Rabatt aktualisiert auch bearbeitete Preise.
-- [ ] Tests, angemeldete Prüfung, Handbuch in vier Sprachen und Versionshinweise.
+- [x] v1.32.0: Startdatum auswählbar, Vorschau und Buchung verwenden dasselbe Datum.
+- [x] Rabatt je Position editierbar und mit Endkunden-VK synchronisiert; globaler Rabatt aktualisiert auch bearbeitete Preise.
+- [x] 40 Tests erfolgreich; angemeldet VK/Rabatt und Start 16.11. (44,55 €) sowie Datums-Vorprüfung geprüft, Handbuch in vier Sprachen und Versionshinweise aktualisiert. Keine Buchung/Rechnung erzeugt; vollständige Rechnungserstellung nicht geprüft.
 
 ## Abrechnung v1.30.0 (02.11.)
 - [x] Kommune/Industrie entfernt, alle Tenants Industrie
