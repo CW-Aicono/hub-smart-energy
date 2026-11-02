@@ -1,5 +1,10 @@
 # Roadmap
 
+## Gemeinsame Paket-Rechnung und EMS-Vorschau (02.11.)
+- [ ] Gleichzeitig gebuchte Pakete je Tenant in einem Entwurf zusammenfassen, Wiederholungen ohne Duplikate.
+- [ ] Rechnungsvorschau im EMS vor Freigabe/Versand.
+- [ ] Tests, angemeldete Prüfung, Handbuch und Versionshinweise.
+
 ## Paketstart und prozentualer VK-Rabatt (02.11.)
 - [x] v1.32.0: Startdatum auswählbar, Vorschau und Buchung verwenden dasselbe Datum.
 - [x] Rabatt je Position editierbar und mit Endkunden-VK synchronisiert; globaler Rabatt aktualisiert auch bearbeitete Preise.
