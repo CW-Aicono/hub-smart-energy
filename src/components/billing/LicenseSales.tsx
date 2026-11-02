@@ -18,6 +18,8 @@ import { termEnd, termLabel } from "@/lib/licenseTerm";
 import { toast } from "sonner";
 import { licenseAmount, licensePeriodEnd, saleSchema, type BillingCadence } from "@/lib/licenseBilling";
 import { useTranslation } from "@/hooks/useTranslation";
+import { InvoiceLineEditor } from "./InvoiceLineEditor";
+import { emptyInvoiceLine, parseCustomInvoiceLines, type CustomInvoiceLine } from "@/lib/customInvoice";
 const db = supabase as any;
 const eur = (n: number) => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 const P1 = "p1_monitoring";
@@ -31,6 +33,9 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
   const { t } = useTranslation(); const T = (k: string) => t(`license.${k}` as any);
   const qc = useQueryClient();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const [customLines, setCustomLines] = useState<CustomInvoiceLine[]>([emptyInvoiceLine()]);
+  const parsedCustom = parseCustomInvoiceLines(customLines);
   const [tenant, setTenant] = useState(tenantId || ""), [product, setProduct] = useState(""), [quantity, setQuantity] = useState("1"), [price, setPrice] = useState(""), [reason, setReason] = useState(""), [cadence, setCadence] = useState<BillingCadence>("monthly"), [payment, setPayment] = useState("invoice"), [request, setRequest] = useState(crypto.randomUUID());
   const [term, setTerm] = useState(""), [autoRenew, setAutoRenew] = useState(true);
   const [termSale, setTermSale] = useState<any>(null), [editTerm, setEditTerm] = useState(""), [editRenew, setEditRenew] = useState(true);
@@ -72,6 +77,16 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
   const showP6Hint = !!state && enterpriseHint(state.locations, owned);
   const refresh = () => { qc.invalidateQueries({ queryKey: ["license-sales"] }); qc.invalidateQueries({ queryKey: ["license-sale-state"] }); qc.invalidateQueries({ queryKey: ["partner-customer-invoices"] }); qc.invalidateQueries({ queryKey: ["super-admin-invoices"] }); qc.invalidateQueries({ queryKey: ["partner-purchase-invoices"] }); qc.invalidateQueries({ queryKey: ["tenant-modules"] }); };
   const save = async () => {
+    if (customMode) {
+      if (!parsedCustom.success || !tenant) return toast.error(T("invalid"));
+      setBusy(true);
+      try {
+        const { error } = await db.rpc("create_custom_invoice_sale", { p_tenant: tenant, p_lines: parsedCustom.data, p_cadence: cadence, p_payment: payment, p_request: request, p_start: today });
+        if (error) throw error;
+        toast.success(T("created")); refresh(); setOpen(false);
+      } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+      return;
+    }
     const parsed = saleSchema.safeParse({ tenant, kind: selected?.kind, code: selected?.code, quantity: Number(quantity), cadence, price: numericPrice, payment });
     if (!parsed.success) return toast.error(T("invalid"));
     if (individual && reason.trim().length < 5) return toast.error(T("reason"));
@@ -97,28 +112,34 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
     toast.success(T("termSaved")); setTermSale(null); refresh();
   };
   return <section className="space-y-3 min-w-0">
-    <div className="flex flex-wrap justify-between items-center gap-3"><h2 className="text-lg font-semibold">{T("contracts")}</h2>{canEdit && <Button variant="outline" onClick={() => { setRequest(crypto.randomUUID()); setProduct(""); setReason(""); setTerm(""); setAutoRenew(true); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />{T("sell")}</Button>}</div>
+    <div className="flex flex-wrap justify-between items-center gap-3"><h2 className="text-lg font-semibold">{T("contracts")}</h2>{canEdit && <Button variant="outline" onClick={() => { setRequest(crypto.randomUUID()); setProduct(""); setReason(""); setTerm(""); setAutoRenew(true); setCustomMode(false); setCustomLines([emptyInvoiceLine()]); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />{T("sell")}</Button>}</div>
     {salesError && <p className="text-destructive">{(salesError as Error).message}</p>}
     <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>{T("customer")}</TableHead><TableHead>{T("product")}</TableHead><TableHead>{T("quantity")}</TableHead><TableHead>{T("cadence")}</TableHead><TableHead>{T("price")}</TableHead><TableHead>{T("term")}</TableHead><TableHead>{T("next")}</TableHead><TableHead /></TableRow></TableHeader><TableBody>
       {sales.map((s: any) => <TableRow key={s.id}><TableCell>{s.tenants?.name}</TableCell><TableCell>{s.label}</TableCell><TableCell>{s.quantity.toLocaleString("de-DE")}</TableCell><TableCell>{T(s.cadence)}</TableCell><TableCell><div className="flex flex-wrap items-center gap-1">{eur(Number(s.sale_price))}{s.price_individual && <Badge variant="outline" title={s.price_reason ?? ""}>{T("individual")}</Badge>}</div></TableCell><TableCell className="text-xs whitespace-nowrap">{termLabel(s.term_months, s.auto_renew, s.starts_on, T)}</TableCell><TableCell>{s.ended_on && s.ended_on < today ? T("ended") : s.ended_on ? `${T("endsOn")} ${new Date(s.ended_on + "T00:00:00").toLocaleDateString("de-DE")}` : s.next_period ? new Date(s.next_period + "T00:00:00").toLocaleDateString("de-DE") : "—"}</TableCell><TableCell className="whitespace-nowrap">{canEdit && !(s.ended_on && s.ended_on < today) && <Button variant="ghost" size="icon" title={T("termEdit")} onClick={() => { setTermSale(s); setEditTerm(s.term_months ? String(s.term_months) : ""); setEditRenew(s.auto_renew !== false); }}><CalendarClock className="h-4 w-4" /></Button>}{canEdit && !s.ended_on && <Button variant="ghost" size="icon" title={T("end")} onClick={() => endSale(s.id)}><Square className="h-4 w-4" /></Button>}</TableCell></TableRow>)}
       {!sales.length && !salesError && <TableRow><TableCell colSpan={8} className="text-muted-foreground">{T("empty")}</TableCell></TableRow>}
     </TableBody></Table></div>
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{T("sell")}</DialogTitle></DialogHeader><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{T(customMode ? "customBilling" : "sell")}</DialogTitle></DialogHeader><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="sm:col-span-2 space-y-1"><Label>{T("customer")}</Label><Select value={tenant} onValueChange={setTenant} disabled={!!tenantId}><SelectTrigger><SelectValue placeholder={T("choose")} /></SelectTrigger><SelectContent>{tenants.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-      <div className="sm:col-span-2 space-y-1"><Label>{T("product")}</Label><Select value={product} onValueChange={v => { setProduct(v); const p: any = catalog.find((x: any) => `${x.kind}:${x.code}` === v); setQuantity("1"); if (p?.onceOnly) setCadence("once"); }}><SelectTrigger><SelectValue placeholder={T("choose")} /></SelectTrigger><SelectContent>{catalog.map((p: any) => <SelectItem key={`${p.kind}:${p.code}`} value={`${p.kind}:${p.code}`} disabled={p.locked}>{p.name} · {p.locked ? "Nicht in deinem Partner-Portfolio – Freischaltung bei AICONO anfragen" : eur(listPrice(p, hasPartner))}</SelectItem>)}</SelectContent></Select>{catalogError && <p className="text-destructive">{(catalogError as Error).message}</p>}
+      <div className="sm:col-span-2 space-y-1"><Label>{T("product")}</Label><Select disabled={customMode} value={product} onValueChange={v => { setProduct(v); const p: any = catalog.find((x: any) => `${x.kind}:${x.code}` === v); setQuantity("1"); if (p?.onceOnly) setCadence("once"); }}><SelectTrigger><SelectValue placeholder={T("choose")} /></SelectTrigger><SelectContent>{catalog.map((p: any) => <SelectItem key={`${p.kind}:${p.code}`} value={`${p.kind}:${p.code}`} disabled={p.locked}>{p.name} · {p.locked ? "Nicht in deinem Partner-Portfolio – Freischaltung bei AICONO anfragen" : eur(listPrice(p, hasPartner))}</SelectItem>)}</SelectContent></Select>{!customMode && catalogError && <p className="text-destructive">{(catalogError as Error).message}</p>}
+        <div className="flex items-center gap-2 pt-3 pb-2"><Switch id="custom-invoice-mode" checked={customMode} onCheckedChange={setCustomMode} /><Label htmlFor="custom-invoice-mode">{T("customBilling")}</Label></div>
+        {!customMode && <>
         <p className="text-xs text-muted-foreground flex gap-1"><Info className="h-3 w-3 mt-0.5 shrink-0" />{T("autoCounted")}</p>
         {prereq && <p className="text-sm text-destructive">{prereq}</p>}
         {showP6Hint && <p className="text-sm text-muted-foreground">{T("p6Cheaper")}</p>}
+        </>}
       </div>
+      {customMode ? <div className="sm:col-span-2"><InvoiceLineEditor lines={customLines} onChange={setCustomLines} /></div> : <>
       <div className="space-y-1"><Label>{T("quantity")}</Label><Input type="number" min={1} disabled value={quantity} onChange={e => setQuantity(e.target.value)} /></div>
       <div className="space-y-1"><Label className="flex items-center gap-2">{T("price")}{individual && <Badge variant="outline">{T("individual")}</Badge>}</Label><Input inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} />{selected && <p className="text-xs text-muted-foreground">{T("listPrice")}: {eur(list)}</p>}</div>
       {individual && <div className="sm:col-span-2 space-y-1"><Label>{T("reason")}</Label><Textarea value={reason} maxLength={500} onChange={e => setReason(e.target.value)} /></div>}
-      <div className="space-y-1"><Label>{T("cadence")}</Label><Select value={cadence} onValueChange={v => setCadence(v as BillingCadence)} disabled={!!selected?.onceOnly}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{(["once","monthly","quarterly","halfyearly"] as const).map(v => <SelectItem key={v} value={v}>{T(v)}</SelectItem>)}</SelectContent></Select></div>
+      </>}
+      <div className="space-y-1"><Label>{T("cadence")}</Label><Select value={cadence} onValueChange={v => setCadence(v as BillingCadence)} disabled={!customMode && !!selected?.onceOnly}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{(["once","monthly","quarterly","halfyearly"] as const).map(v => <SelectItem key={v} value={v}>{T(v)}</SelectItem>)}</SelectContent></Select></div>
       <div className="space-y-1"><Label>{T("payment")}</Label><Select value={payment} onValueChange={setPayment}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="invoice">{T("invoice")}</SelectItem><SelectItem value="sepa">SEPA</SelectItem></SelectContent></Select></div>
-      <div className="space-y-1"><Label>{T("termMonths")}</Label><Input inputMode="numeric" placeholder={T("unlimited")} value={term} onChange={e => setTerm(e.target.value.replace(/\D/g, ""))} />{term && !termValid(term) && <p className="text-xs text-destructive">{T("termInvalid")}</p>}</div>
+      {!customMode && <><div className="space-y-1"><Label>{T("termMonths")}</Label><Input inputMode="numeric" placeholder={T("unlimited")} value={term} onChange={e => setTerm(e.target.value.replace(/\D/g, ""))} />{term && !termValid(term) && <p className="text-xs text-destructive">{T("termInvalid")}</p>}</div>
       <div className="space-y-1"><Label>{T("afterTerm")}</Label><div className="flex items-center gap-2 h-10"><Switch checked={autoRenew} disabled={!term} onCheckedChange={setAutoRenew} /><span className="text-sm">{autoRenew ? T("renews") : T("endsAuto")}</span></div></div>
-      <div className="sm:col-span-2 text-sm border-t pt-3 space-y-1"><p>{T("start")}: {new Date(today + "T00:00:00").toLocaleDateString("de-DE")} – {new Date(licensePeriodEnd(today,cadence) + "T00:00:00").toLocaleDateString("de-DE")}</p>{term && termValid(term) && <p>{autoRenew ? T("minTermUntil") : T("endsOn")}: {new Date(termEnd(today, Number(term)) + "T00:00:00").toLocaleDateString("de-DE")}</p>}<p>{T("draft")}: {eur(licenseAmount(numericPrice, Number(quantity) || 1, today, licensePeriodEnd(today,cadence),cadence))}</p></div>
-    </div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{T("cancel")}</Button><Button disabled={busy || !selected || !tenant || !termValid(term) || !!prereq || (individual && reason.trim().length < 5)} onClick={save}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{T("confirm")}</Button></DialogFooter></DialogContent></Dialog>
+      </>}
+      <div className="sm:col-span-2 text-sm border-t pt-3 space-y-1"><p>{T("start")}: {new Date(today + "T00:00:00").toLocaleDateString("de-DE")} – {new Date(licensePeriodEnd(today,cadence) + "T00:00:00").toLocaleDateString("de-DE")}</p>{!customMode && term && termValid(term) && <p>{autoRenew ? T("minTermUntil") : T("endsOn")}: {new Date(termEnd(today, Number(term)) + "T00:00:00").toLocaleDateString("de-DE")}</p>}<p>{T("draft")}: {eur(customMode ? (parsedCustom.success ? parsedCustom.data.reduce((sum, line) => sum + licenseAmount(line.unit_price, line.quantity, today, licensePeriodEnd(today,cadence),cadence), 0) : 0) : licenseAmount(numericPrice, Number(quantity) || 1, today, licensePeriodEnd(today,cadence),cadence))}</p></div>
+    </div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>{T("cancel")}</Button><Button disabled={busy || !tenant || (customMode ? !parsedCustom.success : !selected || !termValid(term) || !!prereq || (individual && reason.trim().length < 5))} onClick={save}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{T("confirm")}</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={!!termSale} onOpenChange={(v) => !v && setTermSale(null)}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>{T("termEdit")}{termSale ? ` – ${termSale.label}` : ""}</DialogTitle></DialogHeader><div className="space-y-3">
       <p className="text-sm text-muted-foreground">{T("start")}: {termSale ? new Date(termSale.starts_on + "T00:00:00").toLocaleDateString("de-DE") : ""}</p>
       <div className="space-y-1"><Label>{T("termMonths")}</Label><Input inputMode="numeric" placeholder={T("unlimited")} value={editTerm} onChange={e => setEditTerm(e.target.value.replace(/\D/g, ""))} /></div>
