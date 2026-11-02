@@ -23,6 +23,7 @@ export interface UsageInput {
   supportPrice15?: { uvp: number; ek: number };
   setupViaContract: boolean;
   discounts: Discount[];
+  capacityContracts?: Span[];
 }
 export interface UsageLine { code: string; type: string; label: string; quantity: number; uvp: number; ek: number; viaContract?: boolean; review?: boolean; session_id?: string }
 export interface UsageResult { lines: UsageLine[]; uvp: number; ek: number; billableUvp: number; billableEk: number; quantities: { locations: number; chargePoints: number; billedSessions: number }; review: boolean }
@@ -78,9 +79,10 @@ export function computeTenantMonth(i: UsageInput): UsageResult {
     const partial = share < 1;
     lines.push({ code: d.code, type: "package", label: partial ? `${d.name} (anteilig ${Math.round(share * b.days)}/${b.days} Tage)` : d.name, quantity: 1, uvp: r2(d.uvp * share), ek: r2(d.ek * share), viaContract: sp.viaContract });
   }
+  const capacityCovered = (code: string) => (i.capacityContracts ?? []).some(sp => sp.code === code && spanShare(sp, i.month) > 0);
   const extra = activeCodes.has("p6_enterprise") ? 0 : Math.max(0, i.locations - 1);
-  if (extra > 0) lines.push({ code: "extra_location", type: "package_unit", label: `${extra} weitere Liegenschaft(en)`, quantity: extra, uvp: r2(extra * u("extra_location").uvp), ek: r2(extra * u("extra_location").ek) });
-  if (i.chargePoints > 0) lines.push({ code: "charge_point", type: "package_unit", label: `${i.chargePoints} aktive Ladepunkte`, quantity: i.chargePoints, uvp: r2(i.chargePoints * u("charge_point").uvp), ek: r2(i.chargePoints * u("charge_point").ek) });
+  if (extra > 0) lines.push({ code: "extra_location", type: "package_unit", label: `${extra} weitere Liegenschaft(en)`, quantity: extra, uvp: r2(extra * u("extra_location").uvp), ek: r2(extra * u("extra_location").ek), viaContract: capacityCovered("extra_location") });
+  if (i.chargePoints > 0) lines.push({ code: "charge_point", type: "package_unit", label: `${i.chargePoints} aktive Ladepunkte`, quantity: i.chargePoints, uvp: r2(i.chargePoints * u("charge_point").uvp), ek: r2(i.chargePoints * u("charge_point").ek), viaContract: capacityCovered("charge_point") });
   if (i.billedSessions > 0) lines.push({ code: "charging_session", type: "package_unit", label: `${i.billedSessions} abgerechnete Ladevorgänge`, quantity: i.billedSessions, uvp: r2(i.billedSessions * u("charging_session").uvp), ek: r2(i.billedSessions * u("charging_session").ek) });
   let flat = false;
   for (const sp of i.remoteSupport) {
@@ -142,6 +144,7 @@ export function backCharge(recomputed: UsageResult, billedQty: Record<string, nu
   const out: UsageLine[] = [];
   const map: [string, keyof UsageResult["quantities"], string][] = [["charge_point", "chargePoints", "Ladepunkte"], ["charging_session", "billedSessions", "Ladevorgänge"]];
   for (const [code, key, name] of map) {
+    if (recomputed.lines.some(l => l.code === code && l.viaContract)) continue;
     const diff = recomputed.quantities[key] - (billedQty[code] ?? 0);
     if (diff <= 0) continue;
     const p = units[code] ?? { uvp: 0, ek: 0 };

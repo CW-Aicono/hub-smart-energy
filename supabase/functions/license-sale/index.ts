@@ -74,6 +74,8 @@ Deno.serve(async req => {
       const {data:def}=await admin.from("pricing_packages").select("requires_package,requires_any_other").eq("code",p.product_code).eq("active",true).eq("always_active",false).single(); if(!def) return json({error:"Paket nicht buchbar"},400);
       const {data:mods,error}=await admin.from("pricing_package_modules").select("module_code").eq("package_code",p.product_code); if(error) throw error; modules=(mods||[]).map(x=>x.module_code);
     }
+    if(p.product_kind === "unit" && p.product_code === "charge_point") modules=["ev_charging","adhoc_payment"];
+    if(p.product_kind === "unit" && p.product_code === "extra_location") modules=["locations"];
     const {data:oldModules,error:oldError}=await admin.from("tenant_modules").select("module_code,is_enabled").eq("tenant_id",p.tenant_id).in("module_code",modules.length?modules:["__none__"]);
     if(oldError)throw oldError;
     const granted:string[]=[];
