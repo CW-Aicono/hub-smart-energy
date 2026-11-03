@@ -6,6 +6,7 @@
 - Bei unvollständiger Einrichtung trotz Bootstrap/Server-Sofortreparatur idempotente Migrationen 0070/0071 erneut ausführen, ohne bestehende Tenants zurückzusetzen.
 - Partner-Tenant-Liste toleriert additive Spaltenänderungen und zeigt Ladefehler mit Wiederholung. Handbuch und Version in vier Sprachen gepflegt.
 - Pflichtprüfung im schon aus Staging übernommenen Migrationsrunner, Checks im ungeschützten `supabase/deploy/`: auch bestehender Main-Workflow greift. Zusätzliche SHA-/Script-Härtung im geschützten Workflow braucht separate Übernahme. Hetzner-Ausführung und echte Stationen hier nicht prüfbar; HA-Add-on bleibt separater Deploy.
+- Verifiziert: 18 Tests (SQL-Teilreparatur, erster Admin-Login, Audit/Übergabe, Rückkehrsperre, Runner trotz Tracking-Drift, fail-closed Release, Partner-Scope/Fehler, Ladestationsregeln); Cloud-Release-Checks erfolgreich und Partner-Liste angemeldet sichtbar. Kein Live-Deploy ausgeführt.
 
 ## v1.37.1 – 2026-11-03
 - Vestel EVC10/Gemini Modbus-Vorlage mit Registern aus EVC04 Modbus TCP Spec v1.8 aktiviert (Status 1000, Kabel 1004, Fehler 1006, Ströme 1008–1012, Leistung 1020, Zähler 1036, Grenzen 1100–1106; Schreiben 2000/2002/5004/6000) – Migration 0073.

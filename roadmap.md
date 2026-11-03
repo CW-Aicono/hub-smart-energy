@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Vollständiger Live-Deploy vom 03.11.
-- [ ] Deployment von Einrichtungsphase, Tenant-Sichtbarkeit und heutigen Ladestationsvorlagen absichern; Migrationen, Funktionsdateien und Versionsstand prüfen.
-- [ ] Automatisierte Regressionstests, Handbuch in vier Sprachen und Versionshinweise aktualisieren.
-- [ ] Live-Ausführung prüfen – benötigt Zugriff auf den Hetzner-Deploy.
+- [x] v1.37.2: Pflichtprüfung im vorhandenen Migrationsrunner; unvollständige Setup-Installation trotz Tracking automatisch mit 0070/0071 vervollständigen. Übergabe, Gemini/ELMI, Vestel-Register und Funktionsdateien prüfen; API-Schema neu laden. Bestehende Tenants unverändert.
+- [x] 18 Regressionstests erfolgreich, einschließlich echter SQL-Reparatur/Übergabe und simuliertem Deploy-Abbruch; Partner-Tenant-Liste angemeldet sichtbar. Handbuch vier Sprachen, Version und Versionshinweise gepflegt; Cloud-Release-Checks erfolgreich.
+- [ ] Wartet auf Nutzer: LIVE-Deploy auf Hetzner ausführen und dort Einrichtung prüfen; Serverzugriff hier nicht verfügbar. Zusätzliche Workflow-SHA-Härtung separat auf geschütztes main übernehmen; Pflichtprüfung greift auch ohne diese Übernahme.
 
 ## Partner-Freigaben in Tenant-Paketauswahl (02.11.)
 - [x] v1.35.1: Neue Partner-Freigaben beim Öffnen/Fokus und alle 15 Sekunden im offenen Buchungsfenster aktualisieren; Portal-Auswahl nach Partner des ausgewählten Tenants eingrenzen.
