@@ -760,6 +760,15 @@ async function handleRemoteCommand(
     }
     case "UnlockConnector": {
       const connectorId = (body.connectorId as number) || 1;
+      // Fest angeschlagene Kabel / nicht verriegelbare Stecker: Befehl nicht senden.
+      const { data: lockInfo } = await supabase
+        .from("charge_points")
+        .select("cable_attached, supports_connector_lock")
+        .eq("ocpp_id", chargePointOcppId)
+        .maybeSingle();
+      if (lockInfo && (lockInfo.cable_attached === true || lockInfo.supports_connector_lock === false)) {
+        return { status: "Rejected", reason: "Stecker dieser Ladestation ist nicht entriegelbar (fest angeschlagenes Kabel)." };
+      }
 
       await supabase
         .from("pending_ocpp_commands")
