@@ -43,7 +43,7 @@
 4. Jeweils Handbuch in 4 Sprachen, Versionshinweise, Roadmap, Tests der Regelrechnung, angemeldete Prüfung bei ESB.
 
 ## Offene Fragen an euch
-- Soll die Cloud-Regelung auf 1 Minute verkürzt werden, oder bleibt es bei 5 Minuten, bis die lokale Regelung steht? Bei 1 Minute läuft sie 5-mal so oft: 1.440 statt 288 Läufe pro Tag, rund 43.200 statt 8.640 im Monat. Die Datenbank läuft wegen anderer Hintergrundaufgaben ohnehin dauernd, daher kommen vor allem diese zusätzlichen Läufe hinzu. Den genauen Betrag habe ich nicht gemessen.
+- Takt (entschieden): Die Cloud-Regelung läuft künftig alle 3 Minuten statt alle 5 Minuten. Das sind 480 statt 288 Läufe pro Tag, rund 14.400 statt 8.640 im Monat.
 - ELMI (entschieden): Der Speicher darf beim Laden immer entladen werden, da er vorrangig für die Ladestation da ist. Es gibt keinen Mindest-Ladestand.
 
 ## Technische Details
