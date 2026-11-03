@@ -180,6 +180,7 @@ Deno.serve(async (req) => {
     const { data: supportSessions, error: sErr } = await supabase
       .from("support_sessions")
       .select("id, tenant_id, started_at, ended_at, expires_at, reason, duration_minutes, is_manual")
+      .eq("session_kind", "support")
       .gte("started_at", lastMonthStart.toISOString())
       .lt("started_at", currentMonthStart.toISOString());
     if (sErr) throw sErr;
