@@ -1,5 +1,11 @@
 # Versionshinweise
 
+## v1.38.0 – 03.11.2026
+- Pakete korrigieren; Entwürfe neu berechnen, ausgestellte Rechnungen schützen.
+- Jährliche Abrechnung und je Paket individuelle Prozent-/Euro-Rabatte mit Zeitraum und Ablaufwahl.
+- Partner-Rabattanfragen direkt erreichbar; Daten bleiben bei Paketende erhalten.
+
+
 ## v1.37.2 – 03.11.2026
 - Live-Deploy prüft Einrichtung, Übergabe und Ladestationsvorlagen vor der Freigabe.
 - Teilweise installierte Einrichtungsfunktionen werden vervollständigt; übergebene Tenants bleiben unverändert.

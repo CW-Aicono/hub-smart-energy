@@ -2365,6 +2365,9 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
   }
 
   console.log(`[sync-automations] tenant=${tenantId} li=${locationIntegrationId} loc=${locationId}`);
+  const { data: effectiveModules, error: entitlementError } = await supabase.rpc("effective_tenant_modules", { p_tenant: tenantId });
+  if (entitlementError) return json({ error: "Entitlement unavailable" }, 503);
+  const automationEntitlement = effectiveModules?.find((m: any) => m.module_code === "automation_building");
 
   // Sync automations the local engine may execute: loxone_local + hybrid.
   // execution_mode = 'cloud' is intentionally excluded so the gateway
@@ -2439,7 +2442,9 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     conditions: auto.conditions,
     actions: auto.actions,
     logic_operator: auto.logic_operator || "AND",
-    is_active: auto.is_active,
+    is_active: auto.is_active && automationEntitlement?.is_enabled === true,
+    entitlement_enabled: automationEntitlement?.is_enabled === true,
+    entitlement_valid_until: automationEntitlement?.valid_until ?? null,
     actuator_uuid: auto.actuator_uuid,
     action_value: auto.action_value,
     action_type: auto.action_type,

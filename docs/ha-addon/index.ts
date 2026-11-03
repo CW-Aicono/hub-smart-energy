@@ -998,6 +998,8 @@ async function evaluateAndExecuteAutomations(): Promise<void> {
     }
 
     if (!rule.is_active) continue;
+    // Preserve cached rules but never execute them after a known package end.
+    if (rule.entitlement_enabled === false || (rule.entitlement_valid_until && new Date(`${rule.entitlement_valid_until}T23:59:59+01:00`).getTime() < Date.now())) continue;
 
     const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
     if (conditions.length === 0) continue;
