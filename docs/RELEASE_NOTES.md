@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.37.1 – 03.11.2026
+- Vestel AC Gemini Dual: Lastmanagement über Modbus mit jedem Zähler am Standort, inkl. sicherem Rückfallstrom bei Verbindungsausfall.
+
 ## v1.37.0 – 03.11.2026
 - „Ladepunkt hinzufügen“ startet mit einer Vorlage; festgelegte Werte wie Steckertyp, Leistung und Kabel sind nicht mehr falsch einstellbar.
 - Neue Vorlage Vestel AC Gemini Dual; ELMI All-in-One nur noch mit CCS.
