@@ -9,6 +9,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { useChargePoints, ChargePoint } from "@/hooks/useChargePoints";
 import type { ChargePointConnector } from "@/hooks/useChargePointConnectors";
 import { useChargerModels } from "@/hooks/useChargerModels";
+import { getVariants, templateLocks, applyTemplate } from "@/lib/chargerTemplates";
 import { useChargingSessions } from "@/hooks/useChargingSessions";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
@@ -112,6 +113,8 @@ const ChargingPoints = () => {
     auth_required: true,
     ocpp_password: generatePw(),
     location_id: "__none__",
+    charger_model_id: "__none__",
+    charger_variant: "",
   });
   const CONNECTOR_OPTIONS = [
     { value: "Type2", label: "Typ 2" },
@@ -247,6 +250,7 @@ const ChargingPoints = () => {
       vendor: "", model: "", connector_type: "Type2",
       connection_protocol: "wss", auth_required: true, ocpp_password: generatePw(),
       location_id: "__none__",
+      charger_model_id: "__none__", charger_variant: "",
     });
     setAddCoords({ lat: null, lng: null });
     setShowAddPassword(false);
@@ -270,6 +274,8 @@ const ChargingPoints = () => {
       auth_required: form.auth_required,
       ocpp_password: form.auth_required ? form.ocpp_password : null,
       location_id: form.location_id && form.location_id !== "__none__" ? form.location_id : null,
+      charger_model_id: form.charger_model_id !== "__none__" ? form.charger_model_id : null,
+      charger_variant: form.charger_model_id !== "__none__" && form.charger_variant ? form.charger_variant : null,
       ...(duplicateSource?.group_id ? { group_id: duplicateSource.group_id } : {}),
     } as any);
     setAddOpen(false);
@@ -292,6 +298,8 @@ const ChargingPoints = () => {
       auth_required: (cp as any).auth_required ?? true,
       ocpp_password: generatePw(),
       location_id: cp.location_id ?? "__none__",
+      charger_model_id: (cp as any).charger_model_id ?? "__none__",
+      charger_variant: (cp as any).charger_variant ?? "",
     });
     setAddCoords({
       lat: cp.latitude ?? null,
@@ -424,8 +432,66 @@ const ChargingPoints = () => {
     </div>
   );
 
+  const templateModels = chargerModels.filter((m: any) => m.is_active && getVariants(m).length > 0);
+  const selectedTemplate: any = templateModels.find((m: any) => m.id === form.charger_model_id) ?? null;
+  const templateVariants = getVariants(selectedTemplate);
+  const selectedVariant = templateVariants.find((v) => v.key === form.charger_variant) ?? null;
+  const locks = templateLocks(selectedVariant);
+  const pickTemplate = (modelId: string) => {
+    if (modelId === "__none__") { setForm({ ...form, charger_model_id: "__none__", charger_variant: "" }); return; }
+    const m: any = templateModels.find((x: any) => x.id === modelId);
+    const vs = getVariants(m);
+    const v = vs.length === 1 ? vs[0] : null;
+    setForm({ ...form, charger_model_id: modelId, charger_variant: v?.key ?? "", vendor: m?.vendor ?? form.vendor, model: m?.model ?? form.model, ...(v ? applyTemplate(v, form) : {}) });
+  };
+  const pickVariant = (key: string) => {
+    const v = templateVariants.find((x) => x.key === key);
+    if (v) setForm({ ...form, charger_variant: key, ...applyTemplate(v, form) });
+  };
+
   const formFields = (
     <div className="space-y-4">
+      <div className="rounded-md border p-3 space-y-3">
+        <div>
+          <Label>Vorlage <span className="text-xs text-muted-foreground font-normal">— legt Stecker, Leistung und Kabel fest</span></Label>
+          <Select value={form.charger_model_id} onValueChange={pickTemplate}>
+            <SelectTrigger><SelectValue placeholder="Vorlage wählen" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Ohne Vorlage (manuell)</SelectItem>
+              {templateModels.map((m: any) => (
+                <SelectItem key={m.id} value={m.id}>{m.vendor} {m.model}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {selectedTemplate && templateVariants.length > 1 && (
+          <div>
+            <Label>Variante</Label>
+            <Select value={form.charger_variant} onValueChange={pickVariant}>
+              <SelectTrigger><SelectValue placeholder="Variante wählen" /></SelectTrigger>
+              <SelectContent>
+                {templateVariants.map((v) => <SelectItem key={v.key} value={v.key}>{v.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {selectedVariant && (
+          <div className="flex flex-wrap gap-2 text-xs">
+            {selectedVariant.charging_type && <Badge variant="secondary">{selectedVariant.charging_type}</Badge>}
+            {locks.connectorTypes && <Badge variant="secondary">Stecker: {locks.connectorTypes.join(", ")}</Badge>}
+            {locks.connectorCount != null && <Badge variant="secondary">{locks.connectorCount} Ladepunkte</Badge>}
+            {locks.maxPowerKw != null && <Badge variant="secondary">max. {locks.maxPowerKw.toLocaleString("de-DE")} kW</Badge>}
+            {locks.cableAttached != null && <Badge variant="secondary">{locks.cableAttached ? "Kabel fest – nicht entriegelbar" : "Steckdose – verriegelbar"}</Badge>}
+            {selectedVariant.min_current_a != null && <Badge variant="secondary">{selectedVariant.min_current_a}–{selectedVariant.max_current_a} A</Badge>}
+          </div>
+        )}
+        {selectedTemplate?.dlm_notes && (
+          <p className="text-xs text-muted-foreground">{selectedTemplate.dlm_notes}</p>
+        )}
+        {selectedTemplate && templateVariants.length > 1 && !selectedVariant && (
+          <p className="text-xs text-destructive">Bitte eine Variante wählen.</p>
+        )}
+      </div>
       <div><Label>{t("charging.name" as any)}</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
       <div>
         <Label>OCPP-ID (ChargeBox Identity) <span className="text-xs text-muted-foreground font-normal">— optional, kann bei Inbetriebnahme nachgetragen werden</span></Label>
@@ -458,8 +524,8 @@ const ChargingPoints = () => {
         </Select>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label>{t("charging.connectors" as any)}</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
-        <div><Label>{t("charging.maxPower" as any)}</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
+        <div><Label>{t("charging.connectors" as any)}</Label><Input type="number" min="1" value={form.connector_count} disabled={locks.connectorCount != null} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
+        <div><Label>{t("charging.maxPower" as any)}</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} max={locks.maxPowerKw ?? undefined} onChange={(e) => { const v = e.target.value; if (v === "" || (parseFloat(v) >= 0 && (locks.maxPowerKw == null || parseFloat(v) <= locks.maxPowerKw))) setForm({ ...form, max_power_kw: v }); }} /></div>
       </div>
       <div>
         <Label>{t("charging.connectorTypes" as any)}</Label>
@@ -468,7 +534,7 @@ const ChargingPoints = () => {
             const selected = form.connector_type.split(",").includes(opt.value);
             return (
               <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
-                <Checkbox checked={selected} onCheckedChange={() => toggleConnectorType(opt.value)} />
+                <Checkbox checked={selected} disabled={!!locks.connectorTypes && !locks.connectorTypes.includes(opt.value)} onCheckedChange={() => toggleConnectorType(opt.value)} />
                 <span className="text-sm">{opt.label}</span>
               </label>
             );
