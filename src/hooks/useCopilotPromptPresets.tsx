@@ -48,7 +48,7 @@ export function useUpsertPromptPreset() {
         .select("tenant_id")
         .eq("user_id", userId)
         .single();
-      if (!profile?.tenant_id) throw new Error("Kein Mandant zugeordnet");
+      if (!profile?.tenant_id) throw new Error("Kein Tenant zugeordnet");
 
       if (args.id) {
         const { error } = await supabase

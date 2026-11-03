@@ -1,0 +1,37 @@
+import { describe, it, expect } from "vitest";
+import { licenseAmount, licensePeriodEnd, saleSchema, discountedPrice, bookingPrice } from "../licenseBilling";
+describe("license billing rules", () => {
+  const sale = { tenant: "11111111-1111-4111-8111-111111111111", kind: "package", code: "p1_monitoring", quantity: 1, cadence: "monthly", price: 99, payment: "invoice" };
+  it("accepts new package bookings", () => expect(saleSchema.safeParse(sale).success).toBe(true));
+  it("rejects separately sold modules", () => expect(saleSchema.safeParse({ ...sale, kind: "module", code: "energy_monitoring" }).success).toBe(false));
+  it("bills charging by charging-point quantity instead of a free package", () => expect(saleSchema.safeParse({ ...sale, code: "p4_charging", price: 0 }).success).toBe(false));
+  it("accepts two booked charge points", () => expect(saleSchema.safeParse({ ...sale, kind: "unit", code: "charge_point", quantity: 2, price: 8 }).success).toBe(true));
+  it("accepts three booked extra locations", () => expect(saleSchema.safeParse({ ...sale, kind: "unit", code: "extra_location", quantity: 3, price: 39 }).success).toBe(true));
+  it("allows one-time setup", () => expect(saleSchema.safeParse({ ...sale, kind: "unit", code: "setup", cadence: "once", price: 200 }).success).toBe(true));
+  it("rejects recurring setup", () => expect(saleSchema.safeParse({ ...sale, kind: "unit", code: "setup", price: 200 }).success).toBe(false));
+  it("rejects multiple copies of a flat-rate package", () => expect(saleSchema.safeParse({ ...sale, quantity: 2 }).success).toBe(false));
+  it("once charges only the selected quantity", () => expect(licenseAmount(8, 2, "2026-10-30", "2026-10-30", "once")).toBe(16));
+  it("monthly ends at calendar month end", () => expect(licensePeriodEnd("2026-10-30", "monthly")).toBe("2026-10-31"));
+  it("quarterly covers three months", () => expect(licenseAmount(8, 1, "2026-10-01", "2026-12-31", "quarterly")).toBe(24));
+  it("halfyearly covers six months", () => expect(licenseAmount(8, 1, "2026-07-01", "2026-12-31", "halfyearly")).toBe(48));
+  it("bills a start in the second half of the month as half a month", () => expect(licenseAmount(8, 1, "2026-10-30", "2026-10-31", "monthly")).toBe(4));
+  it("bills a start on the 16th as half a month", () => expect(licenseAmount(100, 1, "2026-11-16", "2026-11-30", "monthly")).toBe(50));
+  it("bills a start on the 15th as a full month", () => expect(licenseAmount(100, 1, "2026-11-15", "2026-11-30", "monthly")).toBe(100));
+  it("partner discount is a percentage of the VK", () => expect(discountedPrice(99, 10)).toBe(89.1));
+  it("editing VK updates the displayed percentage instead of leaving it at zero", () => expect(bookingPrice(99, "0", "89,10")).toEqual({ amount: 89.1, pct: 10, individual: false }));
+  it("percentage entry automatically calculates VK", () => expect(bookingPrice(99, "12,5")).toEqual({ amount: 86.63, pct: 12.5, individual: false }));
+  it("a chosen future package start controls the half-month invoice", () => expect(licenseAmount(bookingPrice(99, "10").amount, 1, "2026-12-16", licensePeriodEnd("2026-12-16", "monthly"), "monthly")).toBe(44.55));
+  it("surcharges remain individual prices, not negative discounts", () => expect(bookingPrice(99, "0", "110")).toEqual({ amount: 110, pct: 0, individual: true }));
+  it("separates illustrative resale and wholesale amounts", () => expect(licenseAmount(6, 2, "2026-11-01", "2026-11-30", "monthly")).toBe(12));
+  it("handles leap February", () => expect(licenseAmount(29, 1, "2028-02-29", "2028-02-29", "monthly")).toBe(14.5));
+  it("handles year rollover", () => expect(licensePeriodEnd("2026-12-30", "quarterly")).toBe("2026-12-31"));
+  it("starts the next quarter without overlapping the prior supplement", () => expect(licensePeriodEnd("2027-01-01", "quarterly")).toBe("2027-03-31"));
+  it("halfyearly supplement ends at the calendar halfyear boundary", () => expect(licensePeriodEnd("2026-10-30", "halfyearly")).toBe("2026-12-31"));
+  it("allows zero-value subscription notices", () => expect(licenseAmount(0, 3, "2026-10-30", "2026-12-31", "quarterly")).toBe(0));
+  it("bills a one-time package at the full price without proration", () => expect(licenseAmount(99, 1, "2026-10-31", "2026-10-31", "once")).toBe(99));
+  it("bills a monthly package supplement and the next full period", () => {
+    expect(licenseAmount(99, 1, "2026-10-31", "2026-10-31", "monthly")).toBe(49.5);
+    expect(licenseAmount(99, 1, "2026-11-01", "2026-11-30", "monthly")).toBe(99);
+  });
+  it("rejects negative prices", () => expect(saleSchema.safeParse({ tenant: "11111111-1111-4111-8111-111111111111", kind: "unit", code: "remote_support", quantity: 1, cadence: "monthly", price: -1, payment: "invoice" }).success).toBe(false));
+});

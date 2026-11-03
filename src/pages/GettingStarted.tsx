@@ -81,10 +81,10 @@ const GettingStarted = () => {
   const markOnboardingComplete = async () => {
     if (!tenant) return;
     // Sitzungs-Merker: verhindert, dass die Startseite mit noch nicht
-    // aktualisierten Mandantendaten sofort wieder hierher umleitet.
+    // aktualisierten Tenant-Daten sofort wieder hierher umleitet.
     try { sessionStorage.setItem(`onboarding_dismissed:${tenant.id}`, "1"); } catch { /* ignore */ }
     // Onboarding wird pro Tenant gespeichert (nicht pro User),
-    // damit nachfolgende Nutzer desselben Mandanten den Wizard nicht erneut sehen.
+    // damit nachfolgende Nutzer desselben Tenants den Wizard nicht erneut sehen.
     const { error } = await supabase
       .from("tenants")
       .update({ onboarding_completed: true } as any)

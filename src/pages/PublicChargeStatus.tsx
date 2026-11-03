@@ -1,3 +1,5 @@
+import { CHARGE_POINT_STATUS_META } from "@/lib/chargePointStatusPresentation";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
@@ -52,14 +54,7 @@ interface ApiResponse {
 
 type StatusKey = ChargePointStatusKey;
 
-const STATUS_META: Record<StatusKey, { label: string; bg: string; icon: typeof Zap; iconClass: string }> = {
-  available:    { label: "Verfügbar",     bg: "bg-emerald-600 text-white",                icon: Zap,         iconClass: "text-emerald-100" },
-  charging:     { label: "Belegt",        bg: "bg-blue-600 text-white",                   icon: PlugZap,     iconClass: "text-blue-100" },
-  faulted:      { label: "Fehler",        bg: "bg-red-600 text-white",                    icon: AlertTriangle, iconClass: "text-red-100" },
-  offline:      { label: "Offline",       bg: "bg-slate-500 text-white",                  icon: WifiOff,     iconClass: "text-slate-100" },
-  unavailable:  { label: "Nicht verfügbar", bg: "bg-amber-500 text-white",                icon: ZapOff,      iconClass: "text-amber-100" },
-  unconfigured: { label: "Nicht eingerichtet",  bg: "bg-purple-500 text-white",           icon: Settings,    iconClass: "text-purple-100" },
-};
+
 
 interface CardData {
   key: string;
@@ -73,6 +68,8 @@ interface CardData {
 
 
 export default function PublicChargeStatus() {
+  const { t } = useTranslation();
+  const STATUS_META = Object.fromEntries(Object.entries(CHARGE_POINT_STATUS_META).map(([key, meta]) => [key, { label: t(meta.labelKey), icon: meta.icon, bg: "bg-card text-card-foreground border border-border", iconClass: meta.color }])) as Record<StatusKey, { label: string; bg: string; icon: typeof Zap; iconClass: string }>;
   const { token } = useParams<{ token: string }>();
   const [data, setData] = useState<ApiResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -177,14 +174,7 @@ export default function PublicChargeStatus() {
   }, [data]);
 
   const counters = useMemo(() => {
-    const c: Record<StatusKey, number> = {
-      available: 0,
-      charging: 0,
-      faulted: 0,
-      offline: 0,
-      unavailable: 0,
-      unconfigured: 0,
-    };
+    const c = Object.fromEntries(Object.keys(CHARGE_POINT_STATUS_META).map((key) => [key, 0])) as Record<StatusKey, number>;
     for (const card of cards) {
       if (card.connectors && card.connectors.length > 0) {
         for (const conn of card.connectors) c[conn.status]++;
@@ -195,7 +185,7 @@ export default function PublicChargeStatus() {
     return c;
   }, [cards]);
 
-  const filteredCards = filter ? cards.filter((c) => c.status === filter) : cards;
+  const filteredCards = filter ? cards.filter((c) => c.status === filter || c.connectors?.some((conn) => conn.status === filter)) : cards;
 
   // Nach Gruppen bündeln, "Ohne Gruppe" am Ende
   const groupedCards = useMemo(() => {

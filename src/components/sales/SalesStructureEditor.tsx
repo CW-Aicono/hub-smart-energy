@@ -89,7 +89,7 @@ export function SalesStructureEditor({ projectId }: Props) {
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           Alle Angaben sind optional. Werden sie ausgefüllt, wird die Struktur beim Übernehmen in
-          einen Mandanten automatisch angelegt.
+          einen Tenants automatisch angelegt.
         </p>
         <Button size="sm" variant="outline" onClick={addLocation} disabled={busy}>
           <Plus className="h-4 w-4 mr-1" /> Liegenschaft

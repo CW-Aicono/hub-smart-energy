@@ -123,7 +123,7 @@ export default function SuperAdminSavingsShare() {
       <main className="flex-1 p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Euro className="h-6 w-6" />Gain-Sharing – Übersicht</h1>
-          <p className="text-sm text-muted-foreground">Einsparbeteiligung aller Mandanten mit aktivem Modul.</p>
+          <p className="text-sm text-muted-foreground">Einsparbeteiligung aller Tenants mit aktivem Modul.</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -138,7 +138,7 @@ export default function SuperAdminSavingsShare() {
         </div>
 
         <Card>
-          <CardHeader><CardTitle>Mandanten mit Gain-Sharing-Vertrag</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Tenants mit Gain-Sharing-Vertrag</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {query.isLoading ? <p className="text-sm text-muted-foreground">Lädt…</p> : rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">Noch keine Verträge angelegt.</p>
@@ -147,7 +147,7 @@ export default function SuperAdminSavingsShare() {
                 <div className="relative max-w-sm">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Suchen (Mandant, Status)…"
+                    placeholder="Suchen (Tenant, Status)…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="pl-8"
@@ -158,7 +158,7 @@ export default function SuperAdminSavingsShare() {
                 ) : (
               <Table>
                 <TableHeader><TableRow>
-                  <SortableHead sortKey="tenant" sort={sort} onToggle={toggle}>Mandant</SortableHead>
+                  <SortableHead sortKey="tenant" sort={sort} onToggle={toggle}>Tenant</SortableHead>
                   <SortableHead sortKey="status" sort={sort} onToggle={toggle}>Status</SortableHead>
                   <SortableHead sortKey="baseline" sort={sort} onToggle={toggle}>Baseline-Jahr</SortableHead>
                   <SortableHead sortKey="share" sort={sort} onToggle={toggle} align="right">AICONO %</SortableHead>

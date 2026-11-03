@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { PackageBillingOverviewCard } from "@/components/billing/PackagePricing";
+import { PackageBillingOverviewCard, PartnerUsageNoticesCard } from "@/components/billing/PackagePricing";
+import { PartnerSalesPortfolioCard } from "@/components/billing/PartnerSalesPortfolioCard";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
@@ -7,7 +8,7 @@ import { useModulePrices } from "@/hooks/useModulePrices";
 import { ALL_MODULES } from "@/hooks/useTenantModules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Receipt, TrendingUp, Percent, Building2, Factory, Search } from "lucide-react";
@@ -15,6 +16,9 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "@/hooks/use-toast";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { PartnerDiscountRequestsCard } from "@/components/billing/DiscountRequests";
+import { LicenseSales } from "@/components/billing/LicenseSales";
+import { PartnerCustomerInvoices } from "@/components/billing/PartnerCustomerInvoices";
+import { partnerPriceRows, packageMargin, expectedCommission, salePriceFor, unitUvp, type CatPackage, type CatUnit, type OverviewRow, type PriceRow } from "@/lib/partnerPriceList";
 
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
 const fmtEur = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -24,7 +28,8 @@ export default function PartnerBilling() {
   const { partnerId, loading, permissions, isPartnerAdmin } = usePartnerAccess();
   const canEditPrices = permissions.viewBilling;
   const qc = useQueryClient();
-  const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
+  // Keine Unterscheidung Kommune/Industrie mehr: immer Industrie-Preise
+  const sector = "industrie" as "kommune" | "industrie";
 
   const { data: partner } = useQuery({
     queryKey: ["partner-billing-info", partnerId],
@@ -85,6 +90,48 @@ export default function PartnerBilling() {
     },
   });
 
+  const { data: catalog } = useQuery({
+    queryKey: ["partner-package-catalog"],
+    queryFn: async () => {
+      const db = supabase as any;
+      const [pk, un] = await Promise.all([
+        db.from("pricing_packages").select("code,name,uvp,ek,always_active,active,sort"),
+        db.from("pricing_unit_prices").select("code,name,uvp,ek,new_sale_uvp,partner_available"),
+      ]);
+      if (pk.error) throw pk.error;
+      if (un.error) throw un.error;
+      return { packages: (pk.data ?? []) as CatPackage[], units: (un.data ?? []) as CatUnit[] };
+    },
+  });
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const { data: overview } = useQuery({
+    queryKey: ["package-billing-overview", currentMonth, partnerId],
+    enabled: !!partnerId,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("package-billing-overview", { body: { month: currentMonth, partner_id: partnerId } });
+      if (error) throw error;
+      return data as { rows: OverviewRow[]; partners: any[] };
+    },
+  });
+  const { data: creditNotes = [] } = useQuery({
+    queryKey: ["partner-commission-credits", partnerId],
+    enabled: !!partnerId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("tenant_invoices")
+        .select("id,invoice_number,status,amount,period_start,period_end,document_type")
+        .eq("partner_id", partnerId!).eq("document_type", "credit_note").order("period_start", { ascending: false }).limit(24);
+      if (error) throw error;
+      return data as { id: string; invoice_number: string; status: string; amount: number; period_start: string; period_end: string }[];
+    },
+  });
+  const catalogUvp = (code: string) => {
+    const pk = catalog?.packages.find((p) => p.code === code);
+    if (pk) return Number(pk.uvp);
+    const u = catalog?.units.find((x) => x.code === code);
+    return u ? unitUvp(u) : 0;
+  };
+  const priceRows: PriceRow[] = catalog ? partnerPriceRows(catalog.packages, catalog.units, partnerOverrides as any, sector) : [];
+
   const overrideFor = (code: string) => partnerOverrides.find((o) => o.module_code === code);
 
   const recommendedSale = (code: string, isKommune: boolean) => {
@@ -132,8 +179,17 @@ export default function PartnerBilling() {
       toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
+  // Margen je Tenant: Paketkunden aus der Monatsübersicht (laufender Monat), übrige nach Altvertrag (Modulpreise)
   const tenantTotals = useMemo(() => {
+    const pct = Number(partner?.commission_pct ?? 0);
     return tenants.map((t) => {
+      const row = overview?.rows.find((r) => r.tenant_id === t.id);
+      if (row && !row.legacy) {
+        const own = (code: string) => salePriceFor(code, t.is_kommune ? "kommune" : "industrie", partnerOverrides as any);
+        const m = packageMargin(row, own, catalogUvp);
+        const billedUvp = row.lines ? row.lines.filter((l) => !l.review && !l.viaContract).reduce((s, l) => s + l.uvp, 0) : row.uvp;
+        return { ...t, basis: "package" as const, purchase: m.ek, sale: m.sale, margin: m.margin, commission: expectedCommission(billedUvp, pct), commissionBase: billedUvp };
+      }
       let purchase = 0;
       let sale = 0;
       for (const code of t.modules) {
@@ -141,11 +197,10 @@ export default function PartnerBilling() {
         purchase += purchasePrice(code, t.is_kommune);
         sale += effectiveSale(code, t.is_kommune);
       }
-      const margin = sale - purchase;
-      const commission = sale * ((partner?.commission_pct ?? 0) / 100);
-      return { ...t, purchase, sale, margin, commission };
+      return { ...t, basis: "legacy" as const, purchase, sale, margin: sale - purchase, commission: expectedCommission(sale, pct), commissionBase: sale };
     });
-  }, [tenants, modulePrices, partnerOverrides, partner]);
+  }, [tenants, modulePrices, partnerOverrides, partner, overview, catalog]);
+  const hasLegacy = tenantTotals.some((t) => t.basis === "legacy");
 
   const [tenantSearch, setTenantSearch] = useState("");
   const filteredTenantTotals = tenantSearch.trim()
@@ -215,13 +270,44 @@ export default function PartnerBilling() {
         </Badge>
       </header>
 
-      {partnerId && <PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} />}
-      {partnerId && <PackageBillingOverviewCard partnerId={partnerId} />}
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="overview">Übersicht</TabsTrigger>
+          {!isCommission && <TabsTrigger value="invoices">Rechnungen</TabsTrigger>}
+          {!isCommission && <TabsTrigger value="sales">Pakete</TabsTrigger>}
+          <TabsTrigger value="prices">{isCommission ? "Provision" : "Preise & Margen"}</TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="overview" className="space-y-4">
+          {partnerId && <PartnerSalesPortfolioCard partnerId={partnerId} />}
+          {partnerId && <PartnerUsageNoticesCard partnerId={partnerId} />}
+          {partnerId && <PackageBillingOverviewCard partnerId={partnerId} />}
+        </TabsContent>
+
+        {!isCommission && (
+          <TabsContent value="sales" className="space-y-4">
+            <p className="text-sm text-muted-foreground">Neue Pakete verkaufst du beim Tenants: <strong>Tenants</strong> → Tenant öffnen → Reiter <strong>„Pakete & Verkauf“</strong>.</p>
+            <LicenseSales partnerId={partnerId} canEdit={false} />
+          </TabsContent>
+        )}
+        {!isCommission && (
+          <TabsContent value="invoices" className="space-y-4">
+            <p className="text-sm text-muted-foreground">Hier findest du deine Rechnungen an Tenants sowie die Einkaufsrechnungen von AICONO an dich.</p>
+            <PartnerCustomerInvoices partnerId={partnerId} canEdit={isPartnerAdmin} />
+          </TabsContent>
+        )}
+
+        <TabsContent value="prices" className="space-y-4">
+      {partnerId && (
+        <details className="rounded-lg border bg-card">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Rabatt bei AICONO anfragen</summary>
+          <div className="p-3 pt-0"><PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} /></div>
+        </details>
+      )}
       {isCommission ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Provisionsübersicht je Tenant (Monatsbasis)</CardTitle>
+            <CardTitle className="text-base">Erwartete Provision je Tenant (laufender Monat)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="relative max-w-sm">
@@ -241,14 +327,14 @@ export default function PartnerBilling() {
                   <TableRow>
                     <SortableHead label="Tenant" sortKey="name" sort={sortTotals} onToggle={toggleTotals} />
                     <SortableHead label="Bereich" sortKey="sector" sort={sortTotals} onToggle={toggleTotals} />
-                    <SortableHead label="Endkunden-Verkauf (empf.)" sortKey="sale" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
+                    <SortableHead label="AICONO berechnet (UVP)" sortKey="sale" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
                     <SortableHead label={`Provision (${fmtPct(Number(partner.commission_pct ?? 0))})`} sortKey="commission" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedTotals.map((t) => (
                     <TableRow key={t.id}>
-                      <TableCell className="font-medium">{t.name}</TableCell>
+                      <TableCell className="font-medium">{t.name}{t.basis === "legacy" && <Badge variant="secondary" className="ml-2 text-xs">Altvertrag</Badge>}</TableCell>
                       <TableCell>
                         {t.is_kommune ? <Building2 className="inline h-3.5 w-3.5 mr-1" /> : <Factory className="inline h-3.5 w-3.5 mr-1" />}
                         {t.is_kommune ? "Kommune" : "Industrie"}
@@ -265,9 +351,31 @@ export default function PartnerBilling() {
                 </TableBody>
               </Table>
             )}
-            <p className="text-xs text-muted-foreground mt-4">
-              Read-only Ansicht. Verbindliche Abrechnungen erhältst du monatlich von AICONO.
+            <p className="text-xs text-muted-foreground">
+              Paketkunden: Grundlage ist die Monatsübersicht nach Paketen. „Altvertrag“: Berechnung nach bisherigen Modulpreisen. Verbindlich ist die monatliche Provisionsgutschrift.
             </p>
+            <div className="space-y-2 pt-2">
+              <h3 className="text-sm font-semibold">Provisionsgutschriften</h3>
+              {creditNotes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Noch keine Provisionsgutschriften.</p>
+              ) : (
+                <div className="overflow-x-auto"><Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Gutschrift</TableHead><TableHead>Zeitraum</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Betrag</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {creditNotes.map((c) => (
+                      <TableRow key={c.id}>
+                        <TableCell>{c.status === "draft" ? "Entwurf" : c.invoice_number}</TableCell>
+                        <TableCell>{new Date(c.period_start + "T00:00:00").toLocaleDateString("de-DE")} – {new Date(c.period_end + "T00:00:00").toLocaleDateString("de-DE")}</TableCell>
+                        <TableCell><Badge variant={c.status === "draft" ? "outline" : "secondary"}>{c.status === "draft" ? "In Vorbereitung" : c.status === "paid" ? "Ausgezahlt" : "Ausgestellt"}</Badge></TableCell>
+                        <TableCell className="text-right font-medium">{fmtEur(Math.abs(Number(c.amount ?? 0)))}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table></div>
+              )}
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -281,21 +389,50 @@ export default function PartnerBilling() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="text-base">Einkauf & Verkauf je Modul</CardTitle>
-                  <ToggleGroup
-                    type="single"
-                    value={sector}
-                    onValueChange={(v) => v && setSector(v as "kommune" | "industrie")}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <ToggleGroupItem value="kommune" className="gap-1.5">
-                      <Building2 className="h-4 w-4" /> Kommunen
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="industrie" className="gap-1.5">
-                      <Factory className="h-4 w-4" /> Industrie
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                  <div>
+                    <CardTitle className="text-base">Pakete und Mengenpreise</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">Monatliche Nettopreise. Dein Verkaufspreis erscheint in den Tenants-Entwürfen; ohne eigenen Preis gilt die UVP.</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {!catalog ? <p className="text-sm text-muted-foreground">Lädt…</p> : (
+                  <div className="overflow-x-auto"><Table>
+                    <TableHeader><TableRow>
+                      <TableHead>Paket / Leistung</TableHead>
+                      <TableHead className="text-right">Einkauf (EK)</TableHead>
+                      <TableHead className="text-right">Empf. Verkaufspreis (UVP)</TableHead>
+                      <TableHead className="text-right">Dein Verkaufspreis</TableHead>
+                      <TableHead className="text-right">Marge</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {priceRows.map((r, i) => (
+                        <SalePriceRow
+                          key={`${sector}-${r.code}`}
+                          label={r.name}
+                          sub={r.unit}
+                          separator={i > 0 && r.kind === "unit" && priceRows[i - 1].kind === "package"}
+                          purchase={r.ek}
+                          recommended={r.uvp}
+                          sale={r.sale}
+                          margin={r.margin}
+                          disabled={!canEditPrices}
+                          onSave={(val) => saveSale.mutate({ moduleCode: r.code, value: val })}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table></div>
+                )}
+              </CardContent>
+            </Card>
+
+            {hasLegacy && (
+            <details className="rounded-lg border">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Alte Modulpreisliste – nur für Altverträge</summary>
+            <Card className="border-0 shadow-none">
+              <CardHeader>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="text-base">Einkauf & Verkauf je Modul (Altverträge)</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -348,12 +485,15 @@ export default function PartnerBilling() {
                 )}
               </CardContent>
             </Card>
+            </details>
+            )}
           </TabsContent>
 
           <TabsContent value="margins">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Margenübersicht je Tenant (Monatsbasis)</CardTitle>
+                <CardTitle className="text-base">Margen je Tenant (laufender Monat)</CardTitle>
+                <p className="text-xs text-muted-foreground">Paketkunden: Einkauf aus der Monatsübersicht inkl. freigegebener Rabatte, Verkauf zu deinen Verkaufspreisen. „Altvertrag“: bisherige Modulpreise.</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="relative max-w-sm">
@@ -381,7 +521,7 @@ export default function PartnerBilling() {
                     <TableBody>
                       {sortedTotals.map((t) => (
                         <TableRow key={t.id}>
-                          <TableCell className="font-medium">{t.name}</TableCell>
+                          <TableCell className="font-medium">{t.name}{t.basis === "legacy" && <Badge variant="secondary" className="ml-2 text-xs">Altvertrag</Badge>}</TableCell>
                           <TableCell>
                             {t.is_kommune ? <Building2 className="inline h-3.5 w-3.5 mr-1" /> : <Factory className="inline h-3.5 w-3.5 mr-1" />}
                             {t.is_kommune ? "Kommune" : "Industrie"}
@@ -405,12 +545,16 @@ export default function PartnerBilling() {
           </TabsContent>
         </Tabs>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
 
 interface SalePriceRowProps {
   label: string;
+  sub?: string;
+  separator?: boolean;
   purchase: number;
   recommended: number;
   sale: number;
@@ -419,13 +563,13 @@ interface SalePriceRowProps {
   onSave: (val: number | null) => void;
 }
 
-function SalePriceRow({ label, purchase, recommended, sale, margin, disabled, onSave }: SalePriceRowProps) {
+function SalePriceRow({ label, sub, separator, purchase, recommended, sale, margin, disabled, onSave }: SalePriceRowProps) {
   const [value, setValue] = useState(String(sale.toFixed(2)));
   useMemo(() => setValue(String(sale.toFixed(2))), [sale]);
 
   return (
-    <TableRow>
-      <TableCell className="font-medium">{label}</TableCell>
+    <TableRow className={separator ? "border-t-2" : undefined}>
+      <TableCell className="font-medium">{label}{sub && <div className="text-xs font-normal text-muted-foreground">{sub}</div>}</TableCell>
       <TableCell className="text-right">{fmtEur(purchase)}</TableCell>
       <TableCell className="text-right text-muted-foreground">{fmtEur(recommended)}</TableCell>
       <TableCell className="text-right">

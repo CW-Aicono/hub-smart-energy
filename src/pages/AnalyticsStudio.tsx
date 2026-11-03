@@ -238,7 +238,7 @@ export default function AnalyticsStudio() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Als Vorlage speichern</DialogTitle>
-            <DialogDescription>Die Vorlage wird für alle Nutzer deines Mandanten verfügbar.</DialogDescription>
+            <DialogDescription>Die Vorlage wird für alle Nutzer deines Tenants verfügbar.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">

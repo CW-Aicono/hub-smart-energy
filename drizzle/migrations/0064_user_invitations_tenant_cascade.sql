@@ -1,0 +1,2 @@
+ALTER TABLE public.user_invitations DROP CONSTRAINT IF EXISTS user_invitations_tenant_id_fkey;
+ALTER TABLE public.user_invitations ADD CONSTRAINT user_invitations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;

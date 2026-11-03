@@ -281,7 +281,7 @@ const Automation = () => {
   };
 
   const handleSaveRule = async (data: AutomationRuleData) => {
-    if (!tenant?.id) throw new Error("Kein Mandant");
+    if (!tenant?.id) throw new Error("Kein Tenant");
     const primary = data.actions[0];
     const isTemplate = !!data.loxone_template_key && data.execution_mode !== "cloud";
 

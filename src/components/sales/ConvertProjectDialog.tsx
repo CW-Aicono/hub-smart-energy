@@ -26,7 +26,7 @@ export function ConvertProjectDialog({ projectId, alreadyConverted, convertedTen
         body: { project_id: projectId },
       });
       if (error) throw error;
-      toast.success("Mandant angelegt", {
+      toast.success("Tenant angelegt", {
         description: `${data.modules_enabled} Module aktiviert · Slug: ${data.tenant_slug}`,
       });
       onConverted();
@@ -44,7 +44,7 @@ export function ConvertProjectDialog({ projectId, alreadyConverted, convertedTen
       <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
         <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="font-medium">Konvertiert zu Mandant</div>
+          <div className="font-medium">Konvertiert zu Tenant</div>
           <div className="text-xs text-muted-foreground truncate">{convertedTenantId}</div>
         </div>
       </div>
@@ -56,14 +56,14 @@ export function ConvertProjectDialog({ projectId, alreadyConverted, convertedTen
       <DialogTrigger asChild>
         <Button className="w-full" variant="default">
           <Rocket className="h-4 w-4 mr-2" />
-          In Mandant konvertieren
+          In Tenant konvertieren
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Lead in Mandant umwandeln</DialogTitle>
+          <DialogTitle>Lead in Tenant umwandeln</DialogTitle>
           <DialogDescription>
-            Es wird automatisch ein Mandant inkl. Hauptliegenschaft, Kontaktdaten und allen
+            Es wird automatisch ein Tenant inkl. Hauptliegenschaft, Kontaktdaten und allen
             Modulen des aktuellsten Angebots angelegt. Diese Aktion kann nicht rückgängig gemacht werden.
           </DialogDescription>
         </DialogHeader>

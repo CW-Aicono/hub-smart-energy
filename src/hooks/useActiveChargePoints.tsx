@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-/** Aktive Ladepunkte (Heartbeat in den letzten 30 Tagen) je Mandant – serverseitig berechtigungsgeprüft. */
+/** Aktive Ladepunkte (Heartbeat in den letzten 30 Tagen) je Tenant – serverseitig berechtigungsgeprüft. */
 export function useActiveChargePoints() {
   const { data = {}, isLoading } = useQuery({
     queryKey: ["active-charge-point-counts"],

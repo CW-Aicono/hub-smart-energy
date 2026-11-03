@@ -675,7 +675,9 @@ async function handleRemoteCommand(
       if (!cp) return { status: "Rejected", message: "Charge point not found" };
       // Normalize status to lowercase: gateways may report "Available" or "available"
       const cpStatus = (cp.status ?? "").toLowerCase();
-      if (cpStatus !== "available" && cpStatus !== "unavailable") {
+      // "preparing" = Fahrzeug bereits angesteckt, aber noch kein Ladevorgang –
+      // genau der Fall, in dem ein Fernstart sinnvoll ist.
+      if (cpStatus !== "available" && cpStatus !== "unavailable" && cpStatus !== "preparing") {
         return { status: "Rejected", message: `Charge point not ready (current status: ${cp.status || "unknown"})` };
       }
 
@@ -758,6 +760,15 @@ async function handleRemoteCommand(
     }
     case "UnlockConnector": {
       const connectorId = (body.connectorId as number) || 1;
+      // Fest angeschlagene Kabel / nicht verriegelbare Stecker: Befehl nicht senden.
+      const { data: lockInfo } = await supabase
+        .from("charge_points")
+        .select("cable_attached, supports_connector_lock")
+        .eq("ocpp_id", chargePointOcppId)
+        .maybeSingle();
+      if (lockInfo && (lockInfo.cable_attached === true || lockInfo.supports_connector_lock === false)) {
+        return { status: "Rejected", reason: "Stecker dieser Ladestation ist nicht entriegelbar (fest angeschlagenes Kabel)." };
+      }
 
       await supabase
         .from("pending_ocpp_commands")

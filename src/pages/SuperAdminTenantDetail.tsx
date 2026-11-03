@@ -1,5 +1,10 @@
 import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
+import { TenantSalesOverviewCard } from "@/components/super-admin/TenantSalesOverviewCard";
+import { LicenseSales } from "@/components/billing/LicenseSales";
+import { PackageBillingSwitch, usePackageBilling } from "@/components/billing/PackageBillingSwitch";
+import { TenantInvoiceOptions } from "@/components/billing/TenantInvoiceOptions";
+import { useTranslation } from "@/hooks/useTranslation";
 import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndReturn } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
 import { usePortalMember as useSuperAdmin } from "@/hooks/usePortalAccess";
@@ -89,7 +94,7 @@ const InviteTenantAdminDialog = ({ tenantId, tenantName, onSuccess }: InviteTena
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Kunden-Admin einladen</DialogTitle>
+          <DialogTitle>Tenant-Admin einladen</DialogTitle>
           <DialogDescription>Neuen Benutzer für <strong>{tenantName}</strong> einladen.</DialogDescription>
         </DialogHeader>
         {!inviteLink ? (
@@ -108,7 +113,7 @@ const InviteTenantAdminDialog = ({ tenantId, tenantName, onSuccess }: InviteTena
               <Select value={role} onValueChange={(v: any) => setRole(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" />Kunden-Admin</div></SelectItem>
+                  <SelectItem value="admin"><div className="flex items-center gap-2"><Shield className="h-4 w-4" />Tenant-Admin</div></SelectItem>
                   <SelectItem value="user"><div className="flex items-center gap-2"><User className="h-4 w-4" />Benutzer</div></SelectItem>
                 </SelectContent>
               </Select>
@@ -147,6 +152,8 @@ const SuperAdminTenantDetail = () => {
   const { user, loading: authLoading } = useAuth();
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
   const { modules, toggleModule } = useTenantModules(id ?? null);
+  const { data: pkgState } = usePackageBilling(id ?? "");
+  const isPackageCustomer = !!pkgState?.package_billing;
   const { license, upsertLicense } = useTenantLicense(id ?? null);
   const { getPrice: getGlobalPrice, getStandardPrice: getGlobalStandardPrice, getIndustryPrice: getGlobalIndustryPrice, getIndustryStandardPrice: getGlobalIndustryStandardPrice } = useModulePrices();
   const { bundles: allBundles, bundleItems: allBundleItems, getBundleModules } = useModuleBundles();
@@ -262,6 +269,18 @@ const SuperAdminTenantDetail = () => {
     (s) => !s.ended_at && new Date(s.expires_at).getTime() > Date.now()
   );
 
+  const inSetup = (tenant as any)?.setup_status === "setup";
+  const [completingSetup, setCompletingSetup] = useState(false);
+  const handleCompleteSetup = async () => {
+    if (!id || !window.confirm(t("tenant_setup.confirm" as any))) return;
+    setCompletingSetup(true);
+    const { error } = await supabase.rpc("complete_tenant_setup" as any, { _tenant_id: id } as any);
+    setCompletingSetup(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(t("tenant_setup.completed" as any));
+    queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+    queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
+  };
   const [startingSupport, setStartingSupport] = useState(false);
   const handleStartRemoteSupport = async () => {
     if (!id || !user) return;
@@ -482,7 +501,7 @@ const SuperAdminTenantDetail = () => {
         throw new Error(msg);
       }
       if (data?.success === false) throw new Error(data.error);
-      toast.success(`${email ?? "Person"} aus dem Mandanten entfernt (Konto bleibt bestehen)`);
+      toast.success(`${email ?? "Person"} aus dem Tenant entfernt (Konto bleibt bestehen)`);
       refreshUsers();
     } catch (err: any) {
       toast.error("Entfernen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
@@ -536,13 +555,21 @@ const SuperAdminTenantDetail = () => {
             <p className="text-sm text-muted-foreground mt-1">{tenant?.slug}</p>
           </div>
           <div className="flex items-center gap-2">
+            {inSetup && (
+              <Badge variant="secondary">{t("tenant_setup.badge" as any)}</Badge>
+            )}
+            {inSetup && (
+              <Button variant="outline" disabled={completingSetup} onClick={handleCompleteSetup}>
+                {t("tenant_setup.complete" as any)}
+              </Button>
+            )}
             <Button
-              variant={(tenant as any)?.remote_support_enabled ? "default" : "outline"}
-              disabled={!(tenant as any)?.remote_support_enabled || startingSupport}
+              variant={inSetup || (tenant as any)?.remote_support_enabled ? "default" : "outline"}
+              disabled={!(inSetup || (tenant as any)?.remote_support_enabled) || startingSupport}
               onClick={handleStartRemoteSupport}
             >
               <HeadsetIcon className="h-4 w-4 mr-2" />
-              {activeSession ? "Sitzung fortsetzen" : t("tenant_detail.remote_support")}
+              {activeSession ? "Sitzung fortsetzen" : inSetup ? t("tenant_setup.open" as any) : t("tenant_detail.remote_support")}
               {activeSession && <Badge variant="secondary" className="ml-2 bg-green-500/20 text-green-600">{t("common.active")}</Badge>}
             </Button>
             {activeSession && (
@@ -557,8 +584,7 @@ const SuperAdminTenantDetail = () => {
           <Tabs defaultValue="info">
             <TabsList>
               <TabsTrigger value="info"><Building2 className="h-4 w-4 mr-1" />Info</TabsTrigger>
-              <TabsTrigger value="modules">{t("tenant_detail.modules")}</TabsTrigger>
-              <TabsTrigger value="license">{t("tenant_detail.license")}</TabsTrigger>
+              <TabsTrigger value="modules"><Package className="h-4 w-4 mr-1" />{t("tenant_detail.packages" as any)}</TabsTrigger>
               <TabsTrigger value="users">{t("nav.users")}</TabsTrigger>
               <TabsTrigger value="billing"><Receipt className="h-4 w-4 mr-1" />{t("tenant_detail.billing")}</TabsTrigger>
               <TabsTrigger value="gain_sharing"><Euro className="h-4 w-4 mr-1" />Gain-Sharing</TabsTrigger>
@@ -566,7 +592,7 @@ const SuperAdminTenantDetail = () => {
             </TabsList>
 
             <TabsContent value="info" className="mt-6 space-y-6">
-              {id && <PackageBookingCard tenantId={id} />}
+              {id && <TenantInvoiceOptions tenantId={id} />}
               {/* Stats tiles */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* Gebuchte Bundles tile with dialog */}
@@ -650,10 +676,10 @@ const SuperAdminTenantDetail = () => {
                 <DialogContent className="max-w-lg">
                   <DialogHeader>
                     <DialogTitle>Bundles verwalten – {tenant?.name}</DialogTitle>
-                    <DialogDescription>Bundles für diesen Mandanten buchen oder entfernen.</DialogDescription>
+                    <DialogDescription>Bundles für diesen Tenants buchen oder entfernen.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-3 mt-2 max-h-[60vh] overflow-y-auto">
-                    {allBundles.filter(b => b.is_active).map((bundle) => {
+                    {allBundles.filter(b => b.is_active && (b.bookable !== false || tenantBundleIds.includes(b.id))).map((bundle) => {
                       const isBooked = tenantBundleIds.includes(bundle.id);
                       const bundleModules = getBundleModules(bundle.id);
                       return (
@@ -662,6 +688,7 @@ const SuperAdminTenantDetail = () => {
                             <div className="flex items-center gap-2">
                               <p className="font-medium text-sm">{bundle.name}</p>
                               <Badge variant="outline" className="text-xs">{Number(bundle.price_monthly).toFixed(2)} €/m</Badge>
+                              {bundle.bookable === false && <Badge variant="secondary" className="text-xs">Altvertrag</Badge>}
                             </div>
                             {bundle.description && <p className="text-xs text-muted-foreground mt-0.5">{bundle.description}</p>}
                             <p className="text-xs text-muted-foreground mt-0.5">{bundleModules.length} Module</p>
@@ -686,8 +713,8 @@ const SuperAdminTenantDetail = () => {
                         </div>
                       );
                     })}
-                    {allBundles.filter(b => b.is_active).length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">Keine aktiven Bundles vorhanden.</p>
+                    {allBundles.filter(b => b.is_active && (b.bookable !== false || tenantBundleIds.includes(b.id))).length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">Keine buchbaren Bundles vorhanden.</p>
                     )}
                   </div>
                 </DialogContent>
@@ -696,7 +723,7 @@ const SuperAdminTenantDetail = () => {
               {/* Existing tenant info card */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Mandanten-Informationen</CardTitle>
+                  <CardTitle>Tenants-Informationen</CardTitle>
                   {!editingTenantInfo ? (
                     <Button variant="ghost" size="icon" onClick={() => {
                       setTenantInfoForm({
@@ -729,7 +756,7 @@ const SuperAdminTenantDetail = () => {
                           contact_person: tenantInfoForm.contact_person.trim() || null,
                           contact_email: tenantInfoForm.contact_email.trim() || null,
                           is_aicono_member: tenantInfoForm.is_aicono_member,
-                          is_kommune: tenantInfoForm.is_kommune,
+                          is_kommune: false,
                           partner_id: tenantInfoForm.partner_id ? tenantInfoForm.partner_id : null,
                           support_owner: tenantInfoForm.partner_id ? "partner" : "platform",
                         }).eq("id", tenant!.id);
@@ -852,6 +879,41 @@ const SuperAdminTenantDetail = () => {
             </TabsContent>
 
             <TabsContent value="modules" className="mt-6 space-y-6">
+              {id && <TenantSalesOverviewCard tenantId={id} />}
+              {id && <PackageBillingSwitch tenantId={id} />}
+              {id && <PackageBookingCard tenantId={id} />}
+              {id && <LicenseSales tenantId={id} />}
+              {id && (
+                <Card>
+                  <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Package className="h-4 w-4" />Ladeinfrastruktur</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Wird automatisch je angelegtem Ladepunkt abgerechnet. Hier freischalten, danach Ladepunkte beim Tenant anlegen.</p>
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-sm font-medium">Ladeinfrastruktur freigeschaltet</p>
+                      <Switch checked={getModuleEnabled("ev_charging")} onCheckedChange={(checked) => toggleModule.mutate({ moduleCode: "ev_charging", enabled: checked })} />
+                    </div>
+                    {getModuleEnabled("ev_charging") && (
+                      <ChargePointSubLine tenantId={id} modules={modules as any} isKommune={(tenant as any)?.is_kommune !== false} isMember={!!(tenant as any)?.is_aicono_member} canEdit />
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+              <details className="rounded-md border p-3">
+                <summary className="cursor-pointer text-sm font-medium">Freigeschaltete Funktionen (Sonderfälle)</summary>
+                <p className="mt-2 text-xs text-muted-foreground">Funktionen werden normalerweise über die Pakete freigeschaltet. Hier nur in Ausnahmefällen einzeln ändern.</p>
+                <div className="mt-3 divide-y">
+                  {ALL_MODULES.filter((m) => !("alwaysOn" in m)).map((m) => (
+                    <div key={m.code} className="flex items-center justify-between gap-4 py-2">
+                      <span className="text-sm">{m.label}</span>
+                      <Switch checked={getModuleEnabled(m.code)} onCheckedChange={(checked) => toggleModule.mutate({ moduleCode: m.code, enabled: checked })} />
+                    </div>
+                  ))}
+                </div>
+              </details>
+              {!isPackageCustomer && (
+              <details className="rounded-md border p-3">
+                <summary className="cursor-pointer text-sm font-medium">Altvertrag: Modulpreise</summary>
+                <div className="mt-3 space-y-6">
               <Card>
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -968,156 +1030,11 @@ const SuperAdminTenantDetail = () => {
                     isKommune={(tenant as any)?.is_kommune !== false} isMember={!!(tenant as any)?.is_aicono_member} />
                 </>
               )}
+                </div>
+              </details>
+              )}
             </TabsContent>
 
-            <TabsContent value="license" className="mt-6">
-              <Card>
-                <CardHeader><CardTitle>{t("tenant_detail.license_billing")}</CardTitle></CardHeader>
-                <CardContent className="space-y-4 max-w-md">
-                  <div className="space-y-2">
-                    <Label>{t("billing.plan")}</Label>
-                    <Input defaultValue={license?.plan_name ?? "basic"} onChange={(e) => setLicenseForm((f) => ({ ...f, plan_name: e.target.value }))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>{t("tenant_detail.price_monthly")}</Label>
-                      <Input type="number" defaultValue={license?.price_monthly ?? 0} onChange={(e) => setLicenseForm((f) => ({ ...f, price_monthly: Number(e.target.value) }))} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t("tenant_detail.price_yearly")}</Label>
-                      <Input type="number" defaultValue={license?.price_yearly ?? 0} onChange={(e) => setLicenseForm((f) => ({ ...f, price_yearly: Number(e.target.value) }))} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>{t("tenant_detail.max_users")}</Label>
-                      <Input type="number" defaultValue={license?.max_users ?? 5} onChange={(e) => setLicenseForm((f) => ({ ...f, max_users: Number(e.target.value) }))} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t("tenant_detail.max_locations")}</Label>
-                      <Input type="number" defaultValue={license?.max_locations ?? 3} onChange={(e) => setLicenseForm((f) => ({ ...f, max_locations: Number(e.target.value) }))} />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t("tenant_detail.billing_cycle")}</Label>
-                    <Select defaultValue={license?.billing_cycle ?? "monthly"} onValueChange={(v) => setLicenseForm((f) => ({ ...f, billing_cycle: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="monthly">{t("billing.monthly")}</SelectItem>
-                        <SelectItem value="yearly">{t("billing.yearly")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t("common.status")}</Label>
-                    <Select defaultValue={license?.status ?? "active"} onValueChange={(v) => setLicenseForm((f) => ({ ...f, status: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">{t("common.active")}</SelectItem>
-                        <SelectItem value="expired">{t("tenant_detail.expired")}</SelectItem>
-                        <SelectItem value="cancelled">{t("tenant_detail.cancelled")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button onClick={() => upsertLicense.mutate(licenseForm)} disabled={upsertLicense.isPending}>
-                    {upsertLicense.isPending ? t("tenant_detail.saving") : t("tenant_detail.save_license")}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Payment method & SEPA */}
-              <Card className="mt-6">
-                <CardHeader><CardTitle>{t("tenant_detail.payment_method")}</CardTitle></CardHeader>
-                <CardContent className="space-y-4 max-w-md">
-                  <div className="space-y-2">
-                    <Label>{t("tenant_detail.payment_method")}</Label>
-                    <Select
-                      defaultValue={(tenant as any)?.payment_method ?? "invoice"}
-                      onValueChange={async (v) => {
-                        if (!id) return;
-                        await supabase.from("tenants").update({ payment_method: v } as any).eq("id", id);
-                        queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
-                        toast.success(t("tenant_detail.sepa_saved"));
-                      }}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="invoice">{t("tenant_detail.invoice")}</SelectItem>
-                        <SelectItem value="sepa">{t("tenant_detail.sepa_direct_debit")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {((tenant as any)?.payment_method === "sepa") && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>{t("tenant_detail.sepa_account_holder")}</Label>
-                        <Input
-                          defaultValue={(tenant as any)?.sepa_account_holder ?? ""}
-                          onBlur={async (e) => {
-                            if (!id) return;
-                            await supabase.from("tenants").update({ sepa_account_holder: e.target.value.trim() || null } as any).eq("id", id);
-                            queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
-                          }}
-                          placeholder="Max Mustermann GmbH"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>{t("tenant_detail.sepa_iban")}</Label>
-                          <Input
-                            defaultValue={(tenant as any)?.sepa_iban ?? ""}
-                            onBlur={async (e) => {
-                              if (!id) return;
-                              await supabase.from("tenants").update({ sepa_iban: e.target.value.trim() || null } as any).eq("id", id);
-                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
-                            }}
-                            placeholder="DE89 3704 0044 0532 0130 00"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{t("tenant_detail.sepa_bic")}</Label>
-                          <Input
-                            defaultValue={(tenant as any)?.sepa_bic ?? ""}
-                            onBlur={async (e) => {
-                              if (!id) return;
-                              await supabase.from("tenants").update({ sepa_bic: e.target.value.trim() || null } as any).eq("id", id);
-                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
-                            }}
-                            placeholder="COBADEFFXXX"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>{t("tenant_detail.sepa_mandate_ref")}</Label>
-                          <Input
-                            defaultValue={(tenant as any)?.sepa_mandate_ref ?? ""}
-                            onBlur={async (e) => {
-                              if (!id) return;
-                              await supabase.from("tenants").update({ sepa_mandate_ref: e.target.value.trim() || null } as any).eq("id", id);
-                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
-                            }}
-                            placeholder="MNDT-001"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{t("tenant_detail.sepa_mandate_date")}</Label>
-                          <Input
-                            type="date"
-                            defaultValue={(tenant as any)?.sepa_mandate_date ?? ""}
-                            onBlur={async (e) => {
-                              if (!id) return;
-                              await supabase.from("tenants").update({ sepa_mandate_date: e.target.value || null } as any).eq("id", id);
-                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
 
             <TabsContent value="users" className="mt-6">
               <Card>
@@ -1268,6 +1185,98 @@ const SuperAdminTenantDetail = () => {
             </TabsContent>
 
             <TabsContent value="billing" className="mt-6 space-y-6">
+              {/* Payment method & SEPA */}
+              <Card>
+                <CardHeader><CardTitle>{t("tenant_detail.payment_method")}</CardTitle></CardHeader>
+                <CardContent className="space-y-4 max-w-md">
+                  <div className="space-y-2">
+                    <Label>{t("tenant_detail.payment_method")}</Label>
+                    <Select
+                      defaultValue={(tenant as any)?.payment_method ?? "invoice"}
+                      onValueChange={async (v) => {
+                        if (!id) return;
+                        await supabase.from("tenants").update({ payment_method: v } as any).eq("id", id);
+                        queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                        toast.success(t("tenant_detail.sepa_saved"));
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="invoice">{t("tenant_detail.invoice")}</SelectItem>
+                        <SelectItem value="sepa">{t("tenant_detail.sepa_direct_debit")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {((tenant as any)?.payment_method === "sepa") && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>{t("tenant_detail.sepa_account_holder")}</Label>
+                        <Input
+                          defaultValue={(tenant as any)?.sepa_account_holder ?? ""}
+                          onBlur={async (e) => {
+                            if (!id) return;
+                            await supabase.from("tenants").update({ sepa_account_holder: e.target.value.trim() || null } as any).eq("id", id);
+                            queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                          }}
+                          placeholder="Max Mustermann GmbH"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>{t("tenant_detail.sepa_iban")}</Label>
+                          <Input
+                            defaultValue={(tenant as any)?.sepa_iban ?? ""}
+                            onBlur={async (e) => {
+                              if (!id) return;
+                              await supabase.from("tenants").update({ sepa_iban: e.target.value.trim() || null } as any).eq("id", id);
+                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                            }}
+                            placeholder="DE89 3704 0044 0532 0130 00"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t("tenant_detail.sepa_bic")}</Label>
+                          <Input
+                            defaultValue={(tenant as any)?.sepa_bic ?? ""}
+                            onBlur={async (e) => {
+                              if (!id) return;
+                              await supabase.from("tenants").update({ sepa_bic: e.target.value.trim() || null } as any).eq("id", id);
+                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                            }}
+                            placeholder="COBADEFFXXX"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>{t("tenant_detail.sepa_mandate_ref")}</Label>
+                          <Input
+                            defaultValue={(tenant as any)?.sepa_mandate_ref ?? ""}
+                            onBlur={async (e) => {
+                              if (!id) return;
+                              await supabase.from("tenants").update({ sepa_mandate_ref: e.target.value.trim() || null } as any).eq("id", id);
+                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                            }}
+                            placeholder="MNDT-001"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t("tenant_detail.sepa_mandate_date")}</Label>
+                          <Input
+                            type="date"
+                            defaultValue={(tenant as any)?.sepa_mandate_date ?? ""}
+                            onBlur={async (e) => {
+                              if (!id) return;
+                              await supabase.from("tenants").update({ sepa_mandate_date: e.target.value || null } as any).eq("id", id);
+                              queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
               {/* Module costs */}
               <Card>
                 <CardHeader><CardTitle>{t("tenant_detail.module_costs")}</CardTitle></CardHeader>
@@ -1389,7 +1398,7 @@ const SuperAdminTenantDetail = () => {
 
             <TabsContent value="audit" className="mt-6">
 
-              <AuditLogList tenantId={id} title="Aktivitätslog dieses Mandanten" />
+              <AuditLogList tenantId={id} title="Aktivitätslog dieses Tenants" />
             </TabsContent>
           </Tabs>
         </div>
@@ -1399,3 +1408,10 @@ const SuperAdminTenantDetail = () => {
 };
 
 export default SuperAdminTenantDetail;
+
+function ModulesDisplayOnlyHint({ tenantId }: { tenantId: string }) {
+  const { t } = useTranslation();
+  const { data } = usePackageBilling(tenantId);
+  if (!data?.package_billing) return null;
+  return <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">{t("license.modulesDisplayOnly" as any)}</p>;
+}

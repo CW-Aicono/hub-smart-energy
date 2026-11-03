@@ -98,7 +98,7 @@ export const SALES_MODULE_LABELS: Record<string, ModuleLabel> = {
   },
   gain_sharing: {
     title: "Gain-Sharing (Einsparbeteiligung)",
-    description: "AICONO wird prozentual an den jährlichen Energiekosten-Einsparungen des Mandanten beteiligt (witterungsbereinigte Baseline, optionaler Partner-Split).",
+    description: "AICONO wird prozentual an den jährlichen Energiekosten-Einsparungen des Tenants beteiligt (witterungsbereinigte Baseline, optionaler Partner-Split).",
   },
 };
 

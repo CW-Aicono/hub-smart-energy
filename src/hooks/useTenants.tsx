@@ -70,7 +70,7 @@ export function useTenants() {
     },
     onSuccess: ({ id, reason }) => {
       queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
-      toast({ title: "Mandant gesperrt" });
+      toast({ title: "Tenant gesperrt" });
       writeAuditLog({
         action: "tenant.status_change",
         entity_type: "tenant",
@@ -96,7 +96,7 @@ export function useTenants() {
     },
     onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
-      toast({ title: "Mandant reaktiviert" });
+      toast({ title: "Tenant reaktiviert" });
       writeAuditLog({
         action: "tenant.status_change",
         entity_type: "tenant",
@@ -121,7 +121,7 @@ export function useTenants() {
     },
     onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
-      toast({ title: "Mandant in Papierkorb verschoben" });
+      toast({ title: "Tenant in Papierkorb verschoben" });
       writeAuditLog({
         action: "tenant.delete",
         entity_type: "tenant",

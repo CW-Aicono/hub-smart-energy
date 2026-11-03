@@ -57,12 +57,12 @@ export default function TenantStatusGuard({ children }: { children: React.ReactN
         <div className="max-w-md w-full rounded-2xl border bg-card p-8 shadow-lg text-center">
           <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
           <h1 className="text-xl font-semibold mb-2">
-            {isDeleted ? "Mandant gelöscht" : "Mandant gesperrt"}
+            {isDeleted ? "Tenant gelöscht" : "Tenant gesperrt"}
           </h1>
           <p className="text-sm text-muted-foreground mb-2">
             {isDeleted
-              ? "Dieser Mandant wurde dauerhaft entfernt. Ein Zugriff ist nicht mehr möglich."
-              : "Der Zugang Ihres Mandanten ist aktuell gesperrt. Bitte wenden Sie sich an Ihren Administrator oder AICONO Support."}
+              ? "Dieser Tenant wurde dauerhaft entfernt. Ein Zugriff ist nicht mehr möglich."
+              : "Der Zugang Ihres Tenants ist aktuell gesperrt. Bitte wenden Sie sich an Ihren Administrator oder AICONO Support."}
           </p>
           {reason && !isDeleted && (
             <p className="text-xs text-muted-foreground bg-muted rounded p-2 mb-4">

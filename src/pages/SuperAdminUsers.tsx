@@ -143,7 +143,7 @@ const SuperAdminUsers = () => {
               <Badge variant="secondary">Nur Plattform-User</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              {t("users.subtitle")} — Mandanten-User werden ausschließlich in der jeweiligen Tenant-Benutzerverwaltung verwaltet.
+              {t("users.subtitle")} — Tenants-User werden ausschließlich in der jeweiligen Tenant-Benutzerverwaltung verwaltet.
             </p>
           </div>
           <SuperAdminInviteDialog />

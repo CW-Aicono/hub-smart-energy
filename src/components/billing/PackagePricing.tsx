@@ -10,7 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Loader2, Package } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertTriangle, Info, Loader2, Package } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -20,6 +21,7 @@ const pct = (n: number) => `${n.toLocaleString("de-DE", { maximumFractionDigits:
 export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
   const { catalog, isLoading, error, updatePrice, updateUnlockFee } = usePricingPackages();
   const [draft, setDraft] = useState<Record<string, { uvp: string; ek: string }>>({});
+  const [validFrom, setValidFrom] = useState(() => new Date().toISOString().slice(0, 10));
   if (isLoading) return <Card><CardContent className="p-6"><Loader2 className="h-4 w-4 animate-spin" /></CardContent></Card>;
   if (error || !catalog) return <Card><CardContent className="p-6 text-destructive text-sm">Paketkatalog konnte nicht geladen werden.</CardContent></Card>;
 
@@ -28,7 +30,7 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
     if (!d) return;
     const nu = Number(d.uvp.replace(",", ".")), ne = Number(d.ek.replace(",", "."));
     if (!Number.isFinite(nu) || !Number.isFinite(ne) || (nu === uvp && ne === ek)) return;
-    try { await updatePrice.mutateAsync({ table, code, uvp: nu, ek: ne }); toast({ title: "Preis gespeichert" }); }
+    try { await updatePrice.mutateAsync({ table, code, uvp: nu, ek: ne, validFrom }); toast({ title: "Preis gespeichert", description: `Gültig ab ${new Date(validFrom + "T00:00:00").toLocaleDateString("de-DE")}. Bereits erzeugte Rechnungen bleiben unverändert.` }); }
     catch (e: any) { toast({ title: "Fehler", description: e.message, variant: "destructive" }); }
   };
   const cell = (table: "pricing_packages" | "pricing_unit_prices", code: string, uvp: number, ek: number, field: "uvp" | "ek") => (
@@ -42,11 +44,19 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Pakete (neue Buchungen)</CardTitle>
-        <CardDescription>UVP = unverbindliche Preisempfehlung, EK = Partner-Einkaufspreis, netto pro Monat. Bestandskunden werden weiter nach der Modulpreisliste unten abgerechnet.</CardDescription>
+        <CardDescription>UVP = unverbindliche Preisempfehlung, EK = Partner-Einkaufspreis, netto pro Monat. Bestandskunden werden weiter nach der Modulpreisliste unten abgerechnet. Jede Preisänderung wird mit Gültig-ab-Datum versioniert; bereits erzeugte Rechnungen bleiben unverändert.</CardDescription>
+        {canEdit && (
+          <div className="flex items-center gap-2 pt-2">
+            <Label htmlFor="price-valid-from" className="text-xs whitespace-nowrap">Änderungen gültig ab</Label>
+            <Input id="price-valid-from" type="date" className="w-40 h-8" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         <Table>
-          <TableHeader><TableRow><TableHead>Paket</TableHead><TableHead>Module</TableHead><TableHead>Voraussetzung</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right" title="Einmalig an den Partner, wenn ihm das erste Modul des Pakets freigeschaltet wird">Freischaltung Partner</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Paket</TableHead><TableHead>Module</TableHead><TableHead>Voraussetzung</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right">Gültig ab</TableHead><TableHead className="text-right">
+            <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Freischaltung Partner <Info className="h-3.5 w-3.5 text-muted-foreground" /></span></TooltipTrigger><TooltipContent className="max-w-xs">Einmalige Gebühr, die dem Partner in Rechnung gestellt wird, sobald ihm das erste Modul dieses Pakets freigeschaltet wird. Sie fällt pro Partner nur einmal je Paket an.</TooltipContent></Tooltip></TooltipProvider>
+          </TableHead></TableRow></TableHeader>
           <TableBody>
             {catalog.packages.map((p) => (
               <TableRow key={p.code}>
@@ -55,6 +65,7 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
                 <TableCell className="text-xs">{p.requires_package ? catalog.packages.find((x) => x.code === p.requires_package)?.name : p.requires_any_other ? "mind. ein anderes Paket" : "–"}</TableCell>
                 <TableCell className="text-right">{p.always_active ? eur(0) : cell("pricing_packages", p.code, p.uvp, p.ek, "uvp")}</TableCell>
                 <TableCell className="text-right">{p.always_active ? eur(0) : cell("pricing_packages", p.code, p.uvp, p.ek, "ek")}</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{p.valid_from ? new Date(p.valid_from + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
                 <TableCell className="text-right">{p.always_active ? "–" : (
                   <Input className="h-8 w-24 ml-auto text-right" disabled={!canEdit}
                     defaultValue={p.partner_unlock_fee.toLocaleString("de-DE", { minimumFractionDigits: 2 })}
@@ -70,13 +81,14 @@ export function PackageCatalogCard({ canEdit }: { canEdit: boolean }) {
           </TableBody>
         </Table>
         <Table>
-          <TableHeader><TableRow><TableHead>Mengen- und Servicepreise</TableHead><TableHead>Einheit</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Mengen- und Servicepreise</TableHead><TableHead>Einheit</TableHead><TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead><TableHead className="text-right">Gültig ab</TableHead></TableRow></TableHeader>
           <TableBody>
             {catalog.units.map((u) => (
               <TableRow key={u.code}>
                 <TableCell>{u.name}</TableCell><TableCell className="text-xs">{u.unit}</TableCell>
-                <TableCell className="text-right">{cell("pricing_unit_prices", u.code, u.uvp, u.ek, "uvp")}</TableCell>
-                <TableCell className="text-right">{cell("pricing_unit_prices", u.code, u.uvp, u.ek, "ek")}</TableCell>
+                <TableCell className="text-right">{eur(u.new_sale_uvp ?? u.uvp)}</TableCell>
+                <TableCell className="text-right">{u.partner_available === false ? "–" : cell("pricing_unit_prices", u.code, u.uvp, u.ek, "ek")}</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{u.valid_from ? new Date(u.valid_from + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -101,7 +113,7 @@ export function PackageQuoteCalculator() {
   const defs = catalog?.packages ?? [];
   const packages = useMemo(() => [...defs.filter((d) => d.always_active).map((d) => d.code), ...sel], [defs, sel]);
   const errors = checkDependencies(packages, defs);
-  const q = calculateQuote({ packages, locations, chargePoints: cps, billedSessions: sessions }, defs, catalog?.units ?? []);
+  const q = calculateQuote({ packages, locations, chargePoints: cps, billedSessions: sessions }, defs, (catalog?.units ?? []).map(u => ({ ...u, uvp: u.new_sale_uvp ?? u.uvp })));
   const ep = endPrice === "" ? q.uvp : Number(endPrice.replace(",", "."));
   const v = priceViews(ep, q.uvp, q.ek);
   if (!catalog) return null;
@@ -164,10 +176,10 @@ export function PackageBookingCard({ tenantId }: { tenantId: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base"><Package className="h-4 w-4" /> Pakete</CardTitle>
-        <CardDescription>{booked.length === 0 ? "Bestandskunde – Abrechnung nach bisheriger Modulpreisliste. Mit der ersten Paketbuchung gilt die neue Preislogik." : "Abrechnung nach Paketlogik."}</CardDescription>
+        <CardDescription>Bestehende Paketbuchungen</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
-        {catalog.packages.filter((p) => !p.always_active && p.active).map((p) => {
+        {catalog.packages.filter((p) => !p.always_active && p.active && booked.includes(p.code)).map((p) => {
           const on = booked.includes(p.code);
           return (
             <div key={p.code} className="flex items-center justify-between gap-2 text-sm">
@@ -183,7 +195,7 @@ export function PackageBookingCard({ tenantId }: { tenantId: string }) {
   );
 }
 
-/** Monatsübersicht je Endkunde und Partner (nur Anzeige). */
+/** Monatsübersicht je Endkunde und Partner. Für umgestellte Kunden Grundlage der Monatsrechnung. */
 export function PackageBillingOverviewCard({ partnerId }: { partnerId?: string }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const { data, isLoading, error } = useQuery({
@@ -194,47 +206,93 @@ export function PackageBillingOverviewCard({ partnerId }: { partnerId?: string }
       return data as { rows: any[]; partners: any[] };
     },
   });
+  const anySwitched = (data?.rows ?? []).some((r) => r.packageBilling);
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <div>
           <CardTitle className="text-base">Monatsübersicht nach Paketen</CardTitle>
-          <CardDescription>Grundlage für die Rechnung AICONO → Partner. Nur Anzeige, die Monatsrechnung bleibt unverändert.</CardDescription>
+          <CardDescription>{anySwitched ? "Tenants mit „Abrechnung nach Paketen“: Grundlage der Monatsrechnung. Übrige Tenants: nur Anzeige." : "Grundlage für die Rechnung AICONO → Partner. Nur Anzeige, die Monatsrechnung bleibt unverändert."}</CardDescription>
         </div>
         <Input type="month" className="w-40" value={month} onChange={(e) => setMonth(e.target.value)} />
       </CardHeader>
       <CardContent>
         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : error ? <p className="text-sm text-destructive">Übersicht konnte nicht geladen werden.</p> : (
           <div className="space-y-4">
-            <Table>
+            <div className="overflow-x-auto"><Table>
               <TableHeader><TableRow>
-                <TableHead>Endkunde</TableHead><TableHead>Pakete</TableHead><TableHead className="text-right">Liegenschaften</TableHead>
+                <TableHead>Tenant</TableHead><TableHead>Pakete</TableHead><TableHead className="text-right">Liegenschaften</TableHead>
                 <TableHead className="text-right">Ladepunkte</TableHead><TableHead className="text-right">Abgerechnet</TableHead><TableHead className="text-right">Intern</TableHead>
+                <TableHead>Änderung zum Vormonat</TableHead>
                 <TableHead className="text-right">UVP</TableHead><TableHead className="text-right">EK</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {(data?.rows ?? []).map((r) => (
-                  <TableRow key={r.tenant_id}>
-                    <TableCell>{r.tenant_name}</TableCell>
+                  <TableRow key={r.tenant_id} className={r.delta?.plausibility || r.review ? "bg-warning/10" : undefined}>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1">{r.tenant_name}
+                        {r.packageBilling && <Badge variant="outline" className="text-xs">Grundlage der Monatsrechnung</Badge>}
+                        {(r.delta?.plausibility || r.review) && <Badge className="text-xs bg-warning text-warning-foreground hover:bg-warning">Prüfen</Badge>}
+                      </div>
+                      {r.lines?.length > 0 && (
+                        <details className="text-xs text-muted-foreground mt-1"><summary className="cursor-pointer">Positionen</summary>
+                          <ul className="mt-1 space-y-0.5">{r.lines.map((l: any, i: number) => (
+                            <li key={i} className="flex justify-between gap-4"><span>{l.label}{l.viaContract ? " (Vertrag)" : ""}{l.review ? " – nicht automatisch berechnet" : ""}</span><span className="whitespace-nowrap">UVP {eur(l.uvp)} · EK {eur(l.ek)}</span></li>
+                          ))}</ul>
+                        </details>
+                      )}
+                    </TableCell>
                     <TableCell className="text-xs">{r.legacy ? <Badge variant="secondary">Altpreis</Badge> : r.packages.join(", ")}</TableCell>
                     <TableCell className="text-right">{r.locations.toLocaleString("de-DE")}</TableCell>
                     <TableCell className="text-right">{r.chargePoints.toLocaleString("de-DE")}</TableCell>
                     <TableCell className="text-right">{r.billedSessions.toLocaleString("de-DE")}</TableCell>
                     <TableCell className="text-right">{r.internalSessions.toLocaleString("de-DE")}</TableCell>
+                    <TableCell className="text-xs">{r.delta?.text ? `${r.delta.text}, ${r.delta.ek >= 0 ? "+" : ""}${eur(r.delta.ek)} EK` : "–"}</TableCell>
                     <TableCell className="text-right">{r.legacy ? "–" : eur(r.uvp)}</TableCell>
                     <TableCell className="text-right">{r.legacy ? "–" : eur(r.ek)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </Table></div>
             <div className="text-sm space-y-1">
               {(data?.partners ?? []).map((p) => (
-                <div key={p.partner_id} className="flex justify-between font-medium"><span>Summe {p.partner_name} ({p.tenants} Kunden)</span><span>UVP {eur(p.uvp)} · EK {eur(p.ek)}</span></div>
+                <div key={p.partner_id} className="flex flex-wrap justify-between gap-2 font-medium"><span>Summe {p.partner_name} ({p.tenants} Tenants)</span><span>UVP {eur(p.uvp)} · EK {eur(p.ek)}</span></div>
               ))}
             </div>
           </div>
         )}
       </CardContent>
+    </Card>
+  );
+}
+
+/** Mengenänderungen der eigenen Kunden (einmal täglich gesammelt). */
+export function PartnerUsageNoticesCard({ partnerId }: { partnerId: string }) {
+  const qc = useQueryClient();
+  const { data = [] } = useQuery({
+    queryKey: ["partner-usage-notices", partnerId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("partner_usage_notices").select("id,message,day,read_at").eq("partner_id", partnerId).order("day", { ascending: false }).limit(30);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  if (!data.length) return null;
+  const markRead = async () => {
+    await (supabase as any).from("partner_usage_notices").update({ read_at: new Date().toISOString() }).eq("partner_id", partnerId).is("read_at", null);
+    qc.invalidateQueries({ queryKey: ["partner-usage-notices", partnerId] });
+  };
+  const unread = data.filter((n: any) => !n.read_at).length;
+  return (
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+        <div><CardTitle className="text-base">Mengenänderungen {unread > 0 && <Badge className="ml-2">{unread} neu</Badge>}</CardTitle>
+          <CardDescription>Automatisch gezählt – wirkt auf die nächste Monatsrechnung.</CardDescription></div>
+        {unread > 0 && <Button variant="outline" size="sm" onClick={markRead}>Als gelesen markieren</Button>}
+      </CardHeader>
+      <CardContent><ul className="space-y-1 text-sm">{data.map((n: any) => (
+        <li key={n.id} className={n.read_at ? "text-muted-foreground" : "font-medium"}>{new Date(n.day + "T00:00:00").toLocaleDateString("de-DE")}: {n.message}</li>
+      ))}</ul></CardContent>
     </Card>
   );
 }

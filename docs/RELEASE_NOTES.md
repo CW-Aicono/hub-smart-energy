@@ -1,5 +1,161 @@
 # Versionshinweise
 
+## v1.37.1 – 03.11.2026
+- Vestel AC Gemini Dual: Lastmanagement über Modbus mit jedem Zähler am Standort, inkl. sicherem Rückfallstrom bei Verbindungsausfall.
+
+## v1.37.0 – 03.11.2026
+- „Ladepunkt hinzufügen“ startet mit einer Vorlage; festgelegte Werte wie Steckertyp, Leistung und Kabel sind nicht mehr falsch einstellbar.
+- Neue Vorlage Vestel AC Gemini Dual; ELMI All-in-One nur noch mit CCS.
+- Bei fest angeschlagenem Kabel wird „Kabel entriegeln“ nicht mehr angeboten.
+
+## v1.36.0 – 03.11.2026
+- Neue Tenants können vor der Übergabe an den Kunden vollständig eingerichtet werden („Einrichtung öffnen“), ohne dass Remote-Support freigegeben sein muss.
+- Mit „Einrichtung abschließen & übergeben“ oder der ersten Anmeldung des Tenant-Admins endet die Einrichtung dauerhaft; Einrichtungssitzungen werden nicht als Support-Zeit berechnet.
+
+## v1.35.1 – 02.11.2026
+- Für Partner freigeschaltete Pakete erscheinen ohne Neuladen in der Paketauswahl ihrer Tenants.
+- Auch im AICONO Portal berücksichtigt die Auswahl die Freigaben des Partners des gewählten Tenants; Paketvoraussetzungen bleiben erhalten.
+
+## v1.35.0 – 02.11.2026
+- Rabatt in Prozent wahlweise dauerhaft oder für einen Zeitraum bei der Paketbuchung vergeben. Nach Ablauf gilt automatisch der VK ohne Rabatt; der Partner-EK bleibt gleich.
+- Vorschau und Rechnungen berücksichtigen den Zeitraum im Halbmonatsraster.
+- Ladeinfrastruktur zeigt Preise und Buchungsregeln übersichtlich statt als langen Fließtext.
+
+## v1.34.0 – 02.11.2026
+- Ladepunkte und weitere Liegenschaften mit gewünschter Menge buchen; Preise und Rabatt werden berücksichtigt.
+- Gebuchte Mengen sind feste Obergrenzen; zusätzliche Kapazität ist nachbuchbar. Basis enthält eine Liegenschaft, Enterprise unbegrenzte Liegenschaften.
+- Mengen stehen auf dem gemeinsamen Rechnungsentwurf, ohne doppelte Nutzungsabrechnung; bisherige Tenants bleiben unverändert.
+
+## v1.33.0 – 02.11.2026
+- Gleichzeitig gebuchte Pakete und Zusatzleistungen je Tenant stehen auf einer gemeinsamen Rechnung, mit Leistungszeitraum je Position.
+- In der Partner-Abrechnung öffnet das Augen-Symbol die PDF-Vorschau direkt im EMS, ohne Freigabe oder Versand.
+- Bereits ausgestellte Rechnungen bleiben unverändert.
+
+## v1.32.0 – 02.11.2026
+- Startdatum bei Paketbuchungen frei im Kalender wählbar, mit aktualisierter Preisvorschau im Halbmonatsraster.
+- Rabatt in Prozent je Position eingeben: Endkunden-VK und Marge berechnen sich automatisch. Auch manuelle Preisänderungen aktualisieren den Rabatt; der EK bleibt unverändert.
+
+## v1.31.0 – 02.11.2026
+- Beim Paket buchen werden die nutzungsabhängigen Preise angezeigt, z. B. 8,00 € je Ladepunkt und Monat.
+- Die Partner-Stammdaten erscheinen automatisch als Absender auf neuen Rechnungen des Partners an seine Tenants.
+- Partner-Portal: neuer Menüpunkt „Partner-Einstellungen“ mit Stammdaten (Firma, Anschrift, Steuernummer, USt-IdNr., Handelsregister, Bankverbindung) und Branding.
+
+## v1.30.0 – 02.11.2026
+- Mehrere Pakete gleichzeitig buchbar, mit klarer Preisübersicht (VK, Rabatt, Endkundenpreis, EK, Marge).
+- Partner können Endkunden einen Rabatt in Prozent auf den VK geben.
+- Abrechnung im Halbmonatsraster statt taggenau.
+- Keine Unterscheidung mehr zwischen Kommune und Industrie.
+
+## v1.29.0 – 02.11.2026
+- Unter der Paketauswahl sind eigene Rechnungsposten mit Bezeichnung, Menge und Nettopreis möglich – einmalig oder regelmäßig monatlich, quartalsweise oder halbjährlich. Rechnungen entstehen als Entwürfe zur Prüfung; bestehende Paketverträge bleiben unverändert.
+- „Neue Rechnung“ kombiniert auf Wunsch Pakete und eigene Posten in einem einzelnen Entwurf.
+
+## v1.28.1
+- Beim Anlegen eines Tenants im AICONO Portal kann jetzt die Art gewählt werden: Kommune, Gewerbe/Industrie, Privat oder Sonstige.
+
+## v1.28.0 – 31.10.2026
+- Einheitliche Bezeichnung: überall „Tenant“ statt „Mandant“ oder „Kunde“; die Rolle heißt jetzt „Tenant-Admin“.
+
+## v1.27.4 – 31.10.2026
+- Paketverkauf erzeugt sofort Rechnungsentwürfe für AICONO und Partner; einmalige und automatische Folgerechnungen sind geprüft. Der Buchungsbutton heißt „Buchen & Rechnung erstellen“. Prüfung, Freigabe und Versand bleiben manuell.
+
+## v1.27.2 – 31.10.2026
+- AICONO Portal: Mandantenübersicht zeigt den zugehörigen Partner.
+
+## v1.27.0 – 31.10.2026
+- Abrechnung im AICONO Portal und im Partnerportal klarer gegliedert: Rechnungen, Verträge und Rabatte in eigenen Reitern; Rechnungen an Partner und an Direktkunden getrennt filterbar.
+
+## v1.26.2 – 31.10.2026
+- Partnerportal: Abrechnungsseite übersichtlicher mit drei Reitern – Übersicht, Verkäufe & Rechnungen, Preise & Margen.
+
+## v1.26.1 – 31.10.2026
+- Partnerportal Branding: Farbauswahl funktioniert wieder, mit Vorschau und Formatprüfung.
+
+## v1.26.0 – 31.10.2026
+- Vertragslaufzeit je Paketvertrag in Monaten wählbar, mit automatischer Verlängerung oder automatischem Ende; später änderbar durch AICONO und Partner.
+
+## v1.25.1 – 31.10.2026
+- Partnerportal: „Rabatt bei AICONO anfragen“ ist unter Abrechnung eingeklappt und öffnet per Klick.
+
+## v1.25.0 – 31.10.2026
+- Partner verkaufen Pakete jetzt an genau einer Stelle: beim Endkunden im Reiter „Pakete & Verkauf“.
+- AICONO sieht je Kunde, was der Partner verkauft hat und wie viele Ladepunkte neu dazugekommen sind.
+
+## v1.23.0 – 31.10.2026
+- Portal: Pakete werden Partnern jetzt als ganze Pakete freigeschaltet. Partner können ihren Kunden nur freigeschaltete Pakete verkaufen.
+
+## v1.22.0 – 31.10.2026
+- Portal: Kundenseite zeigt statt „Module“ und „Lizenz“ jetzt den Reiter „Pakete“; Zahlungsart und SEPA stehen unter „Abrechnung“.
+
+## v1.21.5 – 30.10.2026
+- Portal: „Module & Bundles“ heißt jetzt „Modulpreise (Altverträge)“.
+
+## v1.21.4 – 30.10.2026
+- Portal: Der Menüpunkt „Lizenzen“ entfällt – Verträge werden über Pakete gebucht.
+
+## v1.21.3 – 30.10.2026
+- Partnerportal: Ladeinfrastruktur hat beim Tenant wieder eine eigene Karte zum Freischalten; abgerechnet wird je Ladepunkt.
+
+## v1.21.2 – 30.10.2026
+- Partnerportal: Unter „Module & Lizenzen“ stehen jetzt die Pakete im Vordergrund; alte Einzelmodule erscheinen nur noch bei Altverträgen in einem einklappbaren Bereich.
+
+## v1.21.0 – 30.10.2026
+- Einstellungen → „Paket & Rechnungen“ für Kunden-Admins: gebuchte Pakete mit enthaltenen Funktionen (ohne Preise), nicht freigeschaltete Funktionen mit Hinweis „Im Paket X enthalten – Anfrage an Partner/AICONO“ und alle ausgestellten Rechnungen an den Kunden (von AICONO oder vom Partner) als PDF mit E-Rechnung. Normale Benutzer sehen den Bereich nicht.
+- Abnahmetests der Paketabrechnung (Fälle A, B, C, Flatrate, Neukunde, anteilig, Mengenänderung, Support-Prüfung, Paket 6) als automatische Tests hinterlegt.
+
+## v1.20.0 – 30.10.2026
+- Partner-Portal → Abrechnung: Die Preisliste zeigt jetzt Pakete und Mengenpreise mit Einkauf (EK), empfohlenem Verkaufspreis (UVP), eigenem Verkaufspreis und Marge, getrennt für Kommunen und Industrie. Die alte Modulpreisliste erscheint nur noch für Kunden mit Altvertrag.
+- „Rabatt bei AICONO anfragen“: Auswahl von Paketen, Mengenpreisen und Remote-Support-Flatrate statt Einzelmodulen. Freigegebene Rabatte mindern den EK der gewählten Positionen.
+- Margen je Tenant werden für Paketkunden aus der Monatsübersicht berechnet (inkl. Rabatte, eigene Verkaufspreise je Segment).
+- Provisions-Partner sehen die erwartete Provision je Tenant und ihre Provisionsgutschriften.
+- Übersicht: Die Kachel „Offene Abrechnung“ zeigt die Summe der offenen AICONO-Einkaufsrechnungen.
+
+## v1.19.0 – 30.10.2026
+- Rechnungsflüsse nach Partnermodell: Direktkunden zur UVP; Wiederverkaufs-Partner erhalten eine Sammelrechnung je Monat zum EK, gegliedert nach Kunde (inkl. Einrichtung im Aktivierungsmonat); Provisions-Partner erhalten eine monatliche Provisionsgutschrift, der Kunde wird zur UVP abgerechnet.
+- Partner erhalten je Kunde automatisch einen Endkunden-Entwurf mit eigenen Preisen und können eigene Positionen ergänzen; AICONO sieht diese Rechnungen nicht.
+- Warnung beim Generieren, wenn ein offener Direktentwurf an einen Kunden eines Wiederverkaufs-Partners besteht; Eigenbedarf des Partners wird „An Partner“ gekennzeichnet.
+- Korrektur freigegebener Rechnungen nur noch per Storno-Rechnung mit Bezug auf das Original (AICONO und Partner).
+- Alle Rechnungs-PDFs enthalten eine E-Rechnung (ZUGFeRD, EN 16931); Leitweg-ID je Kunde für Behörden.
+- Lexware: Rechnungen werden weiter als Entwurf übertragen und dort abgeschlossen; die Liste zeigt ehrlich „In Lexware (Entwurf)“.
+
+## v1.18.0 – 30.10.2026
+- Monatsübersicht nach Paketen berechnet für umgestellte Kunden UVP und EK je Position und ist dort Grundlage der Monatsrechnung („Positionen“ aufklappbar).
+- Mengen werden automatisch gezählt (täglicher Zähllauf): Ladepunkte mit mindestens einem aktiven Tag, Liegenschaften, abgerechnete Ladevorgänge, Pakete taggenau anteilig, Remote-Support, Support je 15 Min., Einrichtung im Aktivierungsmonat.
+- Support-Sitzungen über 4 Stunden oder ohne Ende werden nicht automatisch berechnet, sondern als „Prüfen“ markiert.
+- Freigegebene Partnerrabatte mindern den EK; Summen je Partner und für Direktkunden.
+- Neue Spalte „Änderung zum Vormonat“; Mengenänderungen über 50 % markieren den Entwurf gelb. Nachträgliche Mengen werden im nächsten Lauf nachberechnet.
+- Partner sehen Mengenänderungen ihrer Kunden einmal täglich gesammelt unter Abrechnung.
+- Neue Kunden werden ab Anlage nach Paketen abgerechnet; Bestandskunden bleiben unverändert.
+
+## v1.17.0 – 30.10.2026
+- „Paket buchen“ belegt den Preis automatisch aus der Preisliste vor (Direktkunde UVP, Partnerkunde EK); abweichende Preise nur mit Begründung, gekennzeichnet als „individueller Preis“.
+- Neu buchbar: „Einrichtung (einmalig)“. Ladepunkte und weitere Liegenschaften werden nicht mehr manuell gebucht, sondern automatisch gezählt.
+- Voraussetzungen werden geprüft (Pakete 2/3/5 nur mit Paket 1, Paket 6 nur mit weiterem Paket oder Ladepunkten); ab 7 Liegenschaften Hinweis auf Paket 6.
+- Kündigen eines Pakets schaltet nur Module ab, die kein anderes Paket abdeckt und die nicht einzeln freigeschaltet sind.
+- Neuer Schalter „Abrechnung nach Paketen“ je Kunde mit Paketvorschlag; gilt ab dem Folgemonat, Modulpreise werden danach nur angezeigt.
+
+## v1.16.3 – 30.10.2026
+- Preisstammdaten aktualisiert: Ladepunkt 8 € / Partner 6 € pro Monat, Remote-Support-Flatrate 149 € / Partner 112 € – jetzt auch für Partner buchbar.
+- Preisänderungen werden mit Gültig-ab-Datum versioniert und automatisch protokolliert; bereits erzeugte Rechnungen bleiben unverändert.
+- Die bisherigen Bundles sind als „Altvertrag – nicht mehr buchbar“ gekennzeichnet; Kunden mit bestehender Buchung werden unverändert weiter abgerechnet.
+
+## v1.16.2 – 30.10.2026
+- Fernstart eines Ladevorgangs ist jetzt auch möglich, wenn das Fahrzeug bereits angesteckt ist (Status „Vorbereitung“).
+- Im OCPP-Protokoll werden reine Hersteller-Statusmeldungen (z. B. ELMI 0x0B0B0000) nicht mehr als Fehler markiert.
+
+## v1.16.1 – 30.10.2026
+- Alle OCPP-Ladestatus getrennt dargestellt, insbesondere Vorbereitung, Fahrzeug-/Stationspause, Beendet und Reserviert. Offene Sitzungen überschreiben gemeldete Zustände nicht; Statusanzeige in Listen, Details, Karten, Widgets und Lade-App vereinheitlicht.
+
+## v1.16.0 – 30.10.2026
+- Neue Buchungen und Rechnungsauswahl bieten Pakete und Zusatzleistungen statt einzelner Module/Lizenzen.
+- Ladeinfrastruktur: 8 € netto pro Ladepunkt und Monat für neue Verkäufe; bestehende Verträge und Preise bleiben unverändert.
+- Remote-Support-Flatrate für direkte Kunden; ohne Partnerpreis nicht im Partnerverkauf verfügbar.
+
+## v1.15.0 – 30.10.2026
+- Lizenzverkauf: Abrechnung je Modul/Paket oder Mengenlizenz einmalig, monatlich, quartalsweise oder halbjährlich; neue Verkäufe zeitanteilig als Entwurf.
+- Partner-Endkundenrechnungen mit eigenen Absenderdaten, Nummernkreis, PDF, bewusster E-Mail-Freigabe und SEPA-Export. AICONO-Einkaufsentwürfe bleiben getrennt.
+- Täglicher Abrechnungslauf holt fällige Zeiträume nach; bestehende Verträge werden nicht automatisch umgestellt.
+
 ## v1.14.0 – 29.10.2026
 - Rechnungen im AICONO-GmbH-Branding: PDF mit allen Pflichtangaben, fortlaufender Rechnungsnummer und ausgewiesener Umsatzsteuer, Versand per E-Mail direkt aus dem Portal.
 - Neu: freie Rechnungen mit eigenen Positionen an Kunden oder Partner; Absenderdaten unter „Rechnungsabsender“ pflegbar.

@@ -8,6 +8,8 @@ export interface ModuleBundle {
   description: string | null;
   price_monthly: number;
   is_active: boolean;
+  /** false = Altvertrag – nicht mehr neu buchbar, Bestandsbuchungen laufen weiter */
+  bookable: boolean;
   created_at: string;
   updated_at: string;
 }

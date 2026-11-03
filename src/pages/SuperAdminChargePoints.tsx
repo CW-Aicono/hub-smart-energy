@@ -1,3 +1,5 @@
+import { CHARGE_POINT_STATUS_META, getChargePointStatusMeta } from "@/lib/chargePointStatusPresentation";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,16 +25,10 @@ import { format } from "date-fns";
 import { fmtKw, fmtKwh, normalizeConnectorStatus } from "@/lib/formatCharging";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
-const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
-  available: { label: "Verfügbar", variant: "default", icon: Zap },
-  charging: { label: "Belegt", variant: "secondary", icon: PlugZap },
-  faulted: { label: "Fehler", variant: "destructive", icon: AlertTriangle },
-  unavailable: { label: "Nicht verfügbar", variant: "outline", icon: ZapOff },
-  offline: { label: "Offline", variant: "outline", icon: WifiOff },
-  unconfigured: { label: "Nicht konfiguriert", variant: "outline", icon: Settings },
-};
+const STATUS_CONFIG = CHARGE_POINT_STATUS_META;
 
 export default function SuperAdminChargePoints() {
+  const { t } = useTranslation();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { tenants } = useTenants();
@@ -69,13 +65,13 @@ export default function SuperAdminChargePoints() {
         .sort((a, b) => a.connector_id - b.connector_id)
         .map((c) => ({
           connectorId: c.connector_id,
-          status: !wsOnline ? "offline" : (() => { const r = normalizeConnectorStatus(c.status, wsOnline); return activeIds.has(c.connector_id) && r !== "available" ? "charging" : r; })(),
+          status: normalizeConnectorStatus(c.status, wsOnline),
         }));
     }
     const count = Math.max(1, cp.connector_count || 1);
     return Array.from({ length: count }, (_, i) => ({
       connectorId: i + 1,
-      status: !wsOnline ? "offline" : (() => { const r = normalizeConnectorStatus(cp.status, wsOnline); return activeIds.has(i + 1) && r !== "available" ? "charging" : r; })(),
+      status: normalizeConnectorStatus(cp.status, wsOnline),
     }));
   };
 
@@ -93,7 +89,7 @@ export default function SuperAdminChargePoints() {
     const q = search.trim().toLowerCase();
     return chargePoints.filter((cp) => {
       if (tenantFilter !== "all" && cp.tenant_id !== tenantFilter) return false;
-      if (statusFilter && getEffectiveStatus(cp) !== statusFilter) return false;
+      if (statusFilter && !getConnectorStatuses(cp).some((c) => c.status === statusFilter)) return false;
       if (!q) return true;
       return [cp.name, cp.ocpp_id, cp.address, tenantName(cp.tenant_id)]
         .filter(Boolean)
@@ -137,7 +133,7 @@ export default function SuperAdminChargePoints() {
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Ladepunkte</h1>
                 <p className="text-sm text-muted-foreground">
-                  Gesamtübersicht aller Ladepunkte über alle Mandanten — für den Service-Zugriff
+                  Gesamtübersicht aller Ladepunkte über alle Tenants — für den Service-Zugriff
                 </p>
               </div>
             </div>
@@ -153,7 +149,7 @@ export default function SuperAdminChargePoints() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Suchen (Name, OCPP-ID, Mandant, Adresse)"
+                placeholder="Suchen (Name, OCPP-ID, Tenant, Adresse)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -162,10 +158,10 @@ export default function SuperAdminChargePoints() {
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
                 <SelectTrigger className="w-[240px]">
-                  <SelectValue placeholder="Alle Mandanten" />
+                  <SelectValue placeholder="Alle Tenants" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle Mandanten</SelectItem>
+                  <SelectItem value="all">Alle Tenants</SelectItem>
                   {tenants.map((t: any) => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
@@ -189,7 +185,7 @@ export default function SuperAdminChargePoints() {
                 className="cursor-pointer"
                 onClick={() => setStatusFilter(statusFilter === key ? null : key)}
               >
-                {cfg.label} ({(statusCounts[key] ?? 0).toLocaleString("de-DE")})
+                {t(cfg.labelKey)} ({(statusCounts[key] ?? 0).toLocaleString("de-DE")})
               </Badge>
             ))}
           </div>
@@ -212,7 +208,7 @@ export default function SuperAdminChargePoints() {
                   <TableHeader>
                     <TableRow>
                       <SortableHead sortKey="name" sort={sort} onToggle={toggle}>Name</SortableHead>
-                      <SortableHead sortKey="tenant_id" sort={sort} onToggle={toggle}>Mandant</SortableHead>
+                      <SortableHead sortKey="tenant_id" sort={sort} onToggle={toggle}>Tenant</SortableHead>
                       <TableHead>Stecker</TableHead>
                       <TableHead>Status</TableHead>
                       <SortableHead sortKey="ocpp_id" sort={sort} onToggle={toggle}>OCPP-ID</SortableHead>
@@ -227,7 +223,7 @@ export default function SuperAdminChargePoints() {
                     {sorted.map((cp) => {
                       const perConnector = getConnectorStatuses(cp);
                       const effective = getEffectiveStatus(cp);
-                      const cfg = STATUS_CONFIG[effective] || STATUS_CONFIG.offline;
+                      const cfg = STATUS_CONFIG[effective as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.offline;
                       const active = activeSessions.find((s) => s.charge_point_id === cp.id);
                       return (
                         <TableRow key={cp.id}>
@@ -247,7 +243,7 @@ export default function SuperAdminChargePoints() {
                           </TableCell>
                           <TableCell>
                             <StatusLiveDataHover chargePointId={cp.id}>
-                              <Badge variant={cfg.variant} className="cursor-help">{cfg.label}</Badge>
+                              <Badge variant={cfg.variant} className="cursor-help">{t(cfg.labelKey)}</Badge>
                             </StatusLiveDataHover>
                             {active && (
                               <span className="ml-2 text-xs text-muted-foreground">{fmtKwh(active.energy_kwh, 1)}</span>
@@ -266,7 +262,7 @@ export default function SuperAdminChargePoints() {
                             <RowActions
                               items={[
                                 { label: "Details & OCPP-Log", icon: ScrollText, onClick: () => setDetail(cp) },
-                                { label: "Zum Mandanten", icon: ExternalLink, onClick: () => navigate(`/super-admin/tenants/${cp.tenant_id}`) },
+                                { label: "Zum Tenants", icon: ExternalLink, onClick: () => navigate(`/super-admin/tenants/${cp.tenant_id}`) },
                               ]}
                             />
                           </TableCell>
@@ -289,7 +285,7 @@ export default function SuperAdminChargePoints() {
           {detail && (
             <div className="space-y-6 mt-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-muted-foreground">Mandant</span><div>{tenantName(detail.tenant_id)}</div></div>
+                <div><span className="text-muted-foreground">Tenant</span><div>{tenantName(detail.tenant_id)}</div></div>
                 <div><span className="text-muted-foreground">OCPP-ID</span><div className="font-mono text-xs">{detail.ocpp_id || "—"}</div></div>
                 <div><span className="text-muted-foreground">Hersteller / Modell</span><div>{[detail.vendor, detail.model].filter(Boolean).join(" / ") || "—"}</div></div>
                 <div><span className="text-muted-foreground">Max. Leistung</span><div>{fmtKw(detail.max_power_kw)}</div></div>
@@ -306,10 +302,10 @@ export default function SuperAdminChargePoints() {
                 <div className="text-sm font-medium mb-2">Stecker</div>
                 <div className="flex flex-wrap gap-2">
                   {getConnectorStatuses(detail).map((c) => {
-                    const cfg = STATUS_CONFIG[c.status] || STATUS_CONFIG.offline;
+                    const cfg = STATUS_CONFIG[c.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.offline;
                     return (
                       <Badge key={c.connectorId} variant={cfg.variant}>
-                        #{c.connectorId} · {cfg.label}
+                        #{c.connectorId} · {t(cfg.labelKey)}
                       </Badge>
                     );
                   })}

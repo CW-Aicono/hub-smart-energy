@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { UserCircle, LayoutDashboard, Building2, LogOut, Briefcase, Users, Receipt, Cpu, ListChecks, Palette, BarChart3, PiggyBank } from "lucide-react";
+import { UserCircle, LayoutDashboard, Building2, LogOut, Briefcase, Users, Receipt, Cpu, ListChecks, Palette, BarChart3, PiggyBank, Settings } from "lucide-react";
 import { useAreaAccess } from "@/hooks/useAreaAccess";
 import { setAreaPreference } from "@/lib/areaPreference";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ export default function PartnerSidebar() {
     { to: "/partner/reporting", icon: BarChart3, label: "Reporting", show: isPartnerAdmin || permissions.viewReporting || permissions.viewBilling },
     { to: "/partner/billing", icon: Receipt, label: "Abrechnung", show: isPartnerAdmin || permissions.viewBilling },
     { to: "/partner/savings-share", icon: PiggyBank, label: "Gain-Sharing", show: isPartnerAdmin || permissions.viewBilling || permissions.viewReporting },
-    { to: "/partner/branding", icon: Palette, label: "Branding", show: isPartnerAdmin || permissions.manageBranding },
+    { to: "/partner/settings", icon: Settings, label: "Partner-Einstellungen", show: isPartnerAdmin || permissions.manageBranding },
     { to: "/partner/members", icon: Users, label: "Partner-User", show: isPartnerAdmin || permissions.manageMembers },
     { to: "/partner/sales/catalog", icon: Cpu, label: "Geräte-Katalog", show: permissions.manageSalesCatalog },
     { to: "/partner/sales/rules", icon: ListChecks, label: "Auswahl-Regeln", show: permissions.manageSalesCatalog },

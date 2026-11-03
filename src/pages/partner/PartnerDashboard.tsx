@@ -3,15 +3,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Briefcase, Receipt } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
+import { openPurchaseTotal } from "@/lib/partnerPriceList";
 
 interface Stats {
   tenants: number;
   members: number;
+  openTotal: number;
+  openCount: number;
 }
 
 export default function PartnerDashboard() {
   const { partnerId, partnerName } = usePartnerAccess();
-  const [stats, setStats] = useState<Stats>({ tenants: 0, members: 0 });
+  const [stats, setStats] = useState<Stats>({ tenants: 0, members: 0, openTotal: 0, openCount: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,14 +24,19 @@ export default function PartnerDashboard() {
     }
     let cancelled = false;
     (async () => {
-      const [tenantsRes, membersRes] = await Promise.all([
+      const [tenantsRes, membersRes, invRes] = await Promise.all([
         supabase.from("tenants").select("id", { count: "exact", head: true }).eq("partner_id", partnerId),
         supabase.from("partner_members").select("id", { count: "exact", head: true }).eq("partner_id", partnerId),
+        // Offene AICONO-Einkaufsrechnungen an diesen Partner
+        supabase.from("tenant_invoices").select("status, document_type, amount").eq("partner_id", partnerId),
       ]);
+      const open = openPurchaseTotal((invRes.data ?? []) as any);
       if (cancelled) return;
       setStats({
         tenants: tenantsRes.count ?? 0,
         members: membersRes.count ?? 0,
+        openTotal: open.total,
+        openCount: open.count,
       });
       setLoading(false);
     })();
@@ -41,7 +49,12 @@ export default function PartnerDashboard() {
     { label: "Eigene Tenants", value: stats.tenants, icon: Building2 },
     { label: "Partner-User", value: stats.members, icon: Users },
     { label: "Sales-Projekte", value: "—", icon: Briefcase },
-    { label: "Offene Abrechnung", value: "—", icon: Receipt },
+    {
+      label: "Offene Abrechnung",
+      value: stats.openTotal.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €",
+      hint: stats.openCount === 1 ? "1 offene AICONO-Rechnung" : `${stats.openCount.toLocaleString("de-DE")} offene AICONO-Rechnungen`,
+      icon: Receipt,
+    },
   ];
 
   return (
@@ -60,6 +73,7 @@ export default function PartnerDashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold">{loading ? "…" : c.value}</p>
+              {"hint" in c && c.hint && !loading && <p className="text-xs text-muted-foreground mt-1">{c.hint}</p>}
             </CardContent>
           </Card>
         ))}

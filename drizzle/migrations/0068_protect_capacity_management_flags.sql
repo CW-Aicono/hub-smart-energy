@@ -1,0 +1,3 @@
+CREATE OR REPLACE FUNCTION public.guard_capacity_management_flags() RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $f$ BEGIN
+IF (NEW.charge_point_capacity_managed IS DISTINCT FROM OLD.charge_point_capacity_managed OR NEW.location_capacity_managed IS DISTINCT FROM OLD.location_capacity_managed) AND current_user NOT IN ('postgres','supabase_admin','service_role') THEN RAISE EXCEPTION 'Kapazitätsverwaltung wird nur durch Paketbuchungen geändert'; END IF; RETURN NEW; END $f$;
+CREATE OR REPLACE TRIGGER guard_capacity_management_flags BEFORE UPDATE OF charge_point_capacity_managed,location_capacity_managed ON public.tenants FOR EACH ROW EXECUTE FUNCTION public.guard_capacity_management_flags();

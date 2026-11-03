@@ -1,5 +1,70 @@
 # Roadmap
 
+## Partner-Freigaben in Tenant-Paketauswahl (02.11.)
+- [x] v1.35.1: Neue Partner-Freigaben beim Öffnen/Fokus und alle 15 Sekunden im offenen Buchungsfenster aktualisieren; Portal-Auswahl nach Partner des ausgewählten Tenants eingrenzen.
+- [x] 13 Tests erfolgreich; angemeldet bei Bolan Test Monitoring + Analyse auswählbar, Vorschau 148 €, Auswahl nach Aktualisierung erhalten. Handbuch in vier Sprachen gepflegt; keine Buchung oder Rechnung ausgelöst.
+
+## Befristeter Paketrabatt (02.11.)
+- [x] v1.35.0: Prozent-Rabatt dauerhaft oder mit Zeitraum im Halbmonatsraster; Vorschau und Folgerechnungen konsistent, EK und Altverträge unverändert.
+- [x] Ladeinfrastruktur-Hinweis mit Preisen, Stichpunkten und Bestandsdetails; vier Sprachen, Handbuch und Version gepflegt.
+- [x] Angemeldete Probebuchung: Remote-Support 10 % vom 16.–30.11.; 141,55 € Endkunden-Entwurf und unverändert 112 € EK in Rechnungsliste geprüft. Probebuchung und zwei Prüfentwürfe entfernt, nichts versendet.
+
+## Test-Tenant Bolan löschen (02.11.)
+- [x] Bolan GmbH I Test auf Nutzerwunsch gelöscht; keine Rechnungen, Paketbuchungen oder Benutzerprofile mehr vorhanden.
+
+## Buchbare Mengen für Tenant-Pakete (02.11.)
+- [x] v1.34.0: Mengenwahl für Ladepunkte und weitere Liegenschaften, mit korrektem VK/EK, gemeinsamer Rechnung und Freischaltungen; feste Obergrenzen und Schutz vor Doppelabrechnung, Alt-Tenants unverändert.
+- [x] 67 Tests erfolgreich; angemeldete Buchung von 4 Ladepunkten + 2 weiteren Liegenschaften mit 10 % Rabatt geprüft (99 € VK / 82 € EK), Prüfbuchungen/Entwürfe/Freischaltungen danach entfernt. Handbuch in vier Sprachen, Version und Hinweise aktualisiert; nichts versendet.
+
+## Testdaten Bolan zurücksetzen (02.11.)
+- [x] Einen Endkunden- und sieben Einkaufs-Rechnungsentwürfe sowie sechs Bolan-Paket-/Zusatzleistungsbuchungen mit Abrechnungsereignissen entfernt; Tenant und Freischaltungen erhalten, keine App-Verhaltensänderung.
+
+## Gemeinsame Paket-Rechnung und EMS-Vorschau (02.11.)
+- [x] v1.33.0: Gleichzeitig gebuchte Pakete je Tenant in einem Entwurf zusammenfassen, Wiederholungen ohne Duplikate; Migration 0066 angewandt und geprüft.
+- [x] PDF-Rechnungsvorschau im EMS per Augen-Symbol vor Freigabe/Versand, angemeldet mit Bolan geprüft; sechs Positionen, 825,00 € netto, weiterhin Entwurf und unversendet. Partner-Absender noch unvollständig, Versandprüfung bleibt gesperrt wie bisher.
+- [x] 44 Tests erfolgreich (echte SQL-Funktion lokal: Bündelung, EK/VK, Wiederholungen, ausgestellte Rechnungen, Folgeperioden); Handbuch in vier Sprachen und Versionshinweise aktualisiert. Keine zusätzliche reale Paketbuchung ausgelöst.
+
+## Paketstart und prozentualer VK-Rabatt (02.11.)
+- [x] v1.32.0: Startdatum auswählbar, Vorschau und Buchung verwenden dasselbe Datum.
+- [x] Rabatt je Position editierbar und mit Endkunden-VK synchronisiert; globaler Rabatt aktualisiert auch bearbeitete Preise.
+- [x] 40 Tests erfolgreich; angemeldet VK/Rabatt und Start 16.11. (44,55 €) sowie Datums-Vorprüfung geprüft, Handbuch in vier Sprachen und Versionshinweise aktualisiert. Keine Buchung/Rechnung erzeugt; vollständige Rechnungserstellung nicht geprüft.
+
+## Abrechnung v1.30.0 (02.11.)
+- [x] Kommune/Industrie entfernt, alle Tenants Industrie
+- [x] Mehrere Pakete gleichzeitig buchbar
+- [x] Partner-Endkundenrabatt (% auf VK)
+- [x] VK/EK/Marge detailliert; Partner-VK-Vorbelegung korrigiert
+- [x] Halbmonatsraster statt taggenau
+
+## Individuelle Rechnungsposten (02.11.)
+- [x] v1.29.0: Eigene Posten unter Paketauswahl; einmalige/monatliche/quartalsweise/halbjährliche Entwürfe im bestehenden täglichen Lauf. 39 Tests erfolgreich, angemeldete Erstellung mit zwei Posten (248,34 € anteilig; nächste Periode 01.12.) und Anzeige im Portal geprüft. Prüfdaten entfernt; keine Rechnung versendet. Künftiger Kalendertag und Partner-Erstellung nicht Ende-zu-Ende geprüft.
+
+## Automatische Paketverkaufsrechnungen (31.10.)
+- [x] v1.27.4: Automatische Entwürfe bei monatlichem AICONO-Verkauf und einmaligem Partnerverkauf angemeldet geprüft; täglicher Folgelauf aktiv und erfolgreich. Rechnungserstellung im Buchungsbutton und Handbuch verdeutlicht; Freigabe/Versand bleiben manuell.
+
+## Ladestatus (30.10.)
+- [x] v1.16.1: Alle OCPP-Zustände getrennt anzeigen; Stationsmeldungen nicht durch offene Sitzungen überschreiben. 23 Tests erfolgreich, angemeldete ELMI-Detailansicht und neun Zustände in öffentlicher Prüfansicht verifiziert; vier Sprachen gepflegt. Keine Stationskonfiguration oder Fernbefehle geändert.
+- [x] v1.16.2: Fernstart auch bei „Vorbereitung“ (Fahrzeug angesteckt) zulässig; ELMI-Statuscode 0x0B0B0000 im Protokoll nicht mehr als Fehler markiert.
+
+## Paketabrechnung v5 (Dirk, 30.10.)
+- [x] Schritt 1 (v1.16.3): Ladepunkt-EK 6,00 €, Remote-Support-EK 112 € (partnerbuchbar), Preisversionierung mit Gültig-ab + Historie, Tooltip „Freischaltung Partner“, Bundles als „Altvertrag – nicht mehr buchbar“. 29 Tests, Build OK, DB-Werte verifiziert.
+- [x] Schritt 2 (v1.17.0): Preis-Vorbelegung + Begründungspflicht, Einrichtung einmalig, Mengen automatisch, Voraussetzungen/Hinweis Paket 6, Modul-Abschaltung beim Kündigen, Schalter „Abrechnung nach Paketen“ mit Vorschlag.
+- [x] Schritt 3 (v1.18.0): Monatsübersicht mit UVP/EK, tägliche Mengen-Snapshots, Support > 4 h „Prüfen“, Partnerrabatt auf EK, Änderung zum Vormonat/Gelbmarkierung, Nachberechnung, Partner-Hinweise, neue Kunden nach Paketen.
+- [x] Offen aus Schritt 3: Endkunden-Entwurf des Partners mit Partnerpreisen (v1.19.0).
+- [x] Schritt 4 (v1.19.0): Sammelrechnung Wiederverkauf, Provisionsgutschrift, Endkunden-Entwürfe mit eigenen Positionen, Warnung Direktrechnung, Eigenbedarf „An Partner“, Storno-Rechnung, ZUGFeRD in allen PDFs, Leitweg-ID, Lexware weiter als Entwurf.
+- [ ] Wartet auf Nutzer: eine erzeugte Rechnung mit einem ZUGFeRD-Prüfwerkzeug validieren (PDF/A-3-Container nicht zertifiziert); Lexware-Einstellung E-Rechnung prüfen
+- [x] Schritt 5 (v1.20.0): Paket-Preisliste mit EK/UVP/eigenem Preis/Marge je Segment, Rabattanfrage auf Pakete/Mengenpreise, Margen auf Paketbasis, Provision + Gutschriften, Kachel „Offene Abrechnung“.
+- [x] Schritt 6 (v1.21.0): Kunden-Ebene „Paket & Rechnungen“, Abnahmetests als automatische Tests.
+- [ ] Wartet auf Nutzer: Entscheidung, ob Einkaufspreise im Preiskatalog für Kunden-Logins gesperrt werden sollen
+- [ ] Wartet auf Nutzer: Lexware-Übertragung und SEPA-Export einer echten Paketrechnung auf Staging prüfen
+
+## Paketumstellung (30.10.)
+- [x] v1.16.0: Neue Buchungen und Rechnungsauswahl nur Pakete/Zusatzleistungen; monatliche Nettopreise, 8 € je Ladepunkt; Bestandsverträge unverändert. 39 Tests, angemeldete Portal-/Partnerauswahl und Vertrag mit anteiligem Entwurf (6,39 €) geprüft; Prüfdaten entfernt. Vorhandener Ladepunkt-Partner-EK 5,25 € unverändert, da kein neuer genannt.
+
+## Partnerabrechnung und Ratierlichkeit (30.10.)
+- [x] v1.15.0: Intervalle je Lizenz, getrennte Endkunden-/EK-Entwürfe, zeitanteilige Ergänzungen, täglicher Nachlauf, Partnerabsender/Freigabe/PDF/E-Mail/SEPA. Angemeldete Testverkäufe, zwei Kunden, Retry und Sperre unvollständiger Absender geprüft; Testdaten entfernt.
+- [ ] Wartet auf Nutzer: Partner-Rechnungsabsender vervollständigen, anschließend Freigabe/PDF-Ende-zu-Ende prüfen; Live-Deploy und Live-Prüfung offen. Versand und Bankabbuchung nicht ausgeführt.
+
 - [x] Portal-Navigation: eigene Symbole, Module & Bundles gemeinsam mit zwei Reitern (v1.8.1; angemeldeter Menü- und Reiterwechsel geprüft)
 
 - [x] Benutzerliste repariert; Portal-Admin, Partner-Admin, Kunden-Admin vereinheitlicht (v1.6.2; 16 Tests erfolgreich, angemeldete Browserprüfung mangels Sitzung offen)
@@ -78,3 +143,8 @@
 - [ ] Energieanalyse leer auf Live – Prüfbefehle ausführen, dann Fix (wartet auf Nutzer)
 - [ ] E-Mail-Adresse ändern (Profil + Admin)
 - [ ] Inbetriebnahme-/Abnahmeprotokoll – Musterprotokolle/Mail benötigt (wartet auf Nutzer)
+
+- [x] Einrichtungsphase für neue Tenants (v1.36.0)
+- [x] Ladestations-Vorlagen + Vestel Gemini (v1.37.0)
+- [x] Vestel Gemini Lastmanagement-Register (v1.37.1)
+- [ ] HA-Add-on (ha-addons-Repo): Bridge-Änderungen übernehmen (dlm_only, Failsafe, Alive)

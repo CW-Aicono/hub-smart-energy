@@ -25,7 +25,7 @@ const SuperAdminOcppControl = () => {
   const { user, loading } = useAuth();
   const { t } = useSATranslation();
   const { tenants } = useTenants();
-  // Super-Admin hat keinen eigenen Mandanten — Ladepunkte deshalb global laden.
+  // Super-Admin hat keinen eigenen Tenants — Ladepunkte deshalb global laden.
   const { data: chargePoints = [] } = useQuery({
     queryKey: ["sa-ocpp-charge-points"],
     queryFn: async () => {
@@ -120,7 +120,7 @@ const SuperAdminOcppControl = () => {
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Suchen (Mandant, Ladepunkt, ID-Tag, Status)…"
+                  placeholder="Suchen (Tenant, Ladepunkt, ID-Tag, Status)…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-8 w-72 h-9 text-sm"
@@ -129,10 +129,10 @@ const SuperAdminOcppControl = () => {
               <Building2 className="h-4 w-4 opacity-60" />
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
                 <SelectTrigger className="w-56 h-9 text-sm">
-                  <SelectValue placeholder="Mandant filtern" />
+                  <SelectValue placeholder="Tenant filtern" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle Mandanten</SelectItem>
+                  <SelectItem value="all">Alle Tenants</SelectItem>
                   {tenants.map(t => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
@@ -172,7 +172,7 @@ const SuperAdminOcppControl = () => {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <SortableHead label="Mandant" sortKey="tenant" sort={sort} onToggle={toggle} />
+                            <SortableHead label="Tenant" sortKey="tenant" sort={sort} onToggle={toggle} />
                             <SortableHead label="Ladepunkt" sortKey="charge_point" sort={sort} onToggle={toggle} />
                             <SortableHead label="Start" sortKey="start" sort={sort} onToggle={toggle} />
                             <SortableHead label="Ende" sortKey="end" sort={sort} onToggle={toggle} />
@@ -215,7 +215,7 @@ const SuperAdminOcppControl = () => {
                 <CardContent className="flex flex-wrap items-center gap-3">
                   <Select value={logTenantId} onValueChange={(v) => { setLogTenantId(v); setLogChargePointId(""); }}>
                     <SelectTrigger className="w-64 h-9 text-sm">
-                      <SelectValue placeholder="Mandant wählen" />
+                      <SelectValue placeholder="Tenant wählen" />
                     </SelectTrigger>
                     <SelectContent>
                       {tenants.map(t => (
@@ -229,7 +229,7 @@ const SuperAdminOcppControl = () => {
                     disabled={!logTenantId}
                   >
                     <SelectTrigger className="w-72 h-9 text-sm">
-                      <SelectValue placeholder={logTenantId ? "Ladepunkt wählen" : "Zuerst Mandant wählen"} />
+                      <SelectValue placeholder={logTenantId ? "Ladepunkt wählen" : "Zuerst Tenant wählen"} />
                     </SelectTrigger>
                     <SelectContent>
                       {chargePoints
@@ -255,7 +255,7 @@ const SuperAdminOcppControl = () => {
               ) : (
                 <Card style={{ backgroundColor: `hsl(var(--sa-card))`, borderColor: `hsl(var(--sa-border))` }}>
                   <CardContent className="py-12 text-center text-sm" style={{ color: `hsl(var(--sa-muted-foreground))` }}>
-                    Bitte zuerst Mandant und Ladepunkt auswählen, um die letzten 200 OCPP-Nachrichten anzuzeigen.
+                    Bitte zuerst Tenant und Ladepunkt auswählen, um die letzten 200 OCPP-Nachrichten anzuzeigen.
                   </CardContent>
                 </Card>
               )}

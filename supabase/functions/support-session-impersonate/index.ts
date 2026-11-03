@@ -4,6 +4,7 @@
 // nicht vorhanden.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveSessionKind } from "../_shared/supportSessionKind.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,15 +87,16 @@ Deno.serve(async (req) => {
     // Tenant existiert?
     const { data: tenant, error: tenantErr } = await admin
       .from("tenants")
-      .select("id, name, remote_support_enabled")
+      .select("id, name, remote_support_enabled, setup_status")
       .eq("id", targetTenantId)
       .maybeSingle();
     if (tenantErr || !tenant) return json({ error: "Tenant not found" }, 404);
 
     // Kundenzustimmung ist Pflicht – gilt auch für Super-Admins.
-    if (!(tenant as { remote_support_enabled?: boolean }).remote_support_enabled) {
-      return json({ error: "Kunde hat Remote-Zugriff nicht freigegeben." }, 403);
-    }
+    // Ausnahme nur während der geplanten Einrichtungsphase (vor Übergabe).
+    const kindResult = resolveSessionKind(tenant as { setup_status?: string; remote_support_enabled?: boolean });
+    if ("error" in kindResult) return json({ error: kindResult.error }, 403);
+    const sessionKind = kindResult.kind;
 
     // 3) Support-User lazy anlegen (oder vorhandenen verwenden)
     let supportUserId: string | null = null;
@@ -182,7 +184,8 @@ Deno.serve(async (req) => {
         impersonated_user_id: supportUserId,
         started_at: new Date().toISOString(),
         expires_at: expiresAt,
-        reason,
+        reason: sessionKind === "setup" ? "Einrichtung (vor Übergabe)" : reason,
+        session_kind: sessionKind,
       })
       .select("id")
       .single();
@@ -215,6 +218,7 @@ Deno.serve(async (req) => {
       session_id: session.id,
       tenant_id: targetTenantId,
       tenant_name: tenant.name,
+      session_kind: sessionKind,
       expires_at: expiresAt,
       access_token: verified.session.access_token,
       refresh_token: verified.session.refresh_token,

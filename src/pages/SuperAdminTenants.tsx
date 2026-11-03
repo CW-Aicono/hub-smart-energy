@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import TenantLifecycleActions, { TenantStatusBadge } from "@/components/super-admin/TenantLifecycleActions";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
-type SortKey = "name" | "slug" | "status" | "email" | "created_at";
+type SortKey = "name" | "slug" | "partner" | "status" | "email" | "created_at";
 
 const SuperAdminTenants = () => {
   const { user, loading: authLoading } = useAuth();
@@ -55,7 +55,18 @@ const SuperAdminTenants = () => {
     },
   });
 
+  const { data: partnerNames = {} } = useQuery({
+    queryKey: ["sa-tenants-partner-names"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("partners").select("id, name");
+      if (error) throw error;
+      return Object.fromEntries((data ?? []).map((p: any) => [p.id, p.name])) as Record<string, string>;
+    },
+  });
+  const partnerOf = (tnt: any) => (tnt.partner_id && partnerNames[tnt.partner_id]) || "";
+
   const filtered = tenants.filter((tnt) =>
+    partnerOf(tnt).toLowerCase().includes(search.toLowerCase()) ||
     tnt.name.toLowerCase().includes(search.toLowerCase()) ||
     tnt.slug.toLowerCase().includes(search.toLowerCase())
   );
@@ -64,6 +75,7 @@ const SuperAdminTenants = () => {
     switch (k) {
       case "name": return r.name;
       case "slug": return r.slug;
+      case "partner": return partnerOf(r);
       case "status": return r.status;
       case "email": return r.contact_email ?? "";
       case "created_at": return r.created_at ? new Date(r.created_at) : null;
@@ -101,6 +113,8 @@ const SuperAdminTenants = () => {
           contact_email: newEmail || adminEmail,
           partner_id: newPartnerId ? newPartnerId : null,
           support_owner: newPartnerId ? "partner" : "platform",
+          tenant_type: "gewerbe_industrie",
+          is_kommune: false,
         })
         .select()
         .single();
@@ -127,7 +141,7 @@ const SuperAdminTenants = () => {
       if (!result?.success) throw new Error(result?.error || "Einladung fehlgeschlagen");
 
       toast({
-        title: "Mandant angelegt",
+        title: "Tenant angelegt",
         description: `Eine Einladungsmail wurde an ${adminEmail} gesendet.`,
       });
       setDialogOpen(false);
@@ -174,7 +188,7 @@ const SuperAdminTenants = () => {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                     <Building2 className="h-4 w-4" />
-                    Mandant
+                    Tenant
                   </div>
                   <div className="space-y-2">
                     <Label>{t("common.name")} *</Label>
@@ -188,7 +202,7 @@ const SuperAdminTenants = () => {
                   <div className="space-y-2">
                     <Label>{t("tenants.contact_email")}</Label>
                     <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="info@firma.de" type="email" />
-                    <p className="text-xs text-muted-foreground">Allgemeine Kontaktadresse des Mandanten (optional)</p>
+                    <p className="text-xs text-muted-foreground">Allgemeine Kontaktadresse des Tenants (optional)</p>
                   </div>
                   <div className="space-y-2">
                     <Label className="flex items-center gap-1">
@@ -207,7 +221,7 @@ const SuperAdminTenants = () => {
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">Wird kein Partner ausgewählt, betreut AICONO den Mandanten direkt.</p>
+                    <p className="text-xs text-muted-foreground">„Direkt AICONO“ legt den Tenant als Direkt-Tenant der AICONO an.</p>
                   </div>
                 </div>
 
@@ -243,7 +257,7 @@ const SuperAdminTenants = () => {
                   disabled={creating || !newName || !newSlug || !adminEmail}
                   className="w-full"
                 >
-                  {creating ? "Wird angelegt..." : "Mandant anlegen & Einladung senden"}
+                  {creating ? "Wird angelegt..." : "Tenant anlegen & Einladung senden"}
                 </Button>
               </div>
             </DialogContent>
@@ -258,6 +272,7 @@ const SuperAdminTenants = () => {
                   <TableRow>
                     <SortableHead label={t("common.name")} sortKey="name" sort={sort} onToggle={toggle} />
                     <SortableHead label="Slug" sortKey="slug" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Partner" sortKey="partner" sort={sort} onToggle={toggle} />
                     <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
                     <SortableHead label={t("common.email")} sortKey="email" sort={sort} onToggle={toggle} />
                     <SortableHead label={t("common.created")} sortKey="created_at" sort={sort} onToggle={toggle} />
@@ -266,14 +281,15 @@ const SuperAdminTenants = () => {
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
                   ) : sorted.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("tenants.not_found")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{t("tenants.not_found")}</TableCell></TableRow>
                   ) : (
                     sorted.map((tenant: any) => (
                       <TableRow key={tenant.id} className="cursor-pointer" onClick={() => navigate(`/super-admin/tenants/${tenant.id}`)}>
                         <TableCell className="font-medium">{tenant.name}</TableCell>
                         <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
+                        <TableCell>{partnerOf(tenant) || <span className="text-muted-foreground">Direkt-Tenant</span>}</TableCell>
                         <TableCell><TenantStatusBadge status={tenant.status} /></TableCell>
                         <TableCell className="text-muted-foreground">{tenant.contact_email || "–"}</TableCell>
                         <TableCell className="text-muted-foreground">{new Date(tenant.created_at).toLocaleDateString("de-DE")}</TableCell>
@@ -302,14 +318,14 @@ const SuperAdminTenants = () => {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setConfirmName(""); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mandant unwiderruflich löschen?</AlertDialogTitle>
+            <AlertDialogTitle>Tenant unwiderruflich löschen?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>
-                  Der Mandant <strong>{deleteTarget?.name}</strong> und alle zugehörigen Daten werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+                  Der Tenant <strong>{deleteTarget?.name}</strong> und alle zugehörigen Daten werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
                 </p>
                 <p className="text-sm">
-                  Bitte geben Sie zur Bestätigung den Namen des Mandanten ein:
+                  Bitte geben Sie zur Bestätigung den Namen des Tenants ein:
                 </p>
                 <Input
                   value={confirmName}

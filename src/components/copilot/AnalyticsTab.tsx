@@ -218,7 +218,7 @@ function PromptPresetEditor({
         <DialogHeader>
           <DialogTitle>{preset ? "Vorschlag bearbeiten" : "Neuer Vorschlag"}</DialogTitle>
           <DialogDescription className="text-xs">
-            Vorschläge sind für alle Nutzer dieses Mandanten sichtbar.
+            Vorschläge sind für alle Nutzer dieses Tenants sichtbar.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

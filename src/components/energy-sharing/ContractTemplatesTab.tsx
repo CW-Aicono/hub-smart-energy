@@ -130,7 +130,7 @@ export default function ContractTemplatesTab({ communityId }: Props) {
                       {t.template_kind === "liefer" ? "Liefervertrag" : "Nutzungsvertrag"}
                     </Badge>
                   </TableCell>
-                  <TableCell>{t.community_id ? "Diese Community" : <Badge variant="outline">Mandantenweit</Badge>}</TableCell>
+                  <TableCell>{t.community_id ? "Diese Community" : <Badge variant="outline">Tenant-weit</Badge>}</TableCell>
                   <TableCell>v{t.version}</TableCell>
                   <TableCell><Badge variant={t.is_active ? "default" : "secondary"}>{t.is_active ? "Aktiv" : "Inaktiv"}</Badge></TableCell>
                   <TableCell>

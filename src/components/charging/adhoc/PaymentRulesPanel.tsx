@@ -19,7 +19,7 @@ const currencySymbol = (c?: string) => ({ EUR: "€", CHF: "CHF", GBP: "£", USD
 
 
 const SCOPE_LABEL: Record<string, string> = {
-  tenant: "Mandant (Basis)",
+  tenant: "Tenant (Basis)",
   group: "Ladepunkt-Gruppe",
   charge_point: "Einzelner Ladepunkt",
 };
@@ -104,8 +104,8 @@ export default function PaymentRulesPanel() {
           <div>
             <h3 className="font-semibold">Zahlungsregeln</h3>
             <p className="text-sm text-muted-foreground">
-              Preauth-Betrag, Tarif und Limits — pro Mandant, Ladepunkt-Gruppe oder einzelnem Ladepunkt.
-              Die spezifischste Regel gewinnt (Ladepunkt {'>'} Gruppe {'>'} Mandant).
+              Preauth-Betrag, Tarif und Limits — pro Tenant, Ladepunkt-Gruppe oder einzelnem Ladepunkt.
+              Die spezifischste Regel gewinnt (Ladepunkt {'>'} Gruppe {'>'} Tenant).
             </p>
           </div>
           <Button onClick={openNew} size="sm" disabled={tariffs.length === 0}>
@@ -200,7 +200,7 @@ export default function PaymentRulesPanel() {
                           const tenantTaken = !editing.id && rules.some((r: any) => r.scope === "tenant");
                           return (
                             <SelectItem value="tenant" disabled={tenantTaken}>
-                              Mandant (Basis){tenantTaken ? " – bereits vergeben" : ""}
+                              Tenant (Basis){tenantTaken ? " – bereits vergeben" : ""}
                             </SelectItem>
                           );
                         })()}

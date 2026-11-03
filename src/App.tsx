@@ -24,6 +24,7 @@ import PartnerBilling from "@/pages/partner/PartnerBilling";
 import PartnerSalesCatalog from "@/pages/partner/PartnerSalesCatalog";
 import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
 import PartnerBranding from "@/pages/partner/PartnerBranding";
+import PartnerSettings from "./pages/partner/PartnerSettings";
 import PartnerReporting from "@/pages/partner/PartnerReporting";
 import PartnerTenantDetail from "@/pages/partner/PartnerTenantDetail";
 import PartnerSavingsShare from "@/pages/partner/PartnerSavingsShare";
@@ -67,7 +68,6 @@ const SuperAdminPartners = lazy(() => import("./pages/SuperAdminPartners"));
 const SuperAdminTenantDetail = lazy(() => import("./pages/SuperAdminTenantDetail"));
 const SuperAdminStatistics = lazy(() => import("./pages/SuperAdminStatistics"));
 const SuperAdminBilling = lazy(() => import("./pages/SuperAdminBilling"));
-const SuperAdminLicenses = lazy(() => import("./pages/SuperAdminLicenses"));
 const SuperAdminSavingsShare = lazy(() => import("./pages/SuperAdminSavingsShare"));
 const SuperAdminSupport = lazy(() => import("./pages/SuperAdminSupport"));
 const SuperAdminModulePricing = lazy(() => import("./pages/SuperAdminModulePricing"));
@@ -258,7 +258,7 @@ const App = () => (
                       <Route path="/super-admin/roles" element={<SA><SuperAdminRoles /></SA>} />
                       <Route path="/super-admin/board" element={<SA><SuperAdminBoard /></SA>} />
                       <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
-                      <Route path="/super-admin/licenses" element={<SA><SuperAdminLicenses /></SA>} />
+                      <Route path="/super-admin/licenses" element={<Navigate to="/super-admin/billing" replace />} />
                       <Route path="/super-admin/savings-share" element={<SA><SuperAdminSavingsShare /></SA>} />
                       <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
                       <Route path="/super-admin/bundles" element={<SA><SuperAdminBundles /></SA>} />
@@ -341,7 +341,8 @@ const App = () => (
                       <Route path="/partner/reporting" element={<PartnerLayout><PartnerReporting /></PartnerLayout>} />
                       <Route path="/partner/billing" element={<PartnerLayout><PartnerBilling /></PartnerLayout>} />
                       <Route path="/partner/savings-share" element={<PartnerLayout><PartnerSavingsShare /></PartnerLayout>} />
-                      <Route path="/partner/branding" element={<PartnerLayout><PartnerBranding /></PartnerLayout>} />
+                      <Route path="/partner/branding" element={<Navigate to="/partner/settings?tab=branding" replace />} />
+                      <Route path="/partner/settings" element={<PartnerLayout><PartnerSettings /></PartnerLayout>} />
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />
                       <Route path="/partner/sales/rules" element={<PartnerLayout><PartnerSalesRules /></PartnerLayout>} />

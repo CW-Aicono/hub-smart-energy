@@ -1,3 +1,5 @@
+import { CHARGE_POINT_STATUS_META, getChargePointStatusMeta } from "@/lib/chargePointStatusPresentation";
+import { useTranslation } from "@/hooks/useTranslation";
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -11,13 +13,7 @@ import { normalizeConnectorStatus } from "@/lib/formatCharging";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
 
-const connectorStatusConfig: Record<string, { label: string; color: string; icon: typeof Zap }> = {
-  available: { label: "Verfügbar", color: "bg-emerald-500", icon: Zap },
-  charging: { label: "Lädt", color: "bg-blue-500", icon: PlugZap },
-  unavailable: { label: "Belegt", color: "bg-muted-foreground", icon: ZapOff },
-  faulted: { label: "Gestört", color: "bg-destructive", icon: AlertTriangle },
-  offline: { label: "Offline", color: "bg-muted-foreground", icon: ZapOff },
-};
+const connectorStatusConfig = CHARGE_POINT_STATUS_META;
 
 /**
  * Liefert das menschen-lesbare Alter eines Zeitstempels — oder null.
@@ -55,6 +51,7 @@ interface Props {
 }
 
 export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, lastHeartbeat = null, lastWsPongAt = null, editable = false, onReorder }: Props) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -121,7 +118,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(connectors.length, 4)}, 1fr)` }}>
         {connectors.map((c, index) => {
           const effectiveStatus = normalizeConnectorStatus(c.status, wsConnected);
-          const cfg = connectorStatusConfig[effectiveStatus] || connectorStatusConfig.offline;
+          const cfg = getChargePointStatusMeta(effectiveStatus);
           const Icon = cfg.icon;
           const isSelected = selectedConnectorId === c.connector_id;
           const isEditing = editingId === c.id;
@@ -168,7 +165,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
                 </div>
               )}
               <div className="flex items-center justify-center gap-1.5 mb-1">
-                <span className={`h-2.5 w-2.5 rounded-full ${cfg.color}`} />
+                <span className={`h-2.5 w-2.5 rounded-full ${cfg.dotColor}`} />
                 <Icon className="h-4 w-4 text-muted-foreground" />
               </div>
               {isEditing ? (
@@ -197,7 +194,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
                   )}
                 </div>
               )}
-              <p className="text-[10px] text-muted-foreground">{cfg.label}</p>
+              <p className="text-[10px] text-muted-foreground">{t(cfg.labelKey)}</p>
               <p className="text-[10px] text-muted-foreground">{c.connector_type} · {c.max_power_kw} kW</p>
               <Tooltip>
                 <TooltipTrigger asChild>

@@ -7,10 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, FileDown, Loader2, Mail, Plus, Trash2 } from "lucide-react";
+import { Building2, FileDown, Loader2, Mail, Plus, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
-import { buildAiconoInvoicePdf, type AiconoBillingSettings, type InvoiceRecipient } from "@/lib/aiconoInvoicePdf";
-import { ALL_MODULES } from "@/hooks/useTenantModules";
+import { type AiconoBillingSettings, type InvoiceRecipient } from "@/lib/aiconoInvoicePdf";
+import { buildEInvoicePdf, downloadBlob } from "@/lib/eInvoicePdf";
+import { packageSaleCatalog } from "@/lib/packageSaleCatalog";
+import { InvoiceLineEditor } from "./InvoiceLineEditor";
+import { parseCustomInvoiceLines } from "@/lib/customInvoice";
 
 const db = supabase as any;
 
@@ -35,18 +38,20 @@ async function loadRecipient(inv: any): Promise<{ recipient: InvoiceRecipient; e
         contact: a.contact || null,
         street: [a.street, a.house_number].filter(Boolean).join(" ") || a.address || null,
         postalCity: [a.postal_code ?? a.zip, a.city].filter(Boolean).join(" ") || null,
-        country: a.country || null,
+        postalCode: a.postal_code ?? a.zip ?? null, city: a.city ?? null,
+        country: a.country || null, vatId: a.vat_id || null, email: a.email || p?.contact_email || null,
       },
       email: a.email || p?.contact_email || null,
     };
   }
-  const { data: t } = await db.from("tenants").select("name, contact_person, street, house_number, address, postal_code, city, contact_email").eq("id", inv.tenant_id).maybeSingle();
+  const { data: t } = await db.from("tenants").select("name, contact_person, street, house_number, address, postal_code, city, contact_email, leitweg_id").eq("id", inv.tenant_id).maybeSingle();
   return {
     recipient: {
-      name: t?.name ?? "Kunde",
+      name: t?.name ?? "Tenant",
       contact: t?.contact_person ? `z. Hd. ${t.contact_person}` : null,
       street: [t?.street, t?.house_number].filter(Boolean).join(" ") || t?.address || null,
       postalCity: [t?.postal_code, t?.city].filter(Boolean).join(" ") || null,
+      postalCode: t?.postal_code ?? null, city: t?.city ?? null, email: t?.contact_email ?? null, leitwegId: t?.leitweg_id ?? null,
     },
     email: t?.contact_email ?? null,
   };
@@ -66,11 +71,17 @@ async function ensureIssued(inv: any): Promise<any> {
 
 async function makePdf(inv: any, settings: AiconoBillingSettings) {
   const { recipient, email } = await loadRecipient(inv);
-  const doc = await buildAiconoInvoicePdf({ settings, recipient, invoice: inv });
-  return { doc, email };
+  let cancels_number: string | null = null;
+  if (inv.cancels_invoice_id) {
+    const { data } = await db.from("tenant_invoices").select("invoice_number").eq("id", inv.cancels_invoice_id).maybeSingle();
+    cancels_number = data?.invoice_number ?? null;
+  }
+  const pdf = await buildEInvoicePdf({ settings, recipient, invoice: { ...inv, cancels_number } });
+  return { pdf, email };
 }
 
 export function canUseAiconoInvoice(inv: any) {
+  if (inv.document_type === "cancellation") return !!inv.issued_at;
   return inv.document_type !== "subscription_notice" && Number(inv.amount) > 0 && (inv.issued_at || inv.status !== "voided");
 }
 
@@ -93,16 +104,9 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
     try {
       const cur = await ensureIssued(inv);
       if (!cur) return;
-      const { doc } = await makePdf(cur, settings);
-      const blob = doc.output("blob") as Blob;
-      const name = `Rechnung_${cur.invoice_number}.pdf`;
-      const download = () => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = name;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 30_000);
-      };
+      const { pdf } = await makePdf(cur, settings);
+      const name = `${cur.document_type === "cancellation" ? "Stornorechnung" : cur.document_type === "credit_note" ? "Gutschrift" : "Rechnung"}_${cur.invoice_number}.pdf`;
+      const download = () => downloadBlob(pdf.blob, name);
       // Browser blockieren Downloads nach längerer Wartezeit (Bestätigung + PDF-Erstellung).
       // Daher zusätzlich ein Button im Hinweis, der den Download per frischem Klick auslöst.
       download();
@@ -130,8 +134,8 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
     if (!issued || !settings) return;
     setBusy("mail");
     try {
-      const { doc } = await makePdf(issued, settings);
-      const pdf_base64 = (doc.output("datauristring") as string).split(",")[1];
+      const { pdf } = await makePdf(issued, settings);
+      const pdf_base64 = pdf.base64;
       const { data, error } = await supabase.functions.invoke("send-aicono-invoice", { body: { invoice_id: issued.id, to: mailTo, message: msg, pdf_base64 } });
       if (error || !data?.success) throw new Error(data?.error || error?.message || "Versand fehlgeschlagen");
       toast.success(`Rechnung ${issued.invoice_number} an ${mailTo} gesendet`);
@@ -140,8 +144,26 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
     } catch (e: any) { toast.error(e.message); } finally { setBusy(null); }
   };
 
+  const onCancel = async () => {
+    const lex = inv.lexware_invoice_id ? "\n\nDie Rechnung liegt auch in Lexware – dort bitte ebenfalls stornieren." : "";
+    if (!window.confirm(`Storno-Rechnung zu ${inv.invoice_number} erstellen?\n\nEs entsteht eine neue Rechnung mit negativen Beträgen und Bezug auf das Original; das Original wird als storniert markiert.${lex}`)) return;
+    setBusy("pdf");
+    try {
+      const { error } = await db.rpc("cancel_aicono_invoice", { p_invoice_id: inv.id });
+      if (error) throw error;
+      toast.success(`Storno-Rechnung zu ${inv.invoice_number} erstellt`);
+      refresh();
+    } catch (e: any) { toast.error(e.message); } finally { setBusy(null); }
+  };
+  const canCancel = !!inv.issued_at && inv.status !== "voided" && ["invoice", "credit_note"].includes(inv.document_type ?? "invoice");
+
   return (
     <div className="flex items-center justify-center gap-1">
+      {canCancel && (
+        <Button size="sm" variant="ghost" title="Storno-Rechnung erstellen" disabled={!!busy} onClick={onCancel}>
+          <Undo2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
       <Button size="sm" variant="ghost" title="PDF (AICONO GmbH)" disabled={!!busy} onClick={onPdf}>
         {busy === "pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
       </Button>
@@ -152,7 +174,7 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rechnung {issued?.invoice_number} per E-Mail senden</DialogTitle>
-            <DialogDescription>Das PDF im AICONO-Branding wird als Anhang verschickt.</DialogDescription>
+            <DialogDescription>Das PDF im AICONO-Branding mit eingebetteter E-Rechnung (ZUGFeRD) wird als Anhang verschickt.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1"><Label>Empfänger</Label><Input type="email" value={mailTo} onChange={(e) => setMailTo(e.target.value)} /></div>
@@ -196,27 +218,22 @@ export function ManualInvoiceDialog() {
     queryKey: ["manual-invoice-packages"], enabled: open,
     queryFn: async () => (await db.from("pricing_packages").select("code, name, uvp, ek, active, sort").eq("active", true).order("sort")).data ?? [],
   });
-  const { data: modPrices = [] } = useQuery({
-    queryKey: ["manual-invoice-module-prices"], enabled: open,
-    queryFn: async () => (await db.from("module_prices").select("module_code, price_monthly, partner_price_monthly")).data ?? [],
+  const { data: unitPrices = [] } = useQuery({
+    queryKey: ["manual-invoice-unit-prices"], enabled: open,
+    queryFn: async () => { const { data, error } = await db.from("pricing_unit_prices").select("code,name,uvp,ek,new_sale_uvp,partner_available"); if (error) throw error; return data ?? []; },
   });
   // Prefill only: price is the partner purchase price (EK) for partner invoices, otherwise the customer price; always editable.
   const isPartner = target === "partner";
-  const catalog = [
-    ...(pkgs as any[]).map((p) => ({ key: `pkg:${p.code}`, group: "Paket", label: p.name, price: Number(isPartner ? p.ek : p.uvp) || 0 })),
-    ...ALL_MODULES.map((m) => {
-      const mp = (modPrices as any[]).find((x) => x.module_code === m.code);
-      return { key: `mod:${m.code}`, group: "Modul", label: m.label, price: Number(isPartner ? mp?.partner_price_monthly : mp?.price_monthly) || 0 };
-    }),
-  ];
+  const catalog = packageSaleCatalog(pkgs, unitPrices, isPartner, true).map(p => ({ key: `${p.kind}:${p.code}`, group: p.kind === "package" ? "Paket" : "Zusatzleistung", label: p.name, price: isPartner ? p.ek : p.uvp }));
 
   const partnerTenants = (tenants as any[]).filter((t) => t.partner_id === partnerId);
   const net = lines.reduce((s, l) => s + Math.round(num(l.quantity) * num(l.unit_price) * 100) / 100, 0);
 
   const save = async () => {
-    if (!tenantId) return toast.error(target === "partner" ? "Bitte Partner und zugehörigen Kunden wählen" : "Bitte Kunden wählen");
-    const p_lines = lines.filter((l) => l.label.trim()).map((l) => ({ label: l.label.trim(), quantity: num(l.quantity), unit_price: num(l.unit_price) }));
-    if (p_lines.length === 0) return toast.error("Mindestens eine Position angeben");
+    if (!tenantId) return toast.error(target === "partner" ? "Bitte Partner und zugehörigen Tenant wählen" : "Bitte Tenant wählen");
+    const parsed = parseCustomInvoiceLines(lines);
+    if (!parsed.success) return toast.error("Bitte alle Positionen mit Bezeichnung, Menge und Nettopreis ausfüllen");
+    const p_lines = parsed.data;
     setSaving(true);
     const { error } = await db.rpc("create_manual_aicono_invoice", {
       p_tenant_id: tenantId, p_partner_id: target === "partner" ? partnerId : null, p_period_start: from, p_period_end: to || from, p_lines,
@@ -232,7 +249,7 @@ export function ManualInvoiceDialog() {
     <>
       <Button variant="outline" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />Neue Rechnung</Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Freie Rechnung erstellen</DialogTitle>
             <DialogDescription>Wird als Entwurf angelegt. Preise netto, die Umsatzsteuer wird im PDF ausgewiesen.</DialogDescription>
@@ -243,7 +260,7 @@ export function ManualInvoiceDialog() {
                 <Label>Rechnung an</Label>
                 <Select value={target} onValueChange={(v: any) => { setTarget(v); setTenantId(""); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="tenant">Kunde</SelectItem><SelectItem value="partner">Partner</SelectItem></SelectContent>
+                  <SelectContent><SelectItem value="tenant">Tenant</SelectItem><SelectItem value="partner">Partner</SelectItem></SelectContent>
                 </Select>
               </div>
               {target === "partner" && (
@@ -256,9 +273,9 @@ export function ManualInvoiceDialog() {
                 </div>
               )}
               <div className="space-y-1 col-span-2">
-                <Label>{target === "partner" ? "Betrifft Kunde des Partners" : "Kunde"}</Label>
+                <Label>{target === "partner" ? "Betrifft Tenant des Partners" : "Tenant"}</Label>
                 <Select value={tenantId} onValueChange={setTenantId}>
-                  <SelectTrigger><SelectValue placeholder="Kunde wählen" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Tenant wählen" /></SelectTrigger>
                   <SelectContent>{(target === "partner" ? partnerTenants : (tenants as any[])).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -266,22 +283,14 @@ export function ManualInvoiceDialog() {
               <div className="space-y-1"><Label>Leistung bis</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
             </div>
             <div className="space-y-2">
-              <Label>Positionen</Label>
-              {lines.map((l, i) => (
-                <div key={i} className="flex gap-2">
-                  <Select value="" onValueChange={(v) => { const o = catalog.find((c) => c.key === v); if (o) setLines((ls) => ls.map((x, j) => j === i ? { ...x, label: o.label, unit_price: o.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }) } : x)); }}>
-                    <SelectTrigger className="w-40"><SelectValue placeholder="Modul/Paket" /></SelectTrigger>
+              <Label>Paket / Zusatzleistung (optional)</Label>
+                  <Select value="" onValueChange={(v) => { const o = catalog.find((c) => c.key === v); if (o) setLines((ls) => { const line = { label: o.label, quantity: "1", unit_price: o.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }) }; return ls.length === 1 && !ls[0].label && !ls[0].unit_price ? [line] : [...ls, line]; }); }}>
+                    <SelectTrigger className="min-w-0"><SelectValue placeholder="Paket / Zusatzleistung" /></SelectTrigger>
                     <SelectContent>
                       {catalog.map((c) => <SelectItem key={c.key} value={c.key}>{c.group}: {c.label} ({c.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €)</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Input className="flex-1" placeholder="Bezeichnung" value={l.label} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
-                  <Input className="w-20" placeholder="Menge" value={l.quantity} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, quantity: e.target.value } : x))} />
-                  <Input className="w-28" placeholder="Preis €" value={l.unit_price} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, unit_price: e.target.value } : x))} />
-                  <Button variant="ghost" size="icon" disabled={lines.length === 1} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              ))}
-              <Button variant="ghost" size="sm" onClick={() => setLines((ls) => [...ls, { label: "", quantity: "1", unit_price: "" }])}><Plus className="h-4 w-4 mr-1" />Position</Button>
+              <InvoiceLineEditor lines={lines} onChange={setLines} />
               <p className="text-sm text-right">Summe netto: <strong>{net.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</strong></p>
             </div>
           </div>

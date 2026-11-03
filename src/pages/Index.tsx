@@ -33,7 +33,7 @@ const Index = () => {
   useEffect(() => {
     if (!user || onboardingChecked) return;
     // Onboarding-Status hängt am Tenant, nicht am User:
-    // Der Wizard wird nur einmal pro Mandant gezeigt (vom Erst-Nutzer).
+    // Der Wizard wird nur einmal pro Tenant gezeigt (vom Erst-Nutzer).
     if (tenantLoading) return;
     setOnboardingChecked(true);
     let dismissed = false;
@@ -61,7 +61,7 @@ const Index = () => {
   // Subdomain das Partner-Portal greifen.
   if (isPartnerHost()) return <Navigate to="/partner" replace />;
 
-  // Mehrere Bereiche (Super-Admin / Partner / eigener Mandant):
+  // Mehrere Bereiche (Super-Admin / Partner / eigener Tenant):
   // gespeicherte Präferenz bzw. einmalige Auswahl. Die Präferenz ist nur
   // Navigationshilfe – jeder Bereich hat seinen eigenen Rechte-Guard.
   if ((isPartnerMember || isSuperAdmin) && !isImpersonating()) {

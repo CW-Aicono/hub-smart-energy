@@ -473,7 +473,7 @@ const SuperAdminSimulators = () => {
                   <div className="relative max-w-sm mb-4">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Suchen (Mandant, OCPP-ID, Status, idTag)…"
+                      placeholder="Suchen (Tenant, OCPP-ID, Status, idTag)…"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       className="pl-8"

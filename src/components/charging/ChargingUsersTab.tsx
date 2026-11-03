@@ -475,7 +475,7 @@ const ChargingUsersTab = () => {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Ein Nutzer kann beliebig viele Tags mit unterschiedlichen IDs haben. Tags werden case-insensitiv eindeutig pro Mandant gespeichert.
+                Ein Nutzer kann beliebig viele Tags mit unterschiedlichen IDs haben. Tags werden case-insensitiv eindeutig pro Tenant gespeichert.
               </p>
               {userForm.tags.length === 0 && (
                 <p className="text-sm text-muted-foreground">Noch keine Tags hinterlegt.</p>

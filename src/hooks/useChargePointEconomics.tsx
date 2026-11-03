@@ -34,7 +34,7 @@ export function useChargePointEconomics(chargePointId?: string) {
 
   const upsert = useMutation({
     mutationFn: async (values: Partial<ChargePointEconomics>) => {
-      if (!tenant?.id || !chargePointId) throw new Error("Kein Mandant/Ladepunkt");
+      if (!tenant?.id || !chargePointId) throw new Error("Kein Tenant/Ladepunkt");
       const payload = {
         charge_point_id: chargePointId,
         tenant_id: tenant.id,

@@ -1,8 +1,193 @@
 # Änderungsprotokoll (intern)
 
+## v1.37.1 – 2026-11-03
+- Vestel EVC10/Gemini Modbus-Vorlage mit Registern aus EVC04 Modbus TCP Spec v1.8 aktiviert (Status 1000, Kabel 1004, Fehler 1006, Ströme 1008–1012, Leistung 1020, Zähler 1036, Grenzen 1100–1106; Schreiben 2000/2002/5004/6000) – Migration 0073.
+- Neue Spalte `wallbox_modbus_templates.bridge_mode` (`dlm_only` = keine OCPP-Emulation); Referenz-Bridge `docs/ha-addon/modbus-wallbox-bridge.ts` schreibt Failsafe/Ladestrom beim Verbindungsaufbau und Alive periodisch.
+
+## v1.37.0 – 2026-11-03
+- Ladestations-Vorlagen: `charger_models.variants/dlm_notes/modbus_template_id`, `charge_points.charger_model_id/charger_variant/cable_attached/supports_connector_lock`; Trigger `enforce_charger_template` erzwingt Stecker, Anzahl, Max-Leistung, Kabel/Verriegelung (Migration 0072).
+- Vorlagen Vestel AC Gemini Dual (6 Varianten aus Datenblatt 05/2024) und ELMI All-in-One 180/360 (DC, CCS, Kabel fest); Modbus-Vorlage Vestel EVC10 (Port 502, Unit 255) inaktiv bis Registerliste vorliegt.
+- `ocpp-central` lehnt UnlockConnector bei fest angeschlagenem Kabel ab; UI blendet „Kabel entriegeln“ aus. Handbuch in vier Sprachen.
+
+## v1.36.0 – 2026-11-03
+- Einrichtungsphase für neue Tenants: `tenants.setup_status` (Bestand `active`, neue Tenants `setup`), Rückkehr per Trigger gesperrt (Migrationen 0070/0071).
+- `support-session-impersonate` erlaubt ohne Kundenfreigabe nur Sitzungen der Art `setup` während der Einrichtungsphase; gleiche Rollenprüfung, `support_sessions.session_kind` gespeichert.
+- Übergabe via RPC `complete_tenant_setup` (Portal-Admin/zuständiger Partner-Admin) oder automatisch bei erster Anmeldung eines echten Tenant-Admins; offene Setup-Sitzungen werden beendet, Audit-Log.
+- Abrechnung/Nutzungslauf zählen nur `session_kind = 'support'`. Handbuch in vier Sprachen.
+
+## v1.35.1 – 2026-11-02
+- Partner-Paketauswahl umgeht den fünfminütigen Dashboard-Cache: Aktualisierung beim Öffnen/Fokus und alle 15 Sekunden im offenen Dialog; Freigaben invalidieren abhängige Ansichten.
+- Portal-Buchungsfenster berücksichtigt das Partnerportfolio des ausgewählten Tenants; entzogene Pakete nicht mehr als ausgewählt übermitteln. Serverseitige Rechte, Voraussetzungen und Preise unverändert.
+- Handbuch und Versionshistorie in vier Sprachen aktualisiert.
+
+## v1.35.0 – 2026-11-02
+- Befristeter Prozent-Rabatt bei Paketbuchung: Beginn/Ende im Halbmonatsraster, automatische Rückkehr zum gespeicherten VK; EK und Altverträge unverändert.
+- Rabattmetadaten vor erster Entwurfserstellung atomar gespeichert; Vorschau und Folgeabrechnung rechnen identisch, Gruppierung/Entwurfsstatus bleiben erhalten.
+- Ladeinfrastruktur-Hinweis mit Preisübersicht, kurzen Stichpunkten und aufklappbaren Bestandsregeln; Handbuch in vier Sprachen aktualisiert.
+
+## Test-Tenant gelöscht – 2026-11-02
+- Auf ausdrücklichen Nutzerwunsch Bolan GmbH I Test gelöscht; zuvor keine Rechnungen, Paketbuchungen oder Benutzerprofile vorhanden. Keine Änderung am App-Verhalten.
+
+## v1.34.0 – 2026-11-02
+- Buchbare Ladepunkt-/Liegenschaftsmengen, Preisvorschau mit Menge und Partner-Rabatt, Freischaltung über bestehende sichere Modulwege.
+- Migration 0067: explizite Kapazitätsbuchungen aktivieren feste Obergrenzen; Basis-Liegenschaft und Enterprise berücksichtigt, Alt-Tenants unverändert.
+- Nutzungslauf und Nachberechnung vermeiden doppelte Abrechnung expliziter Mengenverträge; Handbuch in vier Sprachen aktualisiert.
+
+## Testdatenbereinigung – 2026-11-02
+- Auf Nutzerwunsch im betroffenen Partner-Portal einen Endkunden- und sieben Einkaufs-Rechnungsentwürfe entfernt; sechs Paket-/Zusatzleistungsbuchungen von Bolan GmbH I Test samt sechs Abrechnungsereignissen gelöscht. Tenant und Freischaltungen unverändert; keine Verhaltensänderung oder neue Version.
+
+## v1.33.0 – 2026-11-02
+- Migration 0066 bündelt Katalogpositionen gleicher Tenant-Buchung und Abrechnungsstart; EK und VK getrennt, Event-Idempotenz und unveränderliche ausgestellte Belege erhalten.
+- Partner-Rechnungen: PDF-Vorschau per Augen-Symbol, ohne Festschreiben/Versand; PDF.js rendert vollständiges PDF innerhalb des EMS, aktuelle Stammdaten bei Entwürfen, Snapshots bei ausgestellten Belegen. Leistungszeitraum je Position im PDF.
+- Sechs verifizierte Entwürfe der Bolan-Test-Buchung in einen Entwurf zusammengefasst; keine Preise oder Paketaktivierungen verändert.
+- Handbuch/Versionshistorie in DE/EN/ES/NL aktualisiert.
+
+## v1.32.0 – 2026-11-02
+- Paketbuchung: Startdatum per Shadcn-Kalender; Vorschau, Laufzeit und starts_on synchronisiert. Migration 0065 erlaubt gewählte endliche Startdaten, unveränderte Berechtigungen und Portfolio-Prüfungen.
+- Prozent-Rabatt je Position editierbar, manuell geänderter Endkunden-VK aktualisiert Rabatt; allgemeiner Rabatt entfernt Preisüberschreibungen. EK bleibt unverändert.
+- Handbuch/Versionshistorie in DE/EN/ES/NL aktualisiert.
+
+## v1.31.0 – 2026-11-02
+- Tenant löschen: `user_invitations.tenant_id` FK jetzt ON DELETE CASCADE (Migration 0064) – offene Einladungen blockieren das Löschen nicht mehr.
+- Paket buchen: Hinweisbox mit nutzungsabhängigen Preisen (Ladepunkt je Monat, weitere Liegenschaft, Ladevorgang; VK + EK bei Partner-Tenants).
+- Partner-Abrechnung: Reiter „Verträge“ heißt jetzt „Pakete“.
+- Stammdaten-Speichern übernimmt die Daten in `partner_billing_settings.settings` (Absender der Partner-Rechnungen an Tenants, PDF-Fußzeile + ZUGFeRD); Präfix/Zahlungsziel/USt bleiben, festgeschriebene Rechnungen unverändert (sender_snapshot).
+- Partner-Portal: neuer Menüpunkt „Partner-Einstellungen“ (/partner/settings) mit Tabs Stammdaten und Branding; /partner/branding leitet um. Neue Spalten in `partners` (Migration 0063): legal_name, tax_number, vat_id, trade_register, managing_director, website, bank_name, iban, bic; Anschrift in billing_address.
+
+## v1.30.0 – 2026-11-02
+- Paket buchen: Mehrfachauswahl (P1 zuerst gebucht, Voraussetzungen berücksichtigen Mitauswahl), Tabelle VK/Rabatt/Endkundenpreis/EK/Marge, Vertragsliste mit EK und Marge.
+- Preisfehler behoben: Partnerverkäufe wurden mit EK als Endkundenpreis vorbelegt; jetzt VK (UVP), EK bleibt `purchase_price`.
+- Partner-Endkundenrabatt in % auf VK (`license_sales.customer_discount_pct`, `list_sale_price`); EK unverändert.
+- Halbmonatsraster statt taggenauer Anteile (`license_period_amount`, `licenseAmount`), Migration 0062.
+- Kommune/Industrie entfernt: alle Tenants `is_kommune=false`, Default false, Auswahl beim Anlegen und Partner-Preisliste-Umschalter entfernt.
+
+## v1.29.0 – 2026-11-02
+- Eigene Abrechnung unter der Paketauswahl: freie Posten, einmalige/monatliche/quartalsweise/halbjährliche Entwürfe über den bestehenden täglichen Rechnungslauf; keine Paketfreischaltungen oder EK-Rechnung für eigene Partnerleistungen. Migrationen 0060/0061 erweitern bestehende Verträge, bewahren Katalogabrechnung und berücksichtigen den partiellen Rechnungsindex.
+- QA: 39 Tests erfolgreich; angemeldete Direkt-Tenant-Erstellung mit zwei Posten und 248,34 € Entwurf geprüft, nächste Periode 01.12.; Prüfdaten entfernt, nichts versendet. Partner-Erstellung und zukünftiger Kalendertag nicht Ende-zu-Ende geprüft.
+- Freie Rechnung: optionale Paketauswahl, darunter eigene Posten; Handbuch und Hilfe-Version in DE/EN/ES/NL aktualisiert.
+
+## [1.28.1] - 2026-10-31
+- Portal: Beim Anlegen eines Tenants ist die Art (Kommune, Gewerbe/Industrie, Privat, Sonstige) wählbar; Hinweis zur Direkt-AICONO-Zuordnung.
+
+## v1.28.0
+- Einheitliche Bezeichnung „Tenant/Tenants“ statt „Mandant“/„Kunde“ in AICONO Portal, Partnerportal, Abrechnung und Handbuch; Rolle „Kunden-Admin“ heißt „Tenant-Admin“. Nur Anzeigetexte – Rollenwerte, Pfade und Rechte unverändert. Ladekunden, Vertriebsprojekte und Eichrecht-Links behalten „Kunde“.
+
+## v1.27.4
+- Automatische Paketverkaufsrechnungen mit angemeldetem Portal-/Partnernutzer geprüft: monatlicher Direktverkauf und einmaliger Partnerverkauf erstellen sofort getrennte Entwürfe; täglicher Folgelauf aktiv und erfolgreich. Verkaufsbutton benennt Rechnungserstellung; Handbuch und Hilfe-Version in vier Sprachen ergänzt. Keine Änderungen an Freigabe, Versand oder Preisen.
+
+## v1.27.3
+- Abrechnungskacheln Offen/Bezahlt/Überfällig rechnen nur noch aus AICONO-Rechnungen, nicht mehr aus der Lexware-Belegsumme. Staging: AICONO-Rechnungszähler 2026 auf 0 gesetzt.
+
+## v1.27.2
+- AICONO Portal Mandantenliste: Spalte „Partner“ (sortier- und durchsuchbar, sonst „Direktkunde“).
+
+## v1.27.1
+- Abrechnungsfilter: ausgewählte Filterknöpfe mit gut lesbarer heller Schrift und Rahmen.
+
+## v1.27.0
+- AICONO-Abrechnung in Reiter Rechnungen / Verträge & Pakete / Rabattanfragen; Lexware/SEPA/Absender in Werkzeugleiste im Reiter Rechnungen; Filter AICONO → Partner / → Direktkunde.
+- Partnerportal Abrechnung: Reiter „Verkäufe & Rechnungen“ in „Rechnungen“ und „Verträge“ getrennt.
+
+## v1.26.2
+- Partnerportal Abrechnung in Reiter gegliedert: Übersicht, Verkäufe & Rechnungen, Preise & Margen (bzw. Provision).
+
+## v1.26.1
+- Partner-Branding: Farbfelder außerhalb der Seite definiert (wurden bei jeder Eingabe neu aufgebaut → Farbwähler schloss, Tippen brach ab), #RRGGBB-Prüfung, Vorschau.
+
+## v1.26.0
+- Vertragslaufzeiten: `license_sales.term_months`/`auto_renew`, RPC `set_license_sale_term`, `end_license_sale` respektiert Mindestlaufzeit, `generate_due_license_invoices` rechnet befristete Verträge bis Enddatum ab (Migration 0059). UI in LicenseSales (Verkauf + Kalender-Symbol), `src/lib/licenseTerm.ts` + Tests.
+
+## v1.25.1
+- Partnerportal Abrechnung: „Rabatt bei AICONO anfragen“ eingeklappt.
+
+## v1.25.0
+- AICONO-Portal Kunde → Pakete: Karte „Verkauf & Nutzung im Überblick“ (Partner, Verträge mit Kundenpreis/EK, Ladepunkte, „+X neu in diesem Monat“).
+- AICONO-Portal Partnerliste: Spalte „Verkauf“ (Kunden, aktive Verträge, Ladepunkte).
+- Partnerportal: Paketverkauf nur noch im Tenant-Reiter „Pakete & Verkauf“; Abrechnung zeigt Verkäufe nur lesend.
+
+## v1.24.0
+- Partnerportal Abrechnung: Karte „Freigegeben zum Verkauf“ zeigt die von AICONO freigeschalteten Pakete + Button „Endkunden anlegen“.
+
+## v1.23.0 – 31.10.2026
+- Portal → Partner: Button „Pakete“ öffnet Paket-Portfolio (Paket-Schalter setzen alle Paketmodule in partner_modules, Entzug behält Module anderer freigeschalteter Pakete, Warnung bei bestehenden Buchungen; Einzelmodule eingeklappt). Partner-Paketbuchung sperrt Pakete außerhalb des Portfolios. src/lib/partnerPortfolio.ts + Tests.
+
+## v1.22.0 – 31.10.2026
+- Portal → Kunde: Reiter „Module“ → „Pakete“ (Paketabrechnung-Schalter, Paketbuchung, Ladeinfrastruktur-Karte, eingeklappte Funktionsschalter, Modulpreise nur bei Altvertrag eingeklappt). Reiter „Lizenz“ entfernt (tenant_licenses-Formular), Zahlungsart/SEPA in „Abrechnung“ verschoben. Handbuch 4 Sprachen.
+
+## v1.21.5 – 30.10.2026
+- Portal: Menüpunkt „Module & Bundles“ heißt jetzt „Modulpreise (Altverträge)“ (4 Sprachen).
+
+## v1.21.4 – 30.10.2026
+- Portal: Menüpunkt „Lizenzen“ entfernt (tenant_licenses leer, Verträge laufen über Pakete/license_sales); alte URL leitet auf Abrechnung um.
+
+## v1.21.3 – 30.10.2026
+- Partnerportal → Tenant: eigene Karte „Ladeinfrastruktur“ (Freischaltung ev_charging + Ladepunktzahl), da sie je Ladepunkt abgerechnet wird und nicht im Paket-Dropdown steht.
+
+## v1.21.2 – 30.10.2026
+- Partnerportal → Tenant → Module & Lizenzen: oben Pakete und Paketbuchung; alte Einzelmodule und Lizenzen nur noch als eingeklappter Bereich „Altvertrag“ bei Tenants ohne Paketabrechnung.
+
+## v1.21.1 – 30.10.2026
+- Sicherheit: Paket- und Mengenpreisliste (inkl. Einkaufspreise) nur noch für AICONO-Portal und Partner lesbar; Kunden sehen ihre Pakete weiterhin über „Paket & Rechnungen“ ohne Preise. Migration 0058 can_read_price_catalog().
+
+## v1.21.0 – 30.10.2026
+- Einstellungen → „Paket & Rechnungen“ für Kunden-Admins: gebuchte Pakete mit enthaltenen Funktionen (ohne Preise), nicht freigeschaltete Funktionen mit Hinweis „Im Paket X enthalten – Anfrage an Partner/AICONO“ und alle ausgestellten Rechnungen an den Kunden (von AICONO oder vom Partner) als PDF mit E-Rechnung. Normale Benutzer sehen den Bereich nicht.
+- Abnahmetests der Paketabrechnung (Fälle A, B, C, Flatrate, Neukunde, anteilig, Mengenänderung, Support-Prüfung, Paket 6) als automatische Tests hinterlegt.
+- Technisch: Migration 0057 RPC tenant_package_summary() (SECURITY DEFINER, nur Rolle admin des eigenen Mandanten; Pakete ohne Preise, gesperrte Module mit Paket, AICONO-Absender für PDFs). src/lib/tenantBillingView.ts, TenantPackageInvoices.tsx, packageAcceptance.test.ts. Befund: pricing_packages/pricing_unit_prices sind für alle Angemeldeten lesbar (inkl. EK) – nicht geändert.
+
+## v1.20.0 – 30.10.2026
+- Partner-Portal → Abrechnung: Die Preisliste zeigt jetzt Pakete und Mengenpreise mit Einkauf (EK), empfohlenem Verkaufspreis (UVP), eigenem Verkaufspreis und Marge, getrennt für Kommunen und Industrie. Die alte Modulpreisliste erscheint nur noch für Kunden mit Altvertrag.
+- „Rabatt bei AICONO anfragen“: Auswahl von Paketen, Mengenpreisen und Remote-Support-Flatrate statt Einzelmodulen. Freigegebene Rabatte mindern den EK der gewählten Positionen.
+- Margen je Tenant werden für Paketkunden aus der Monatsübersicht berechnet (inkl. Rabatte, eigene Verkaufspreise je Segment).
+- Provisions-Partner sehen die erwartete Provision je Tenant und ihre Provisionsgutschriften.
+- Übersicht: Die Kachel „Offene Abrechnung“ zeigt die Summe der offenen AICONO-Einkaufsrechnungen.
+- Technisch: src/lib/partnerPriceList.ts (Preisliste, Margen, Provision, offene Summe) + Tests; _shared/packageUsage.ts discountApplies (Paket-/Mengencodes, Altanfragen mit Modulcodes weiter gültig, Vertragspositionen ausgenommen); portal-decide-discount-request legt tenant_module_discounts nur noch für Modulcodes an; generate-monthly-invoices nutzt für Industrie-Kunden sale_price_industry_monthly. Keine Schemaänderung.
+
+## v1.19.0 – 30.10.2026
+- Rechnungsflüsse nach Partnermodell: Direktkunden zur UVP; Wiederverkaufs-Partner erhalten eine Sammelrechnung je Monat zum EK, gegliedert nach Kunde (inkl. Einrichtung im Aktivierungsmonat); Provisions-Partner erhalten eine monatliche Provisionsgutschrift, der Kunde wird zur UVP abgerechnet.
+- Partner erhalten je Kunde automatisch einen Endkunden-Entwurf mit eigenen Preisen und können eigene Positionen ergänzen; AICONO sieht diese Rechnungen nicht.
+- Warnung beim Generieren, wenn ein offener Direktentwurf an einen Kunden eines Wiederverkaufs-Partners besteht; Eigenbedarf des Partners wird „An Partner“ gekennzeichnet.
+- Korrektur freigegebener Rechnungen nur noch per Storno-Rechnung mit Bezug auf das Original (AICONO und Partner).
+- Alle Rechnungs-PDFs enthalten eine E-Rechnung (ZUGFeRD, EN 16931); Leitweg-ID je Kunde für Behörden.
+- Lexware: Rechnungen werden weiter als Entwurf übertragen und dort abgeschlossen; die Liste zeigt ehrlich „In Lexware (Entwurf)“.
+- Technisch: Migration 0056 (document_type credit_note/cancellation, cancels_invoice_id, tenants.partner_self_customer + leitweg_id mit Guard, RPCs cancel_aicono_invoice, cancel_partner_customer_invoice, partner_set_custom_lines, set_tenant_invoice_options; issue_aicono_invoice erlaubt Gutschriften; set_partner_invoice_status lehnt direktes Stornieren freigegebener Rechnungen ab). _shared/partnerInvoiceFlows.ts, src/lib/zugferd.ts + eInvoicePdf.ts (pdf-lib). lexware-api setzt keinen Status „sent“ mehr und überträgt keine Gutschriften/Stornos; Sammelrechnung ersetzt offene Einzel-EK-Entwürfe (source_ref monthly:partner-sum:{partner}:{monat}). PDF/A-3-Konformität des Containers nicht validiert.
+
+## v1.18.0 – 30.10.2026
+- Monatsübersicht nach Paketen berechnet für umgestellte Kunden UVP und EK je Position und ist dort Grundlage der Monatsrechnung („Positionen“ aufklappbar).
+- Mengen werden automatisch gezählt (täglicher Zähllauf): Ladepunkte mit mindestens einem aktiven Tag, Liegenschaften, abgerechnete Ladevorgänge, Pakete taggenau anteilig, Remote-Support, Support je 15 Min., Einrichtung im Aktivierungsmonat.
+- Support-Sitzungen über 4 Stunden oder ohne Ende werden nicht automatisch berechnet, sondern als „Prüfen“ markiert.
+- Freigegebene Partnerrabatte mindern den EK; Summen je Partner und für Direktkunden.
+- Neue Spalte „Änderung zum Vormonat“; Mengenänderungen über 50 % markieren den Entwurf gelb. Nachträgliche Mengen werden im nächsten Lauf nachberechnet.
+- Partner sehen Mengenänderungen ihrer Kunden einmal täglich gesammelt unter Abrechnung.
+- Neue Kunden werden ab Anlage nach Paketen abgerechnet; Bestandskunden bleiben unverändert.
+- Technisch: Migration 0055 (tenant_usage_daily + snapshot_tenant_usage, Cron 00:20, partner_usage_notices, tenant_invoices.usage_review/usage_delta, Trigger: neue Mandanten package_billing=true), _shared/packageUsage.ts + Loader, package-billing-overview und generate-monthly-invoices nutzen dieselbe Rechnung. Snapshots auf Staging für 30 Tage nachgefüllt.
+
+## v1.17.0 – 30.10.2026
+- „Paket buchen“ belegt den Preis automatisch aus der Preisliste vor (Direktkunde UVP, Partnerkunde EK); abweichende Preise nur mit Begründung, gekennzeichnet als „individueller Preis“.
+- Neu buchbar: „Einrichtung (einmalig)“. Ladepunkte und weitere Liegenschaften werden nicht mehr manuell gebucht, sondern automatisch gezählt.
+- Voraussetzungen werden geprüft (Pakete 2/3/5 nur mit Paket 1, Paket 6 nur mit weiterem Paket oder Ladepunkten); ab 7 Liegenschaften Hinweis auf Paket 6.
+- Kündigen eines Pakets schaltet nur Module ab, die kein anderes Paket abdeckt und die nicht einzeln freigeschaltet sind.
+- Neuer Schalter „Abrechnung nach Paketen“ je Kunde mit Paketvorschlag; gilt ab dem Folgemonat, Modulpreise werden danach nur angezeigt.
+- Technisch: Migrationen 0053/0054 (tenants.package_billing*, tenant_modules.individual_grant, license_sales.price_individual/price_reason, set_tenant_package_billing, Schutz-Trigger), license-sale (Begründungspflicht, action=end), generate-monthly-invoices (Modulpreise für umgestellte Kunden aussetzen).
+
+## v1.16.3 – 30.10.2026
+- Paketabrechnung Schritt 1 (Preisstammdaten): Ladepunkt-EK 6,00 € (bisher 5,25 €), Remote-Support-EK 112,00 € und für Partner buchbar (bisher kein Partnerpreis). UVP unverändert.
+- Preisversionierung: valid_from auf pricing_packages/pricing_unit_prices, Historientabelle pricing_price_history mit Trigger (jede UVP/EK-Änderung protokolliert), „Gültig ab“-Datum in der Katalogpflege; erzeugte Rechnungen bleiben unverändert.
+- Tooltip erklärt „Freischaltung Partner“ (einmalige Gebühr je Partner und Paket).
+- module_bundles.bookable (Standard false): alte Bundles als „Altvertrag – nicht mehr buchbar“ gekennzeichnet, Neubuchung im Mandanten-Dialog gesperrt, Bestandsbuchungen laufen unverändert weiter.
+
+## v1.16.2 – 30.10.2026
+- Fernstart (RemoteStartTransaction) jetzt auch bei Status „Vorbereitung“ (Fahrzeug angesteckt) zulässig, nicht nur bei „Verfügbar“/„Nicht verfügbar“ (ocpp-central).
+- OCPP-Protokoll: ELMI-Statuscode 0x0B0B0000 gilt als reine Information und wird nicht mehr rot als Fehler markiert (OcppLogViewer).
+
+## v1.16.1 – 30.10.2026
+- Alle OCPP-Ladestatus getrennt dargestellt, insbesondere Vorbereitung, Fahrzeug-/Stationspause, Beendet und Reserviert. Offene Sitzungen überschreiben gemeldete Zustände nicht; Statusanzeige in Listen, Details, Karten, Widgets und Lade-App vereinheitlicht.
+
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## Unreleased
+- v1.16.0: Package-only new contract/invoice choices, per-point charging and additional locations/support; legacy module contracts remain unchanged. Additive current-unit UVP and partner availability, database insert/preflight safeguards, localized manual and version history. Current charging recommendation 8 EUR; existing partner EK 5.25 EUR retained pending specified replacement.
+- v1.15.0 validation: authenticated sales for two temporary partner customers, monthly and quarterly proration read back in both invoice paths; identical retry reused sale, changed payload rejected, direct bill RPC denied, partner issuance blocked without legal sender details. Test tenants/drafts removed. Partner PDF issuance awaits real sender data; email/bank debit not performed. Existing sales remain explicit opt-in rather than technical module toggles; new contract entry available in portal/partner customer details. Daily catch-up bounded; initial/follow-up calendar periods non-overlapping.
+- v1.15.0: Explicit license sales with once/monthly/quarterly/halfyearly cadence, catalog purchase snapshots, daily due draft generation and transactional billing-event idempotency. Separate partner customer invoices/settings/counters, partner-scoped issuance with immutable snapshots, PDF/email and approved-only SEPA export. Legacy monthly billing excludes explicitly sold positions; issued partner wholesale invoices are no longer overwritten. Existing bookings remain unchanged.
 - Rechnungs-PDF: Logo mittig, Leistungszeitraum überlappt nicht mehr.
 
 ## [Unreleased]

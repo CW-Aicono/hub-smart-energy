@@ -73,7 +73,7 @@ export function useCreatePpaContract() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreatePpaInput) => {
-      if (!tenant?.id) throw new Error("Kein Mandant");
+      if (!tenant?.id) throw new Error("Kein Tenant");
       const { data: contract, error } = await supabase
         .from("ppa_contracts" as any)
         .insert({ ...input.contract, tenant_id: tenant.id, status: input.contract.status ?? "draft" } as any)
@@ -138,7 +138,7 @@ export function useUpdatePpaContract() {
       offsite?: Partial<Omit<PpaOffsiteConfig, "id" | "contract_id" | "tenant_id">>;
       consumptionMeterIds?: string[];
     }) => {
-      if (!tenant?.id) throw new Error("Kein Mandant");
+      if (!tenant?.id) throw new Error("Kein Tenant");
       if (params.contract && Object.keys(params.contract).length > 0) {
         const { error } = await supabase
           .from("ppa_contracts" as any)

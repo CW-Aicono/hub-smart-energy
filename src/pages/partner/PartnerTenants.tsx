@@ -12,6 +12,7 @@ import { Plus, LifeBuoy, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 import { beginImpersonation } from "@/lib/supportView";
 import { useTenantOptional } from "@/hooks/useTenant";
 import { setAreaPreference } from "@/lib/areaPreference";
@@ -23,6 +24,7 @@ interface Row {
   slug: string;
   contact_email: string | null;
   created_at: string;
+  setup_status?: string | null;
 }
 
 type SortKey = "name" | "slug" | "contact" | "created_at";
@@ -80,7 +82,7 @@ export default function PartnerTenants() {
     setLoading(true);
     const { data } = await supabase
       .from("tenants")
-      .select("id, name, slug, contact_email, created_at")
+      .select("id, name, slug, contact_email, created_at, setup_status")
       .eq("partner_id", partnerId)
       .order("created_at", { ascending: false });
     setRows((data as Row[]) ?? []);
@@ -136,8 +138,16 @@ export default function PartnerTenants() {
     }
   };
 
+  const handleCompleteSetup = async (tenantId: string) => {
+    if (!window.confirm("Einrichtung abschließen und an den Kunden übergeben? Danach ist Fernzugriff nur noch mit Freigabe des Kunden möglich.")) return;
+    const { error } = await supabase.rpc("complete_tenant_setup" as any, { _tenant_id: tenantId } as any);
+    if (error) { toast({ title: "Übergabe fehlgeschlagen", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Tenant übergeben" });
+    await load();
+  };
+
   const handleStartRemoteSupport = async (tenantId: string) => {
-    // Eigener Mandant: direkt öffnen, keine Remote-Sitzung nötig.
+    // Eigener Tenant: direkt öffnen, keine Remote-Sitzung nötig.
     if (ownTenantId && ownTenantId === tenantId) {
       setAreaPreference("ems");
       navigate("/", { replace: true });
@@ -158,7 +168,7 @@ export default function PartnerTenants() {
       if (impErr) {
         let msg = impErr.message;
         try { msg = (await (impErr as any)?.context?.json())?.error ?? msg; } catch { /* noop */ }
-        if ((impErr as any)?.context?.status === 403) msg = "Der Kunde hat Remote-Support nicht freigegeben. " + (msg ?? "");
+        if ((impErr as any)?.context?.status === 403) msg = "Der Tenant hat Remote-Support nicht freigegeben. " + (msg ?? "");
         throw new Error(msg);
       }
       if (!imp?.access_token) throw new Error(imp?.error || "Impersonation fehlgeschlagen");
@@ -185,7 +195,7 @@ export default function PartnerTenants() {
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Meine Tenants</h1>
-          <p className="text-muted-foreground">Alle Mandanten, die diesem Partner zugeordnet sind.</p>
+          <p className="text-muted-foreground">Alle Tenants, die diesem Partner zugeordnet sind.</p>
         </div>
         {canCreate && (
           <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) resetForm(); }}>
@@ -218,14 +228,14 @@ export default function PartnerTenants() {
                 </div>
                 <div className="border-t my-2" />
                 <p className="text-xs text-muted-foreground">
-                  Optional: Kunden-Admin direkt einladen. Lassen Sie die Felder leer, wenn die Einladung später erfolgen soll.
+                  Optional: Tenant-Admin direkt einladen. Lassen Sie die Felder leer, wenn die Einladung später erfolgen soll.
                 </p>
                 <div className="space-y-2">
-                  <Label>E-Mail Kunden-Admin</Label>
+                  <Label>E-Mail Tenant-Admin</Label>
                   <Input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@firma.de" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Name Kunden-Admin</Label>
+                  <Label>Name Tenant-Admin</Label>
                   <Input value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Max Mustermann" />
                 </div>
               </div>
@@ -275,7 +285,12 @@ export default function PartnerTenants() {
                     className="cursor-pointer hover:bg-muted/40"
                     onClick={() => navigate(`/partner/tenants/${r.id}`)}
                   >
-                    <TableCell className="font-medium">{r.name ?? "—"}</TableCell>
+                    <TableCell className="font-medium">
+                      {r.name ?? "—"}
+                      {r.setup_status === "setup" && (
+                        <Badge variant="secondary" className="ml-2">In Einrichtung</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{r.slug}</TableCell>
                     <TableCell className="text-muted-foreground">{r.contact_email ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
@@ -294,7 +309,17 @@ export default function PartnerTenants() {
                           ) : (
                             <LifeBuoy className="h-3.5 w-3.5 mr-1" />
                           )}
-                          EMS öffnen
+                          {r.setup_status === "setup" ? "Einrichtung öffnen" : "EMS öffnen"}
+                        </Button>
+                      )}
+                      {isPartnerAdmin && r.setup_status === "setup" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-1"
+                          onClick={() => handleCompleteSetup(r.id)}
+                        >
+                          Übergeben
                         </Button>
                       )}
                     </TableCell>

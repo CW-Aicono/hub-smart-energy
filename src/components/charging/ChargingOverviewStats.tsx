@@ -35,7 +35,7 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
   const uptimePercent = chargePoints.length > 0
     ? (chargePoints.filter((cp) => {
         const s = normalizeConnectorStatus(cp.status, (cp as any).ws_connected !== false);
-        return s === "available" || s === "charging";
+        return ["available", "charging", "preparing", "suspended_ev", "suspended_evse", "finishing", "reserved", "occupied"].includes(s);
       }).length / chargePoints.length * 100)
     : 0;
 

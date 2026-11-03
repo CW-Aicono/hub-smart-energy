@@ -1727,8 +1727,11 @@ export type Database = {
           auto_reboot_skip_if_charging: boolean
           auto_reboot_time: string
           auto_reboot_type: string
+          cable_attached: boolean | null
           certificate_required: boolean
           certificate_type: string | null
+          charger_model_id: string | null
+          charger_variant: string | null
           cheap_charging_schedule: Json | null
           connection_protocol: string
           connector_count: number
@@ -1758,6 +1761,7 @@ export type Database = {
           status: string
           supports_change_configuration: boolean | null
           supports_charging_profile: boolean | null
+          supports_connector_lock: boolean | null
           tenant_id: string
           updated_at: string
           vendor: string | null
@@ -1773,8 +1777,11 @@ export type Database = {
           auto_reboot_skip_if_charging?: boolean
           auto_reboot_time?: string
           auto_reboot_type?: string
+          cable_attached?: boolean | null
           certificate_required?: boolean
           certificate_type?: string | null
+          charger_model_id?: string | null
+          charger_variant?: string | null
           cheap_charging_schedule?: Json | null
           connection_protocol?: string
           connector_count?: number
@@ -1804,6 +1811,7 @@ export type Database = {
           status?: string
           supports_change_configuration?: boolean | null
           supports_charging_profile?: boolean | null
+          supports_connector_lock?: boolean | null
           tenant_id: string
           updated_at?: string
           vendor?: string | null
@@ -1819,8 +1827,11 @@ export type Database = {
           auto_reboot_skip_if_charging?: boolean
           auto_reboot_time?: string
           auto_reboot_type?: string
+          cable_attached?: boolean | null
           certificate_required?: boolean
           certificate_type?: string | null
+          charger_model_id?: string | null
+          charger_variant?: string | null
           cheap_charging_schedule?: Json | null
           connection_protocol?: string
           connector_count?: number
@@ -1850,6 +1861,7 @@ export type Database = {
           status?: string
           supports_change_configuration?: boolean | null
           supports_charging_profile?: boolean | null
+          supports_connector_lock?: boolean | null
           tenant_id?: string
           updated_at?: string
           vendor?: string | null
@@ -1857,6 +1869,13 @@ export type Database = {
           ws_connected_since?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "charge_points_charger_model_id_fkey"
+            columns: ["charger_model_id"]
+            isOneToOne: false
+            referencedRelation: "charger_models"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "charge_points_group_id_fkey"
             columns: ["group_id"]
@@ -1891,40 +1910,57 @@ export type Database = {
         Row: {
           charging_type: string
           created_at: string
+          dlm_notes: string | null
           id: string
           is_active: boolean
+          modbus_template_id: string | null
           model: string
           notes: string | null
           power_kw: number | null
           protocol: string
           updated_at: string
+          variants: Json | null
           vendor: string
         }
         Insert: {
           charging_type?: string
           created_at?: string
+          dlm_notes?: string | null
           id?: string
           is_active?: boolean
+          modbus_template_id?: string | null
           model: string
           notes?: string | null
           power_kw?: number | null
           protocol?: string
           updated_at?: string
+          variants?: Json | null
           vendor: string
         }
         Update: {
           charging_type?: string
           created_at?: string
+          dlm_notes?: string | null
           id?: string
           is_active?: boolean
+          modbus_template_id?: string | null
           model?: string
           notes?: string | null
           power_kw?: number | null
           protocol?: string
           updated_at?: string
+          variants?: Json | null
           vendor?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "charger_models_modbus_template_id_fkey"
+            columns: ["modbus_template_id"]
+            isOneToOne: false
+            referencedRelation: "wallbox_modbus_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       charging_access_log: {
         Row: {
@@ -6790,6 +6826,137 @@ export type Database = {
           },
         ]
       }
+      license_billing_events: {
+        Row: {
+          created_at: string
+          period_end: string
+          period_start: string
+          sale_id: string
+        }
+        Insert: {
+          created_at?: string
+          period_end: string
+          period_start: string
+          sale_id: string
+        }
+        Update: {
+          created_at?: string
+          period_end?: string
+          period_start?: string
+          sale_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "license_billing_events_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "license_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      license_sales: {
+        Row: {
+          auto_renew: boolean
+          cadence: string
+          created_at: string
+          created_by: string | null
+          custom_lines: Json | null
+          customer_discount_pct: number
+          discount_ends_on: string | null
+          discount_starts_on: string | null
+          ended_on: string | null
+          id: string
+          label: string
+          list_sale_price: number | null
+          next_period: string | null
+          partner_id: string | null
+          payment_method: string
+          price_individual: boolean
+          price_reason: string | null
+          product_code: string
+          product_kind: string
+          purchase_price: number
+          quantity: number
+          request_id: string
+          sale_price: number
+          starts_on: string
+          tenant_id: string
+          term_months: number | null
+        }
+        Insert: {
+          auto_renew?: boolean
+          cadence?: string
+          created_at?: string
+          created_by?: string | null
+          custom_lines?: Json | null
+          customer_discount_pct?: number
+          discount_ends_on?: string | null
+          discount_starts_on?: string | null
+          ended_on?: string | null
+          id?: string
+          label: string
+          list_sale_price?: number | null
+          next_period?: string | null
+          partner_id?: string | null
+          payment_method?: string
+          price_individual?: boolean
+          price_reason?: string | null
+          product_code: string
+          product_kind: string
+          purchase_price?: number
+          quantity?: number
+          request_id: string
+          sale_price?: number
+          starts_on?: string
+          tenant_id: string
+          term_months?: number | null
+        }
+        Update: {
+          auto_renew?: boolean
+          cadence?: string
+          created_at?: string
+          created_by?: string | null
+          custom_lines?: Json | null
+          customer_discount_pct?: number
+          discount_ends_on?: string | null
+          discount_starts_on?: string | null
+          ended_on?: string | null
+          id?: string
+          label?: string
+          list_sale_price?: number | null
+          next_period?: string | null
+          partner_id?: string | null
+          payment_method?: string
+          price_individual?: boolean
+          price_reason?: string | null
+          product_code?: string
+          product_kind?: string
+          purchase_price?: number
+          quantity?: number
+          request_id?: string
+          sale_price?: number
+          starts_on?: string
+          tenant_id?: string
+          term_months?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "license_sales_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "license_sales_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_automations: {
         Row: {
           action_type: string
@@ -8760,6 +8927,48 @@ export type Database = {
         }
         Relationships: []
       }
+      meter_power_readings_5min_p_202702: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       meter_power_readings_5min_p_default: {
         Row: {
           bucket: string
@@ -9273,6 +9482,7 @@ export type Database = {
       }
       module_bundles: {
         Row: {
+          bookable: boolean
           created_at: string
           description: string | null
           id: string
@@ -9282,6 +9492,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bookable?: boolean
           created_at?: string
           description?: string | null
           id?: string
@@ -9291,6 +9502,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bookable?: boolean
           created_at?: string
           description?: string | null
           id?: string
@@ -9878,6 +10090,129 @@ export type Database = {
           },
         ]
       }
+      partner_billing_settings: {
+        Row: {
+          partner_id: string
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          partner_id: string
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          partner_id?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_billing_settings_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: true
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_customer_invoices: {
+        Row: {
+          amount: number
+          cancels_invoice_id: string | null
+          created_at: string
+          document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
+          id: string
+          invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
+          line_items: Json
+          partner_id: string
+          payment_method: string
+          period_end: string
+          period_start: string
+          recipient_snapshot: Json | null
+          sender_snapshot: Json | null
+          source_ref: string
+          status: string
+          tenant_id: string
+          vat_rate: number | null
+        }
+        Insert: {
+          amount?: number
+          cancels_invoice_id?: string | null
+          created_at?: string
+          document_type?: string
+          due_date?: string | null
+          emailed_at?: string | null
+          emailed_to?: string | null
+          id?: string
+          invoice_number?: string
+          issued_at?: string | null
+          issued_by?: string | null
+          line_items?: Json
+          partner_id: string
+          payment_method?: string
+          period_end: string
+          period_start: string
+          recipient_snapshot?: Json | null
+          sender_snapshot?: Json | null
+          source_ref: string
+          status?: string
+          tenant_id: string
+          vat_rate?: number | null
+        }
+        Update: {
+          amount?: number
+          cancels_invoice_id?: string | null
+          created_at?: string
+          document_type?: string
+          due_date?: string | null
+          emailed_at?: string | null
+          emailed_to?: string | null
+          id?: string
+          invoice_number?: string
+          issued_at?: string | null
+          issued_by?: string | null
+          line_items?: Json
+          partner_id?: string
+          payment_method?: string
+          period_end?: string
+          period_start?: string
+          recipient_snapshot?: Json | null
+          sender_snapshot?: Json | null
+          source_ref?: string
+          status?: string
+          tenant_id?: string
+          vat_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_customer_invoices_cancels_invoice_id_fkey"
+            columns: ["cancels_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "partner_customer_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_customer_invoices_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_customer_invoices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_discount_requests: {
         Row: {
           approved_module_codes: string[] | null
@@ -9946,6 +10281,32 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_invoice_counters: {
+        Row: {
+          last_number: number
+          partner_id: string
+          year: number
+        }
+        Insert: {
+          last_number?: number
+          partner_id: string
+          year: number
+        }
+        Update: {
+          last_number?: number
+          partner_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_invoice_counters_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -10079,10 +10440,57 @@ export type Database = {
           },
         ]
       }
+      partner_usage_notices: {
+        Row: {
+          created_at: string
+          day: string
+          id: string
+          message: string
+          partner_id: string
+          read_at: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          id?: string
+          message: string
+          partner_id: string
+          read_at?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          id?: string
+          message?: string
+          partner_id?: string
+          read_at?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_usage_notices_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_usage_notices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partners: {
         Row: {
           accent_color: string | null
           ai_analysis_mode: string
+          bank_name: string | null
+          bic: string | null
           billing_address: Json
           billing_mode: string
           brand_display_name: string | null
@@ -10091,10 +10499,13 @@ export type Database = {
           contact_phone: string | null
           created_at: string
           custom_domain: string | null
+          iban: string | null
           id: string
           is_active: boolean
+          legal_name: string | null
           lexware_contact_id: string | null
           logo_url: string | null
+          managing_director: string | null
           name: string
           notes: string | null
           primary_color: string | null
@@ -10102,12 +10513,18 @@ export type Database = {
           slug: string
           subdomain: string | null
           support_email: string | null
+          tax_number: string | null
+          trade_register: string | null
           updated_at: string
+          vat_id: string | null
+          website: string | null
           white_label_enabled: boolean
         }
         Insert: {
           accent_color?: string | null
           ai_analysis_mode?: string
+          bank_name?: string | null
+          bic?: string | null
           billing_address?: Json
           billing_mode?: string
           brand_display_name?: string | null
@@ -10116,10 +10533,13 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           custom_domain?: string | null
+          iban?: string | null
           id?: string
           is_active?: boolean
+          legal_name?: string | null
           lexware_contact_id?: string | null
           logo_url?: string | null
+          managing_director?: string | null
           name: string
           notes?: string | null
           primary_color?: string | null
@@ -10127,12 +10547,18 @@ export type Database = {
           slug: string
           subdomain?: string | null
           support_email?: string | null
+          tax_number?: string | null
+          trade_register?: string | null
           updated_at?: string
+          vat_id?: string | null
+          website?: string | null
           white_label_enabled?: boolean
         }
         Update: {
           accent_color?: string | null
           ai_analysis_mode?: string
+          bank_name?: string | null
+          bic?: string | null
           billing_address?: Json
           billing_mode?: string
           brand_display_name?: string | null
@@ -10141,10 +10567,13 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           custom_domain?: string | null
+          iban?: string | null
           id?: string
           is_active?: boolean
+          legal_name?: string | null
           lexware_contact_id?: string | null
           logo_url?: string | null
+          managing_director?: string | null
           name?: string
           notes?: string | null
           primary_color?: string | null
@@ -10152,7 +10581,11 @@ export type Database = {
           slug?: string
           subdomain?: string | null
           support_email?: string | null
+          tax_number?: string | null
+          trade_register?: string | null
           updated_at?: string
+          vat_id?: string | null
+          website?: string | null
           white_label_enabled?: boolean
         }
         Relationships: []
@@ -11493,6 +11926,7 @@ export type Database = {
           sort: number
           updated_at: string
           uvp: number
+          valid_from: string
         }
         Insert: {
           active?: boolean
@@ -11507,6 +11941,7 @@ export type Database = {
           sort?: number
           updated_at?: string
           uvp?: number
+          valid_from?: string
         }
         Update: {
           active?: boolean
@@ -11521,6 +11956,43 @@ export type Database = {
           sort?: number
           updated_at?: string
           uvp?: number
+          valid_from?: string
+        }
+        Relationships: []
+      }
+      pricing_price_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          code: string
+          field: string
+          id: string
+          new_value: number | null
+          old_value: number | null
+          table_name: string
+          valid_from: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          code: string
+          field: string
+          id?: string
+          new_value?: number | null
+          old_value?: number | null
+          table_name: string
+          valid_from: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          code?: string
+          field?: string
+          id?: string
+          new_value?: number | null
+          old_value?: number | null
+          table_name?: string
+          valid_from?: string
         }
         Relationships: []
       }
@@ -11529,25 +12001,34 @@ export type Database = {
           code: string
           ek: number
           name: string
+          new_sale_uvp: number | null
+          partner_available: boolean
           unit: string
           updated_at: string
           uvp: number
+          valid_from: string
         }
         Insert: {
           code: string
           ek?: number
           name: string
+          new_sale_uvp?: number | null
+          partner_available?: boolean
           unit: string
           updated_at?: string
           uvp?: number
+          valid_from?: string
         }
         Update: {
           code?: string
           ek?: number
           name?: string
+          new_sale_uvp?: number | null
+          partner_available?: boolean
           unit?: string
           updated_at?: string
           uvp?: number
+          valid_from?: string
         }
         Relationships: []
       }
@@ -13676,6 +14157,7 @@ export type Database = {
           is_manual: boolean
           notes: string | null
           reason: string | null
+          session_kind: string
           started_at: string
           super_admin_user_id: string
           tenant_id: string
@@ -13690,6 +14172,7 @@ export type Database = {
           is_manual?: boolean
           notes?: string | null
           reason?: string | null
+          session_kind?: string
           started_at?: string
           super_admin_user_id: string
           tenant_id: string
@@ -13704,6 +14187,7 @@ export type Database = {
           is_manual?: boolean
           notes?: string | null
           reason?: string | null
+          session_kind?: string
           started_at?: string
           super_admin_user_id?: string
           tenant_id?: string
@@ -14425,6 +14909,7 @@ export type Database = {
       tenant_invoices: {
         Row: {
           amount: number
+          cancels_invoice_id: string | null
           created_at: string
           document_type: string
           due_date: string | null
@@ -14436,6 +14921,7 @@ export type Database = {
           issued_at: string | null
           issued_by: string | null
           lexware_invoice_id: string | null
+          license_payment_method: string | null
           line_items: Json | null
           module_total: number
           partner_id: string | null
@@ -14447,10 +14933,13 @@ export type Database = {
           support_total: number
           tenant_id: string
           updated_at: string
+          usage_delta: string | null
+          usage_review: boolean
           vat_rate: number | null
         }
         Insert: {
           amount?: number
+          cancels_invoice_id?: string | null
           created_at?: string
           document_type?: string
           due_date?: string | null
@@ -14462,6 +14951,7 @@ export type Database = {
           issued_at?: string | null
           issued_by?: string | null
           lexware_invoice_id?: string | null
+          license_payment_method?: string | null
           line_items?: Json | null
           module_total?: number
           partner_id?: string | null
@@ -14473,10 +14963,13 @@ export type Database = {
           support_total?: number
           tenant_id: string
           updated_at?: string
+          usage_delta?: string | null
+          usage_review?: boolean
           vat_rate?: number | null
         }
         Update: {
           amount?: number
+          cancels_invoice_id?: string | null
           created_at?: string
           document_type?: string
           due_date?: string | null
@@ -14488,6 +14981,7 @@ export type Database = {
           issued_at?: string | null
           issued_by?: string | null
           lexware_invoice_id?: string | null
+          license_payment_method?: string | null
           line_items?: Json | null
           module_total?: number
           partner_id?: string | null
@@ -14499,9 +14993,18 @@ export type Database = {
           support_total?: number
           tenant_id?: string
           updated_at?: string
+          usage_delta?: string | null
+          usage_review?: boolean
           vat_rate?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tenant_invoices_cancels_invoice_id_fkey"
+            columns: ["cancels_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_invoices"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tenant_invoices_partner_id_fkey"
             columns: ["partner_id"]
@@ -14659,6 +15162,7 @@ export type Database = {
           disabled_at: string | null
           enabled_at: string | null
           id: string
+          individual_grant: boolean
           is_enabled: boolean
           module_code: string
           price_override: number | null
@@ -14671,6 +15175,7 @@ export type Database = {
           disabled_at?: string | null
           enabled_at?: string | null
           id?: string
+          individual_grant?: boolean
           is_enabled?: boolean
           module_code: string
           price_override?: number | null
@@ -14683,6 +15188,7 @@ export type Database = {
           disabled_at?: string | null
           enabled_at?: string | null
           id?: string
+          individual_grant?: boolean
           is_enabled?: boolean
           module_code?: string
           price_override?: number | null
@@ -15052,12 +15558,48 @@ export type Database = {
           },
         ]
       }
+      tenant_usage_daily: {
+        Row: {
+          active_charge_point_ids: string[]
+          charge_points: number
+          created_at: string
+          day: string
+          locations: number
+          tenant_id: string
+        }
+        Insert: {
+          active_charge_point_ids?: string[]
+          charge_points?: number
+          created_at?: string
+          day: string
+          locations?: number
+          tenant_id: string
+        }
+        Update: {
+          active_charge_point_ids?: string[]
+          charge_points?: number
+          created_at?: string
+          day?: string
+          locations?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_usage_daily_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           address: string | null
           auto_logout_enabled: boolean
           auto_logout_minutes: number
           branding: Json
+          charge_point_capacity_managed: boolean
           city: string | null
           contact_email: string | null
           contact_person: string | null
@@ -15068,11 +15610,18 @@ export type Database = {
           id: string
           is_aicono_member: boolean
           is_kommune: boolean
+          leitweg_id: string | null
           lexware_contact_id: string | null
+          location_capacity_managed: boolean
           logo_url: string | null
           name: string
           onboarding_completed: boolean
+          package_billing: boolean
+          package_billing_from: string | null
+          package_billing_set_at: string | null
+          package_billing_set_by: string | null
           partner_id: string | null
+          partner_self_customer: boolean
           payment_method: string
           postal_code: string | null
           remote_support_enabled: boolean
@@ -15083,6 +15632,9 @@ export type Database = {
           sepa_iban: string | null
           sepa_mandate_date: string | null
           sepa_mandate_ref: string | null
+          setup_completed_at: string | null
+          setup_completed_by: string | null
+          setup_status: string
           show_empty_widgets: boolean
           show_manual_meters: boolean
           slug: string
@@ -15104,6 +15656,7 @@ export type Database = {
           auto_logout_enabled?: boolean
           auto_logout_minutes?: number
           branding?: Json
+          charge_point_capacity_managed?: boolean
           city?: string | null
           contact_email?: string | null
           contact_person?: string | null
@@ -15114,11 +15667,18 @@ export type Database = {
           id?: string
           is_aicono_member?: boolean
           is_kommune?: boolean
+          leitweg_id?: string | null
           lexware_contact_id?: string | null
+          location_capacity_managed?: boolean
           logo_url?: string | null
           name: string
           onboarding_completed?: boolean
+          package_billing?: boolean
+          package_billing_from?: string | null
+          package_billing_set_at?: string | null
+          package_billing_set_by?: string | null
           partner_id?: string | null
+          partner_self_customer?: boolean
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -15129,6 +15689,9 @@ export type Database = {
           sepa_iban?: string | null
           sepa_mandate_date?: string | null
           sepa_mandate_ref?: string | null
+          setup_completed_at?: string | null
+          setup_completed_by?: string | null
+          setup_status?: string
           show_empty_widgets?: boolean
           show_manual_meters?: boolean
           slug: string
@@ -15150,6 +15713,7 @@ export type Database = {
           auto_logout_enabled?: boolean
           auto_logout_minutes?: number
           branding?: Json
+          charge_point_capacity_managed?: boolean
           city?: string | null
           contact_email?: string | null
           contact_person?: string | null
@@ -15160,11 +15724,18 @@ export type Database = {
           id?: string
           is_aicono_member?: boolean
           is_kommune?: boolean
+          leitweg_id?: string | null
           lexware_contact_id?: string | null
+          location_capacity_managed?: boolean
           logo_url?: string | null
           name?: string
           onboarding_completed?: boolean
+          package_billing?: boolean
+          package_billing_from?: string | null
+          package_billing_set_at?: string | null
+          package_billing_set_by?: string | null
           partner_id?: string | null
+          partner_self_customer?: boolean
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -15175,6 +15746,9 @@ export type Database = {
           sepa_iban?: string | null
           sepa_mandate_date?: string | null
           sepa_mandate_ref?: string | null
+          setup_completed_at?: string | null
+          setup_completed_by?: string | null
+          setup_status?: string
           show_empty_widgets?: boolean
           show_manual_meters?: boolean
           slug?: string
@@ -15517,6 +16091,7 @@ export type Database = {
       }
       wallbox_modbus_templates: {
         Row: {
+          bridge_mode: string
           created_at: string
           created_by: string | null
           default_port: number
@@ -15536,6 +16111,7 @@ export type Database = {
           write_map: Json
         }
         Insert: {
+          bridge_mode?: string
           created_at?: string
           created_by?: string | null
           default_port?: number
@@ -15555,6 +16131,7 @@ export type Database = {
           write_map?: Json
         }
         Update: {
+          bridge_mode?: string
           created_at?: string
           created_by?: string | null
           default_port?: number
@@ -15733,6 +16310,10 @@ export type Database = {
     Functions: {
       _can_restructure_location: { Args: { p_loc: string }; Returns: string }
       _complex_of: { Args: { p_loc: string }; Returns: string }
+      _finish_tenant_setup: {
+        Args: { _by: string; _reason: string; _tenant_id: string }
+        Returns: boolean
+      }
       _move_floor_to: {
         Args: { p_floor: string; p_target: string }
         Returns: undefined
@@ -15780,6 +16361,18 @@ export type Database = {
         Args: { p_days?: number }
         Returns: number
       }
+      bill_catalog_license_sale: {
+        Args: { p_sale: string; p_start: string; p_supplement?: boolean }
+        Returns: undefined
+      }
+      bill_license_sale: {
+        Args: { p_sale: string; p_start: string; p_supplement?: boolean }
+        Returns: undefined
+      }
+      booked_tenant_capacity: {
+        Args: { p_code: string; p_tenant: string }
+        Returns: number
+      }
       bootstrap_cron_settings: {
         Args: { p_key: string; p_url: string }
         Returns: undefined
@@ -15797,6 +16390,10 @@ export type Database = {
         Args: { _project_id: string }
         Returns: boolean
       }
+      can_manage_partner_billing: {
+        Args: { p_partner: string }
+        Returns: boolean
+      }
       can_portal_read: {
         Args: { _area: string; _uid: string }
         Returns: boolean
@@ -15804,6 +16401,79 @@ export type Database = {
       can_portal_write: {
         Args: { _area: string; _uid: string }
         Returns: boolean
+      }
+      can_read_price_catalog: { Args: { _uid: string }; Returns: boolean }
+      cancel_aicono_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: {
+          amount: number
+          cancels_invoice_id: string | null
+          created_at: string
+          document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
+          id: string
+          invoice_kind: string
+          invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
+          lexware_invoice_id: string | null
+          license_payment_method: string | null
+          line_items: Json | null
+          module_total: number
+          partner_id: string | null
+          pdf_url: string | null
+          period_end: string
+          period_start: string
+          source_ref: string | null
+          status: string
+          support_total: number
+          tenant_id: string
+          updated_at: string
+          usage_delta: string | null
+          usage_review: boolean
+          vat_rate: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tenant_invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      cancel_partner_customer_invoice: {
+        Args: { p_invoice: string }
+        Returns: {
+          amount: number
+          cancels_invoice_id: string | null
+          created_at: string
+          document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
+          id: string
+          invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
+          line_items: Json
+          partner_id: string
+          payment_method: string
+          period_end: string
+          period_start: string
+          recipient_snapshot: Json | null
+          sender_snapshot: Json | null
+          source_ref: string
+          status: string
+          tenant_id: string
+          vat_rate: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "partner_customer_invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       cleanup_bridge_raw_samples: { Args: never; Returns: undefined }
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
@@ -15905,6 +16575,7 @@ export type Database = {
           deleted_raw: number
         }[]
       }
+      complete_tenant_setup: { Args: { _tenant_id: string }; Returns: boolean }
       compute_daily_totals_from_5min: {
         Args: { p_day?: string }
         Returns: number
@@ -15915,6 +16586,31 @@ export type Database = {
       }
       convert_floor_to_building: {
         Args: { p_floor_id: string }
+        Returns: string
+      }
+      create_custom_invoice_sale: {
+        Args: {
+          p_cadence: string
+          p_lines: Json
+          p_payment: string
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
+        Returns: string
+      }
+      create_license_sale: {
+        Args: {
+          p_cadence: string
+          p_code: string
+          p_kind: string
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
         Returns: string
       }
       create_manual_aicono_invoice: {
@@ -15954,6 +16650,7 @@ export type Database = {
           exists_flag: boolean
         }[]
       }
+      end_license_sale: { Args: { p_sale: string }; Returns: undefined }
       ensure_at_least_one_admin: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
@@ -15972,6 +16669,38 @@ export type Database = {
         Returns: number
       }
       evaluate_monitoring_rules: { Args: never; Returns: number }
+      finalize_license_sale: {
+        Args: {
+          p_cadence: string
+          p_code: string
+          p_kind: string
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
+        Returns: string
+      }
+      finalize_license_sale_discount: {
+        Args: {
+          p_cadence: string
+          p_code: string
+          p_discount?: number
+          p_discount_from?: string
+          p_discount_to?: string
+          p_kind: string
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_reason?: string
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
+        Returns: string
+      }
       find_duplicate_meters: {
         Args: never
         Returns: {
@@ -15982,6 +16711,7 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      generate_due_license_invoices: { Args: never; Returns: number }
       get_active_charge_point_counts: {
         Args: { p_since?: string }
         Returns: {
@@ -16259,6 +16989,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      install_license_billing_schedule: { Args: never; Returns: undefined }
       is_app_tenant_user: { Args: { _user_id: string }; Returns: boolean }
       is_document_category_in_tenant: {
         Args: { _category_id: string; _tenant_id: string }
@@ -16279,6 +17010,7 @@ export type Database = {
         Args: { p_invoice_id: string }
         Returns: {
           amount: number
+          cancels_invoice_id: string | null
           created_at: string
           document_type: string
           due_date: string | null
@@ -16290,6 +17022,7 @@ export type Database = {
           issued_at: string | null
           issued_by: string | null
           lexware_invoice_id: string | null
+          license_payment_method: string | null
           line_items: Json | null
           module_total: number
           partner_id: string | null
@@ -16301,11 +17034,46 @@ export type Database = {
           support_total: number
           tenant_id: string
           updated_at: string
+          usage_delta: string | null
+          usage_review: boolean
           vat_rate: number | null
         }
         SetofOptions: {
           from: "*"
           to: "tenant_invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      issue_partner_customer_invoice: {
+        Args: { p_invoice: string }
+        Returns: {
+          amount: number
+          cancels_invoice_id: string | null
+          created_at: string
+          document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
+          id: string
+          invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
+          line_items: Json
+          partner_id: string
+          payment_method: string
+          period_end: string
+          period_start: string
+          recipient_snapshot: Json | null
+          sender_snapshot: Json | null
+          source_ref: string
+          status: string
+          tenant_id: string
+          vat_rate: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "partner_customer_invoices"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -16317,6 +17085,37 @@ export type Database = {
           meter_id: string
           reading_at: string
         }[]
+      }
+      license_discount_period_amount: {
+        Args: {
+          p_cadence: string
+          p_end: string
+          p_from: string
+          p_list: number
+          p_quantity: number
+          p_sale: number
+          p_start: string
+          p_to: string
+        }
+        Returns: number
+      }
+      license_period_amount: {
+        Args: {
+          p_cadence: string
+          p_end: string
+          p_price: number
+          p_quantity: number
+          p_start: string
+        }
+        Returns: number
+      }
+      license_period_end: {
+        Args: { p_cadence: string; p_day: string }
+        Returns: string
+      }
+      license_term_end: {
+        Args: { p_months: number; p_start: string }
+        Returns: string
       }
       merge_duplicate_meter: {
         Args: {
@@ -16369,6 +17168,39 @@ export type Database = {
         Args: { _partner_id: string }
         Returns: Json
       }
+      partner_set_custom_lines: {
+        Args: { p_invoice: string; p_lines: Json }
+        Returns: {
+          amount: number
+          cancels_invoice_id: string | null
+          created_at: string
+          document_type: string
+          due_date: string | null
+          emailed_at: string | null
+          emailed_to: string | null
+          id: string
+          invoice_number: string
+          issued_at: string | null
+          issued_by: string | null
+          line_items: Json
+          partner_id: string
+          payment_method: string
+          period_end: string
+          period_start: string
+          recipient_snapshot: Json | null
+          sender_snapshot: Json | null
+          source_ref: string
+          status: string
+          tenant_id: string
+          vat_rate: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "partner_customer_invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       portal_roles: { Args: { _uid: string }; Returns: string[] }
       portal_set_user_roles: {
         Args: { _roles: string[]; _target: string }
@@ -16385,6 +17217,20 @@ export type Database = {
           roles: string[]
           user_id: string
         }[]
+      }
+      preflight_license_sale: {
+        Args: {
+          p_cadence: string
+          p_code: string
+          p_kind: string
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
+        Returns: string
       }
       purge_meter_power_readings_retention: { Args: never; Returns: undefined }
       refresh_meter_daily_totals: {
@@ -16441,7 +17287,25 @@ export type Database = {
       }
       run_ems_cron_bundle: { Args: never; Returns: undefined }
       run_meter_power_hourly_backfill_guarded: { Args: never; Returns: number }
+      set_license_sale_term: {
+        Args: { p_auto_renew: boolean; p_sale: string; p_term_months: number }
+        Returns: undefined
+      }
+      set_partner_invoice_status: {
+        Args: { p_invoice: string; p_status: string }
+        Returns: undefined
+      }
+      set_tenant_invoice_options: {
+        Args: { p_leitweg: string; p_self: boolean; p_tenant: string }
+        Returns: undefined
+      }
+      set_tenant_package_billing: {
+        Args: { p_enabled: boolean; p_individual: string[]; p_tenant: string }
+        Returns: string
+      }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
+      snapshot_tenant_usage: { Args: { p_day?: string }; Returns: number }
+      tenant_package_summary: { Args: never; Returns: Json }
       touch_location_integration_sync: {
         Args: { _id: string; _min_interval_seconds?: number; _status: string }
         Returns: undefined
@@ -16453,6 +17317,15 @@ export type Database = {
           p_ttl_seconds?: number
         }
         Returns: boolean
+      }
+      validate_package_sale_input: {
+        Args: {
+          p_code: string
+          p_kind: string
+          p_quantity: number
+          p_tenant: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

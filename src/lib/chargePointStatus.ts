@@ -10,9 +10,16 @@
 export type ChargePointStatusKey =
   | "available"
   | "charging"
+  | "preparing"
+  | "suspended_ev"
+  | "suspended_evse"
+  | "finishing"
+  | "reserved"
+  | "occupied"
   | "faulted"
   | "offline"
   | "unavailable"
+  | "unknown"
   | "unconfigured";
 
 export interface ChargePointStatusInput {
@@ -32,27 +39,22 @@ export function normalizeChargePointStatus(
 
   const s = (input.rawStatus ?? "").toLowerCase().trim();
 
-  if (s === "") return "unconfigured";
+  if (s === "") return "unknown";
 
   if (s.includes("fault") || s.includes("error")) return "faulted";
   if (s.includes("unavailable") || s.includes("inoperative")) return "unavailable";
 
-  // Alle Zustände, bei denen ein Fahrzeug verbunden ist oder geladen wird,
-  // gelten in der Übersicht als "in Nutzung" (= belegt).
-  if (
-    s.includes("charg") ||
-    s.includes("occup") ||
-    s.includes("suspendedev") ||
-    s.includes("suspendedevse") ||
-    s.includes("preparing") ||
-    s.includes("finishing") ||
-    s.includes("reserved")
-  ) {
-    return "charging";
-  }
+  const compact = s.replace(/[\s_-]/g, "");
+  const ocppStatuses: Record<string, ChargePointStatusKey> = {
+    available: "available", preparing: "preparing", charging: "charging",
+    suspendedev: "suspended_ev", suspendedevse: "suspended_evse",
+    finishing: "finishing", reserved: "reserved", occupied: "occupied",
+    offline: "offline", unconfigured: "unconfigured", unknown: "unknown",
+  };
+  if (ocppStatuses[compact]) return ocppStatuses[compact];
 
   if (s.includes("avail")) return "available";
 
   // Unbekannten Status nicht stillschweigend als "verfügbar" interpretieren.
-  return "unconfigured";
+  return "unknown";
 }

@@ -45,7 +45,7 @@ export function useTenantDiscounts(tenantId?: string) {
 
 export interface TenantBundleInfo { id: string; name: string; modules: string[] }
 
-/** Gebuchte Bundles eines Mandanten inkl. enthaltener Module. */
+/** Gebuchte Bundles eines Tenants inkl. enthaltener Module. */
 export function useTenantBundles(tenantId?: string) {
   const { data = [] } = useQuery({
     queryKey: ["tenant-bundles-detail", tenantId],

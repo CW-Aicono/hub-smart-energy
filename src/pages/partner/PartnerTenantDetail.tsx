@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "@/hooks/useTranslation";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
+import { LicenseSales } from "@/components/billing/LicenseSales";
+import { CapacitySummary } from "@/components/billing/CapacitySummary";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +33,7 @@ const statusColor: Record<string, string> = {
 };
 
 export default function PartnerTenantDetail() {
+  const { t } = useTranslation();
   const { tenantId } = useParams<{ tenantId: string }>();
   const { partnerId, permissions, isPartnerAdmin, loading: accessLoading } = usePartnerAccess();
   const qc = useQueryClient();
@@ -182,7 +186,7 @@ export default function PartnerTenantDetail() {
         <TabsList>
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
           <TabsTrigger value="locations">Standorte ({locations.length})</TabsTrigger>
-          <TabsTrigger value="modules">Module & Lizenzen</TabsTrigger>
+          <TabsTrigger value="modules">Pakete & Verkauf</TabsTrigger>
           {modules.some((m) => m.module_code === "gain_sharing") && <TabsTrigger value="gain_sharing">Gain-Sharing</TabsTrigger>}
           <TabsTrigger value="activity">Aktivität</TabsTrigger>
         </TabsList>
@@ -235,6 +239,37 @@ export default function PartnerTenantDetail() {
 
         <TabsContent value="modules" className="space-y-4">
           {tenantId && <PackageBookingCard tenantId={tenantId} />}
+          {tenantId && partnerId && <LicenseSales tenantId={tenantId} partnerId={partnerId} canEdit={isPartnerAdmin} />}
+          {tenantId && (() => {
+            const evOn = modules.some((x) => x.module_code === "ev_charging");
+            const evAllowed = partnerModules.includes("ev_charging");
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base"><Package className="h-4 w-4" /> Ladeinfrastruktur</CardTitle>
+                  <CapacitySummary />
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium">Ladeinfrastruktur freigeschaltet</p>
+                      {!evAllowed && <p className="text-xs text-muted-foreground">Nicht in Ihrem Partner-Portfolio</p>}
+                    </div>
+                    <Switch checked={evOn} disabled={togglingModule === "ev_charging" || (!evAllowed && !evOn)} onCheckedChange={(v) => toggleModule("ev_charging", v)} />
+                  </div>
+                  {evOn && (
+                    <ChargePointSubLine tenantId={tenantId} modules={modules.map((x: any) => ({ ...x, is_enabled: true }))}
+                      isKommune={tenant?.is_kommune !== false} isMember={!!tenant?.is_aicono_member} />
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+          {!(tenant as any)?.package_billing && (
+          <details className="rounded-md border p-3">
+            <summary className="cursor-pointer text-sm font-medium">Altvertrag: Einzelmodule & alte Lizenzen</summary>
+            <p className="mt-2 text-xs text-muted-foreground">Nur für bestehende Verträge nach Modulpreisen. Neue Buchungen erfolgen über Pakete.</p>
+            <div className="mt-3 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Module ({modules.length} aktiv)</CardTitle>
@@ -313,6 +348,9 @@ export default function PartnerTenantDetail() {
               )}
             </CardContent>
           </Card>
+            </div>
+          </details>
+          )}
         </TabsContent>
 
         {modules.some((m) => m.module_code === "gain_sharing") && (

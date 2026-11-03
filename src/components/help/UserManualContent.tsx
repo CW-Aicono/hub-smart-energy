@@ -301,6 +301,30 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground mt-2">{T("manual.roles.roadmapStaging")}</p>
             <h4 className="font-semibold mb-2 mt-4">{T("manual.billing.v150Title")}</h4>
             <p className="text-sm text-muted-foreground">{T("manual.billing.v150Text")}</p>
+            <h4 className="font-semibold mb-2 mt-4">{T("license.contracts")}</h4>
+            <p className="text-sm text-muted-foreground">{T("manual.billing.licenseSales")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.packageCatalog")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.packageBooking")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.startDiscount132")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.combined133")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.capacity134")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.discount135")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.packageUsage")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.invoiceFlows")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.partnerPortfolio")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.partnerAvailability1351")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.tenantSetup136")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.chargerTemplates137")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.vestelDlm1371")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.salesFlow")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.contractTerm")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.partnerBillingTabs")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.portalBillingTabs")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.partnerPortalPackages")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.tenantPackageView")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.customInvoices")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.packages130")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.partner.settings131")}</p>
           </section>
           <section>
             <h4 className="font-semibold mb-2">{T("manual.energy.widgetTitle")}</h4>
@@ -553,6 +577,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               <li>{T("manual.ev.detailItem4")}</li>
               <li>{T("manual.ev.detailItem5")}</li>
               <li>{T("manual.ev.detailItem6")}</li>
+              <li>{T("manual.ev.detailItem7")}</li>
             </ul>
           </section>
 
@@ -581,12 +606,11 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
 
           <section>
             <h4 className="font-semibold mb-2">{T("manual.ev.statusTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-3">{T("manual.ev.ocppStates")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
-              <li><span className="text-green-600 font-medium">{T("manual.ev.statusAvailable")}</span></li>
-              <li><span className="text-blue-600 font-medium">{T("manual.ev.statusCharging")}</span></li>
-              <li><span className="text-red-600 font-medium">{T("manual.ev.statusError")}</span></li>
-              <li><span className="text-yellow-600 font-medium">{T("manual.ev.statusUnavailable")}</span></li>
-              <li><span className="text-orange-600 font-medium">{T("manual.ev.statusOffline")}</span></li>
+              {["available", "preparing", "charging", "suspended_ev", "suspended_evse", "finishing", "reserved", "occupied", "unavailable", "faulted", "offline", "unconfigured", "unknown"].map((state) => (
+                <li key={state}>{T(`chargePointStatus.${state}`)}</li>
+              ))}
             </ul>
           </section>
         </div>
@@ -970,6 +994,8 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               <li>{T("manual.acc.billingItem4")}</li>
               <li>{T("manual.acc.billingItem5")}</li>
             </ul>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.automaticSales")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.terms.tenantUnified")}</p>
           </section>
           <section>
             <h4 className="font-semibold mb-2">{T("manual.acc.versionTitle")}</h4>
