@@ -92,12 +92,21 @@ jobs:
             fi
           done
 
-          # Der Workflow selbst bleibt aus main geschützt. Der Migrations-Runner
-          # ist dagegen Anwendungscode und muss neue, von Lovable erzeugte
-          # Drizzle-Migrationen aus staging kennen.
-          if git cat-file -e "${STAGING_SHA}:scripts/apply-migrations.sh" 2>/dev/null; then
-            git checkout "${STAGING_SHA}" -- scripts/apply-migrations.sh
-          fi
+          # Release-coupled scripts must travel together; keeping an old deploy
+          # script would silently omit the new backend completeness checks.
+          RELEASE_PATHS=(
+            scripts/deploy.sh
+            scripts/apply-migrations.sh
+            supabase/deploy/verify-live-release.sh
+            supabase/deploy/tenant-setup-ready.sql
+            supabase/deploy/live-release-check.sql
+            docs/GO-LIVE.md
+          )
+          for path in "${RELEASE_PATHS[@]}"; do
+            git cat-file -e "${STAGING_SHA}:${path}"
+            git checkout "${STAGING_SHA}" -- "$path"
+          done
+          bash -n scripts/deploy.sh scripts/apply-migrations.sh supabase/deploy/verify-live-release.sh
 
           git add -A
           TARGET_TREE="$(git write-tree)"
@@ -119,7 +128,9 @@ jobs:
 
       - name: Kurz-SHA ermitteln
         id: sha
-        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "full=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Image-Name (lowercase, von GHCR verlangt)
         id: img
@@ -143,6 +154,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.img.outputs.name }}:${{ steps.sha.outputs.short }}
+            ${{ steps.img.outputs.name }}:${{ steps.sha.outputs.full }}
             ${{ steps.img.outputs.name }}:latest
           build-args: |
             VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
@@ -163,7 +175,13 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/hub-smart-energy
-            ./scripts/deploy.sh ${{ steps.sha.outputs.short }}
+            # Load the current release scripts BEFORE running them. Otherwise
+            # this deploy executes the old script even after its internal reset.
+            git fetch origin main
+            RELEASE_SHA='${{ steps.sha.outputs.full }}'
+            test "$(git rev-parse origin/main)" = "$RELEASE_SHA"
+            git show "${RELEASE_SHA}:scripts/deploy.sh" > /tmp/aicono-deploy-release.sh
+            bash /tmp/aicono-deploy-release.sh "$RELEASE_SHA"
 
       - name: Ergebnis
         if: always()

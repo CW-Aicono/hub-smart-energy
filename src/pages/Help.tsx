@@ -102,6 +102,7 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.37.2", date: "2026-11-03", changes: [{ type: "fix", textKey: "manual.liveDeploy1372" }] },
     { version: "1.37.1", date: "2026-11-03", changes: [{ type: "feature", textKey: "manual.vestelDlm1371" }] },
     { version: "1.37.0", date: "2026-11-03", changes: [{ type: "feature", textKey: "manual.chargerTemplates137" }] },
     { version: "1.36.0", date: "2026-11-03", changes: [{ type: "feature", textKey: "manual.tenantSetup136" }] },

@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.37.2 – 03.11.2026
+- Live-Deploy prüft Einrichtung, Übergabe und Ladestationsvorlagen vor der Freigabe.
+- Teilweise installierte Einrichtungsfunktionen werden vervollständigt; übergebene Tenants bleiben unverändert.
+- Partner-Tenant-Liste bleibt bei zusätzlichen Spalten kompatibel; Ladefehler sind sichtbar und erneut ladbar.
+
 ## v1.37.1 – 03.11.2026
 - Vestel AC Gemini Dual: Lastmanagement über Modbus mit jedem Zähler am Standort, inkl. sicherem Rückfallstrom bei Verbindungsausfall.
 

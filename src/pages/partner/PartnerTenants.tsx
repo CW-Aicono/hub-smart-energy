@@ -17,6 +17,8 @@ import { beginImpersonation } from "@/lib/supportView";
 import { useTenantOptional } from "@/hooks/useTenant";
 import { setAreaPreference } from "@/lib/areaPreference";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+import { loadPartnerTenants } from "@/lib/partnerTenantList";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface Row {
   id: string;
@@ -41,10 +43,12 @@ export default function PartnerTenants() {
   const { partnerId, isPartnerAdmin, permissions } = usePartnerAccess();
   const canCreate = permissions.createTenant;
   const { toast } = useToast();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const ownTenantId = useTenantOptional()?.tenant?.id ?? null;
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
 
   const filtered = rows.filter((r) =>
@@ -76,17 +80,20 @@ export default function PartnerTenants() {
 
   const load = async () => {
     if (!partnerId) {
+      setRows([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const { data } = await supabase
-      .from("tenants")
-      .select("id, name, slug, contact_email, created_at, setup_status")
-      .eq("partner_id", partnerId)
-      .order("created_at", { ascending: false });
-    setRows((data as Row[]) ?? []);
-    setLoading(false);
+    setLoadError(false);
+    try {
+      setRows(await loadPartnerTenants(partnerId));
+    } catch {
+      setRows([]);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -263,6 +270,11 @@ export default function PartnerTenants() {
           />
           {loading ? (
             <p className="text-sm text-muted-foreground">Lade…</p>
+          ) : loadError ? (
+            <div role="alert" className="flex items-center gap-3 flex-wrap">
+              <p className="text-sm text-destructive">{t("partner.tenants.loadError")}</p>
+              <Button variant="outline" size="sm" onClick={load}>{t("partner.tenants.retry")}</Button>
+            </div>
           ) : sorted.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Keine Tenants gefunden.
