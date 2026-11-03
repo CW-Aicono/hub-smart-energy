@@ -1,6 +1,9 @@
 export type Language = "de" | "en" | "es" | "nl";
 
 export const translations = {
+  "license.cancelMistake": { de: "Fehlbuchung zurücknehmen", en: "Undo mistaken booking", es: "Revertir contratación errónea", nl: "Foutieve boeking terugdraaien" },
+  "license.cancelMistakeConfirm": { de: "Fehlbuchung sofort zurücknehmen? Nur Entwürfe werden angepasst; Daten bleiben erhalten.", en: "Undo this booking immediately? Only drafts change; data is retained.", es: "¿Revertir ahora? Solo se modifican borradores; se conservan datos.", nl: "Boeking direct terugdraaien? Alleen concepten wijzigen; gegevens blijven." },
+  "license.mistakeCancelled": { de: "Fehlbuchung zurückgenommen; Paket erneut buchbar", en: "Booking undone; package can be rebooked", es: "Contratación revertida; puede contratar de nuevo", nl: "Boeking teruggedraaid; pakket opnieuw te boeken" },
   "license.yearly": {"de": "Jährlich", "en": "Yearly", "es": "Anual", "nl": "Jaarlijks"},
   "license.discountMode": {"de": "Rabattart", "en": "Discount type", "es": "Tipo de descuento", "nl": "Kortingstype"},
   "license.correct": {"de": "Paket korrigieren", "en": "Correct package", "es": "Corregir paquete", "nl": "Pakket corrigeren"},
