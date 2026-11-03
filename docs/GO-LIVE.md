@@ -33,6 +33,11 @@ Damit funktioniert diese Reparatur auch mit dem bisherigen geschützten Workflow
 Zusätzliche Workflow-Härtung (Zielcommit-Script und SHA-Abgleich) muss separat in
 den geschützten Main-Workflow übernommen werden; die Pflichtprüfung wartet nicht darauf.
 
+Der aktualisierte Workflow übernimmt künftig ausdrücklich auch seine eigene
+Release-Version aus Staging und führt die Regressionstests vor Image-Bau aus.
+Für den ersten Lauf muss dieser Workflow einmal auf dem ausführenden Main-Branch
+vorliegen; ein bereits gestarteter älterer Workflow aktualisiert sich nicht selbst.
+
 Die separat auf Geräten installierte Gateway-/HA-Add-on-Software ist nicht Teil
 des EMS-Deploys. Direkter Gemini-Modbus-Betrieb braucht dort ein eigenes Update;
 Loxone bleibt ein eigener Modbus-Master.

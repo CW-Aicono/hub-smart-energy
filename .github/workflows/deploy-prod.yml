@@ -95,6 +95,7 @@ jobs:
           # Release-coupled scripts must travel together; keeping an old deploy
           # script would silently omit the new backend completeness checks.
           RELEASE_PATHS=(
+            .github/workflows/deploy-prod.yml
             scripts/deploy.sh
             scripts/apply-migrations.sh
             supabase/deploy/verify-live-release.sh
@@ -107,6 +108,9 @@ jobs:
             git checkout "${STAGING_SHA}" -- "$path"
           done
           bash -n scripts/deploy.sh scripts/apply-migrations.sh supabase/deploy/verify-live-release.sh
+
+          npm ci --no-audit --no-fund
+          npx vitest run src/lib/__tests__/tenantSetupDeploy.test.ts src/lib/__tests__/tenantSetupKind.test.ts src/lib/__tests__/liveMigrationRunner.test.ts src/lib/__tests__/liveDeployRecovery.test.ts src/lib/__tests__/setupEndpointGuard.test.ts src/lib/__tests__/partnerTenantList.test.ts src/lib/__tests__/chargerTemplates.test.ts src/lib/__tests__/packageCorrectionSql.test.ts
 
           git add -A
           TARGET_TREE="$(git write-tree)"
