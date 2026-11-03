@@ -145,3 +145,5 @@
 - [ ] Inbetriebnahme-/Abnahmeprotokoll – Musterprotokolle/Mail benötigt (wartet auf Nutzer)
 
 - [x] Einrichtungsphase für neue Tenants (v1.36.0)
+- [x] Ladestations-Vorlagen + Vestel Gemini (v1.37.0)
+- [ ] Vestel Gemini Lastmanagement-Register – wartet auf Vestel-Modbus-Registerliste
