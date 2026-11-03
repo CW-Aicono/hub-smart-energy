@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.39.0 – 03.11.2026
+- PV-Überschussladen sichtbar: Live-Energiefluss, Regelentscheidungen Schritt für Schritt, Tagesanalyse und Prüfliste in der Ladegruppe und als Dashboard-Widget.
+- Funktioniert auch ohne Speicher; ELMI-Speicher darf beim Laden immer entladen. Regelung alle 3 Minuten.
+
 ## v1.38.4 – 03.11.2026
 - Ladevorgänge erscheinen jetzt noch am selben Tag in der Energieanalyse.
 
