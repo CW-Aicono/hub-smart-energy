@@ -540,6 +540,13 @@
       "when": 1793695017702,
       "tag": "0076_package_correction_security_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793695416761,
+      "tag": "0077_package_correction_collective_invoice_guard",
+      "breakpoints": true
     }
   ]
 }
