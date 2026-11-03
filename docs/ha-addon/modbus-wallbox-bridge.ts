@@ -33,6 +33,7 @@ type WriteEntry = {
   min?: number;
   max?: number;
   unit?: string;
+  period_ms?: number;
 };
 
 export interface WallboxTemplate {
@@ -47,7 +48,15 @@ export interface WallboxTemplate {
     start_charge?: WriteEntry;
     stop_charge?: WriteEntry;
     unlock?: WriteEntry;
+    /** Beim Verbindungsaufbau schreiben (z. B. Vestel 2000) */
+    failsafe_current?: WriteEntry;
+    /** Beim Verbindungsaufbau schreiben (z. B. Vestel 2002) */
+    failsafe_timeout?: WriteEntry;
+    /** Periodisch schreiben, sonst Failsafe (z. B. Vestel 6000 = 1) */
+    alive?: WriteEntry;
   };
+  /** emulate_ocpp: Bridge spiegelt OCPP; dlm_only: Station spricht OCPP selbst */
+  bridge_mode?: "emulate_ocpp" | "dlm_only";
   status_map: Record<string, string>;
   poll_intervals: { fast_ms: number; slow_ms: number };
 }
@@ -139,6 +148,7 @@ export class ModbusWallboxBridge {
   private ws: WebSocket | null = null;
   private pollFast?: ReturnType<typeof setInterval>;
   private pollSlow?: ReturnType<typeof setInterval>;
+  private aliveTimer?: ReturnType<typeof setInterval>;
   private state: ParsedState = {};
   private lastOcppStatus = "Available";
   private msgId = 1;
@@ -155,7 +165,14 @@ export class ModbusWallboxBridge {
 
   async start() {
     await this.connectModbus();
-    this.connectOcpp();
+    await this.initSession();
+    if (this.tpl.bridge_mode !== "dlm_only") this.connectOcpp();
+    const alive = this.tpl.write_map?.alive;
+    if (alive) {
+      const timeoutS = this.tpl.write_map?.failsafe_timeout?.value ?? 20;
+      const period = Math.max(3000, alive.period_ms ?? (timeoutS * 1000) / 2);
+      this.aliveTimer = setInterval(() => this.writeEntry(alive, alive.value ?? 1).catch((e) => console.error("[wb-bridge] alive", e?.message)), period);
+    }
     const fast = this.tpl.poll_intervals?.fast_ms ?? 3000;
     const slow = this.tpl.poll_intervals?.slow_ms ?? 30000;
     this.pollFast = setInterval(() => this.pollGroup("fast").catch((e) => console.error("[wb-bridge] fast", e?.message)), fast);
@@ -166,6 +183,7 @@ export class ModbusWallboxBridge {
     this.stopped = true;
     if (this.pollFast) clearInterval(this.pollFast);
     if (this.pollSlow) clearInterval(this.pollSlow);
+    if (this.aliveTimer) clearInterval(this.aliveTimer);
     try { this.ws?.close(); } catch { /* ignore */ }
     try { await this.modbus?.close?.(); } catch { /* ignore */ }
   }
@@ -337,6 +355,21 @@ export class ModbusWallboxBridge {
         meterValue: [{ timestamp: new Date().toISOString(), sampledValue }],
       });
     }
+  }
+
+  /** Pflicht-Schreibvorgänge direkt nach Verbindungsaufbau (Vestel: Failsafe-Strom, -Timeout, Ladestrom). */
+  private async initSession() {
+    const w = this.tpl.write_map ?? {};
+    if (w.failsafe_current) await this.writeEntry(w.failsafe_current, w.failsafe_current.value ?? 6);
+    if (w.failsafe_timeout) await this.writeEntry(w.failsafe_timeout, w.failsafe_timeout.value ?? 20);
+    if (w.failsafe_current && w.set_current) await this.setCurrent(w.failsafe_current.value ?? 6);
+    if (w.alive) await this.writeEntry(w.alive, w.alive.value ?? 1);
+  }
+
+  private async writeEntry(w: WriteEntry, value: number) {
+    const regs = encode(Math.round(value * (w.scale ?? 1)), w);
+    if (w.function_code === 6) await this.modbus.writeRegister(w.address, regs[0]);
+    else await this.modbus.writeRegisters(w.address, regs);
   }
 
   async setCurrent(amps: number) {
