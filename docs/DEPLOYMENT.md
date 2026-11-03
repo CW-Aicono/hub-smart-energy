@@ -23,7 +23,8 @@ Pfad auf dem Server: `/opt/hub-smart-energy`
     - `scripts/apply-migrations.sh` spielt neue SQLs aus `supabase/migrations/` und `drizzle/migrations/`
    - `docker pull` + `docker compose up -d frontend functions`
    - `curl` Healthcheck auf `https://ems.aicono.org/`
-   - Bei jedem Fehler: automatisches `scripts/rollback.sh` (DB + Code zurück).
+   - Vor Frontend-Aktivierung: Release-Prüfung inkl. Paketfunktionen; Funktionscontainer zuerst aktualisieren und alle Dateien mit der Zielversion vergleichen.
+   - Bei Fehler: vorherigen Code und vorheriges Frontend-Image wiederherstellen. Additive Migrationen bleiben erhalten; kein Dump-Restore in die laufende Datenbank. Die Sicherung dient ausschließlich kontrollierter Notfallwiederherstellung.
 
 ## DB-Aenderungen: nur per Migration, nie per Studio-UI/SQL-Editor
 

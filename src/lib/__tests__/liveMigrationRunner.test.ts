@@ -7,9 +7,13 @@ const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 function fixture(failRelease = false) {
   const dir = mkdtempSync(join(tmpdir(), "live-runner-")); dirs.push(dir);
-  for (const folder of ["bin", "scripts", "supabase/deploy", "supabase/migrations", "drizzle/migrations", "supabase/functions/_shared", "supabase/functions/support-session-impersonate", "supabase/functions/generate-monthly-invoices", "supabase/functions/ocpp-central"]) mkdirSync(join(dir, folder), { recursive: true });
-  for (const file of ["scripts/apply-migrations.sh", "supabase/deploy/tenant-setup-ready.sql", "supabase/deploy/live-release-check.sql", "supabase/deploy/verify-live-release.sh", "drizzle/migrations/0070_tenant_setup_phase.sql", "drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql", "drizzle/migrations/0072_charger_templates_variants.sql", "drizzle/migrations/0073_vestel_modbus_registers.sql", "supabase/functions/_shared/supportSessionKind.ts"]) copyFileSync(file, join(dir,file));
-  writeFileSync(join(dir,"supabase/functions/support-session-impersonate/index.ts"), "resolveSessionKind");
+  for (const folder of ["bin", "scripts", "supabase/deploy", "supabase/migrations", "drizzle/migrations", "supabase/functions/_shared", "supabase/functions/support-session-impersonate", "supabase/functions/generate-monthly-invoices", "supabase/functions/ocpp-central", "supabase/functions/partner-create-tenant", "supabase/functions/license-sale", "supabase/functions/automation-scheduler", "supabase/functions/gateway-ingest"]) mkdirSync(join(dir, folder), { recursive: true });
+  for (const file of ["scripts/apply-migrations.sh", "supabase/deploy/tenant-setup-ready.sql", "supabase/deploy/live-release-check.sql", "supabase/deploy/verify-live-release.sh", "drizzle/migrations/0070_tenant_setup_phase.sql", "drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql", "drizzle/migrations/0072_charger_templates_variants.sql", "drizzle/migrations/0073_vestel_modbus_registers.sql", "drizzle/migrations/0074_package_sale_corrections_yearly.sql", "drizzle/migrations/0075_package_effective_entitlements.sql", "drizzle/migrations/0076_package_correction_security_guard.sql", "drizzle/migrations/0077_package_correction_collective_invoice_guard.sql", "drizzle/migrations/0078_package_correction_fail_closed_auth.sql", "drizzle/migrations/0079_tenant_setup_deploy_contract.sql", "supabase/functions/_shared/supportSessionKind.ts"]) copyFileSync(file, join(dir,file));
+  writeFileSync(join(dir,"supabase/functions/support-session-impersonate/index.ts"), "resolveSessionKind sessionSchemaError");
+  writeFileSync(join(dir,"supabase/functions/partner-create-tenant/index.ts"), 'setup_status: "setup"');
+  writeFileSync(join(dir,"supabase/functions/license-sale/index.ts"), 'finalize_license_sale_options');
+  writeFileSync(join(dir,"supabase/functions/automation-scheduler/index.ts"), 'effective_tenant_modules');
+  writeFileSync(join(dir,"supabase/functions/gateway-ingest/index.ts"), 'entitlement_enabled');
   writeFileSync(join(dir,"supabase/functions/generate-monthly-invoices/index.ts"), "session_kind");
   writeFileSync(join(dir,"supabase/functions/ocpp-central/index.ts"), "supports_connector_lock");
   const docker = join(dir,"bin/docker");
@@ -43,6 +47,12 @@ describe("live migration runner release gate", () => {
   });
   it("fails the existing deploy when the actual release check fails, without reloading the API", () => {
     const { dir,run } = fixture(true);
+    expect(run).toThrow();
+    expect(existsSync(join(dir,"notified"))).toBe(false);
+  });
+  it("refuses missing mandatory release files even when all migrations are marked applied", () => {
+    const {dir,run} = fixture();
+    rmSync(join(dir,"drizzle/migrations/0079_tenant_setup_deploy_contract.sql"));
     expect(run).toThrow();
     expect(existsSync(join(dir,"notified"))).toBe(false);
   });

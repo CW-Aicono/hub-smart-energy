@@ -20,11 +20,23 @@ Eine nur per Serverbefehl ergänzte Einrichtungsphase wird vervollständigt;
 bereits übergebene Tenants werden nicht zurückgesetzt. Fehlende Bestandteile
 brechen den Deploy ab.
 
+Seit v1.38.1 werden auch Jahresabrechnung, Paketkorrekturen und die tatsächlich
+ausgelieferten Funktionsdateien geprüft. Neue Tenants starten in beiden Portalen
+ausdrücklich in Einrichtung. Fehlt die Sitzungsprotokollierung, startet kein
+Fernzugriff. Bei Deploy-Fehlern werden App und Funktionen zurückgenommen, ohne
+die laufende Datenbank mit einer Sicherung zu überschreiben. Bereits fälschlich
+als übergeben angelegte Tenants werden nicht automatisch zurückgesetzt.
+
 Die Pflichtprüfung liegt im bereits aus `staging` übernommenen Migrationsrunner;
 die Prüfscripte unter `supabase/deploy/` bleiben von der Main-CI-Ausnahme unberührt.
 Damit funktioniert diese Reparatur auch mit dem bisherigen geschützten Workflow.
 Zusätzliche Workflow-Härtung (Zielcommit-Script und SHA-Abgleich) muss separat in
 den geschützten Main-Workflow übernommen werden; die Pflichtprüfung wartet nicht darauf.
+
+Der aktualisierte Workflow übernimmt künftig ausdrücklich auch seine eigene
+Release-Version aus Staging und führt die Regressionstests vor Image-Bau aus.
+Für den ersten Lauf muss dieser Workflow einmal auf dem ausführenden Main-Branch
+vorliegen; ein bereits gestarteter älterer Workflow aktualisiert sich nicht selbst.
 
 Die separat auf Geräten installierte Gateway-/HA-Add-on-Software ist nicht Teil
 des EMS-Deploys. Direkter Gemini-Modbus-Betrieb braucht dort ein eigenes Update;

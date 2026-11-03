@@ -57,6 +57,7 @@ serve(async (req: Request) => {
         slug,
         contact_email: contactEmail,
         partner_id: membership.partner_id,
+        setup_status: "setup",
       })
       .select("id, name, slug")
       .single();
