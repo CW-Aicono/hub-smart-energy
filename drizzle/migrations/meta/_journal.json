@@ -547,6 +547,13 @@
       "when": 1793695416761,
       "tag": "0077_package_correction_collective_invoice_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793695519510,
+      "tag": "0078_package_correction_fail_closed_auth",
+      "breakpoints": true
     }
   ]
 }
