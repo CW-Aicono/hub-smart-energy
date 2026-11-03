@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.38.3 – 03.11.2026
+- Partnerliste zeigt das Abrechnungsmodell verständlich als „Wiederverkauf“ oder „Provision“.
+
 ## v1.38.2 – 03.11.2026
 - Partner-Rechnungen berücksichtigen Logo und Farben aus den Partner-Einstellungen, auch in der Vorschau.
 - Das Design wird bei Freigabe gespeichert; spätere Änderungen lassen ausgestellte Rechnungen unverändert.
