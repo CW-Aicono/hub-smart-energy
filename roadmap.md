@@ -1,5 +1,10 @@
 # Roadmap
 
+## Paketkorrekturen und individuelle Abrechnung (03.11., Dirk)
+- [ ] Bestehende Möglichkeiten prüfen: Korrektur/Wiederbuchung, Intervall je Paket, befristeter Einzelrabatt, Euro-Rabatt, Ablaufwahl, Partner-Rabattanfragen, jährliche Abrechnung.
+- [ ] Fehlendes im bestehenden Verkaufs-/Abrechnungsweg ergänzen; Bestandsdaten und technische Steuerung erhalten; Tests, Handbuch vier Sprachen und Versionshinweise.
+- [ ] Angemeldete Paketverwaltung und Rechnungsentwürfe prüfen; Live-Ausführung bleibt abhängig vom Hetzner-Deploy.
+
 ## Vollständiger Live-Deploy vom 03.11.
 - [x] v1.37.2: Pflichtprüfung im vorhandenen Migrationsrunner; unvollständige Setup-Installation trotz Tracking automatisch mit 0070/0071 vervollständigen. Übergabe, Gemini/ELMI, Vestel-Register und Funktionsdateien prüfen; API-Schema neu laden. Bestehende Tenants unverändert.
 - [x] 18 Regressionstests erfolgreich, einschließlich echter SQL-Reparatur/Übergabe und simuliertem Deploy-Abbruch; Partner-Tenant-Liste angemeldet sichtbar. Handbuch vier Sprachen, Version und Versionshinweise gepflegt; Cloud-Release-Checks erfolgreich.
