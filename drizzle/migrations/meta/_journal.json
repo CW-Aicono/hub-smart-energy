@@ -491,6 +491,13 @@
       "when": 1793640262098,
       "tag": "0069_temporary_package_discounts",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1793686358345,
+      "tag": "0070_tenant_setup_phase",
+      "breakpoints": true
     }
   ]
 }
