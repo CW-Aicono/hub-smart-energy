@@ -160,14 +160,23 @@ export function useMeters(locationId?: string) {
   };
 
   const deleteMeter = async (id: string) => {
-    const { error } = await supabase.from("meters").delete().eq("id", id);
-    if (error) {
-      toast.error(getT()("meter.errorDelete"));
-      console.error(error);
-    } else {
-      toast.success(getT()("meter.deleted"));
+    // .select() liefert die tatsächlich gelöschten Zeilen. Ohne Rückgabe
+    // meldete die Datenbank bei fehlender Berechtigung "Erfolg" mit 0 Zeilen,
+    // und der Nutzer sah weder Fehler noch Änderung.
+    const { data, error } = await supabase.from("meters").delete().eq("id", id).select("id");
+    if (error || !data || data.length === 0) {
+      const detail = error?.message ? `: ${error.message}` : " (keine Berechtigung oder bereits entfernt)";
+      toast.error(`${getT()("meter.errorDelete")}${detail}`);
+      console.error(error ?? "delete affected 0 rows", id);
       invalidate();
+      return;
     }
+    // Sofort aus allen geladenen Zählerlisten entfernen – kein manueller Refresh nötig.
+    queryClient.setQueriesData<Meter[]>({ queryKey: ["meters"] }, (old) =>
+      Array.isArray(old) ? old.filter((m) => m.id !== id) : old,
+    );
+    toast.success(getT()("meter.deleted"));
+    invalidate();
   };
 
   const archiveMeter = async (id: string, archived: boolean) => {
