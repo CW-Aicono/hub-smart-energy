@@ -3,6 +3,7 @@
 ## v1.38.2 – 03.11.2026
 - Partner-Rechnungsvorschau liest Logo und drei Farben aus Partner-Einstellungen; PDF verwendet Primärfarbe für Titel, Sekundärfarbe für Tabellenkopf und Akzentfarbe für Linien, mit lesbarem Kontrast und begrenzten Logomaßen.
 - Beim Ausstellen wird das Design im bestehenden sender_snapshot eingefroren; Altbelege, Preise, Rechte und ZUGFeRD-Daten bleiben unverändert. Idempotente Migration für den nächsten Live-Deploy; Handbuch vier Sprachen gepflegt.
+- 18 Tests erfolgreich; angemeldete Vorschau eines vorhandenen Partner-Entwurfs zeigt gespeichertes Logo und alle drei Farben, 99 € netto und Status Entwurf unverändert. Nichts ausgestellt/versendet; Live-Deploy extern offen.
 
 ## v1.38.1 – 03.11.2026
 - Beide Portal-Anlegewege und useTenants schreiben setup_status explizit; Support-Einstieg prüft Sitzungsprotokoll vor User-/Token-Erstellung, kein Fallback ohne Protokollierung.
