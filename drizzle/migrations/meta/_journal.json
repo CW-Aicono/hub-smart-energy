@@ -512,6 +512,13 @@
       "when": 1793687586437,
       "tag": "0072_charger_templates_variants",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1793687957998,
+      "tag": "0073_vestel_modbus_registers",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,9 @@
 # Änderungsprotokoll (intern)
 
+## v1.37.1 – 2026-11-03
+- Vestel EVC10/Gemini Modbus-Vorlage mit Registern aus EVC04 Modbus TCP Spec v1.8 aktiviert (Status 1000, Kabel 1004, Fehler 1006, Ströme 1008–1012, Leistung 1020, Zähler 1036, Grenzen 1100–1106; Schreiben 2000/2002/5004/6000) – Migration 0073.
+- Neue Spalte `wallbox_modbus_templates.bridge_mode` (`dlm_only` = keine OCPP-Emulation); Referenz-Bridge `docs/ha-addon/modbus-wallbox-bridge.ts` schreibt Failsafe/Ladestrom beim Verbindungsaufbau und Alive periodisch.
+
 ## v1.37.0 – 2026-11-03
 - Ladestations-Vorlagen: `charger_models.variants/dlm_notes/modbus_template_id`, `charge_points.charger_model_id/charger_variant/cable_attached/supports_connector_lock`; Trigger `enforce_charger_template` erzwingt Stecker, Anzahl, Max-Leistung, Kabel/Verriegelung (Migration 0072).
 - Vorlagen Vestel AC Gemini Dual (6 Varianten aus Datenblatt 05/2024) und ELMI All-in-One 180/360 (DC, CCS, Kabel fest); Modbus-Vorlage Vestel EVC10 (Port 502, Unit 255) inaktiv bis Registerliste vorliegt.

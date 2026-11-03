@@ -16091,6 +16091,7 @@ export type Database = {
       }
       wallbox_modbus_templates: {
         Row: {
+          bridge_mode: string
           created_at: string
           created_by: string | null
           default_port: number
@@ -16110,6 +16111,7 @@ export type Database = {
           write_map: Json
         }
         Insert: {
+          bridge_mode?: string
           created_at?: string
           created_by?: string | null
           default_port?: number
@@ -16129,6 +16131,7 @@ export type Database = {
           write_map?: Json
         }
         Update: {
+          bridge_mode?: string
           created_at?: string
           created_by?: string | null
           default_port?: number

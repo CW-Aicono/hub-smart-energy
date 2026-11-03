@@ -146,4 +146,5 @@
 
 - [x] Einrichtungsphase für neue Tenants (v1.36.0)
 - [x] Ladestations-Vorlagen + Vestel Gemini (v1.37.0)
-- [ ] Vestel Gemini Lastmanagement-Register – wartet auf Vestel-Modbus-Registerliste
+- [x] Vestel Gemini Lastmanagement-Register (v1.37.1)
+- [ ] HA-Add-on (ha-addons-Repo): Bridge-Änderungen übernehmen (dlm_only, Failsafe, Alive)
