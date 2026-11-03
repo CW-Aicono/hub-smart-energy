@@ -37,6 +37,8 @@ export interface StorageSetpointInput {
   socPct: number | null;
   /** Entladen zur Deckung des eigenen Verbrauchs erlaubt. */
   allowSelfDischarge: boolean;
+  /** Ladestand, unter dem nicht mehr entladen wird (Standard 5 %). */
+  minSocPct?: number;
 }
 
 /**
