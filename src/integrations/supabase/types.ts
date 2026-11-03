@@ -16490,6 +16490,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cancel_mistaken_license_sale: {
+        Args: { p_reason: string; p_sale: string }
+        Returns: undefined
+      }
       cancel_partner_customer_invoice: {
         Args: { p_invoice: string }
         Returns: {
