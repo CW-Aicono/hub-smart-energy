@@ -432,6 +432,20 @@ for file in "${migration_files[@]}"; do
   filename="$(migration_key "$file")"
   escaped="$(printf '%s' "$filename" | sed "s/'/''/g")"
 
+  # 0079 needs the setup columns. Repair a falsely tracked 0070 first, rather
+  # than failing on 0079 before the post-loop readiness repair can run.
+  if [ "$filename" = "drizzle/0079_tenant_setup_deploy_contract.sql" ]; then
+    setup_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/tenant-setup-ready.sql")"
+    if [ "$setup_ready" != 't' ]; then
+      for prerequisite in 0070_tenant_setup_phase.sql 0071_tenant_setup_phase_audit_fix.sql; do
+        if ! run_migration_with_autoheal "$DRIZZLE_MIG_DIR/$prerequisite"; then
+          log "FEHLER: Einrichtungs-Voraussetzung fehlt"
+          exit 1
+        fi
+      done
+    fi
+  fi
+
   already="$(psql_exec -At -c "SELECT 1 FROM public._deploy_migrations WHERE filename = '$escaped'")"
   if [ "$already" = "1" ]; then
     skipped_count=$((skipped_count + 1))
