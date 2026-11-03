@@ -449,7 +449,7 @@ done
 # release. Replay only the two idempotent setup migrations when their actual
 # schema/default/triggers are missing; never reset existing tenants to setup.
 if [ -f "$DRIZZLE_MIG_DIR/0070_tenant_setup_phase.sql" ]; then
-  setup_ready="$(psql_exec -At < "$REPO_ROOT/scripts/tenant-setup-ready.sql")"
+  setup_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/tenant-setup-ready.sql")"
   if [ "$setup_ready" != 't' ]; then
     log "Reparatur: Einrichtungsphase unvollstaendig trotz Migrationsstand"
     for setup_file in 0070_tenant_setup_phase.sql 0071_tenant_setup_phase_audit_fix.sql; do
@@ -459,11 +459,20 @@ if [ -f "$DRIZZLE_MIG_DIR/0070_tenant_setup_phase.sql" ]; then
       fi
       mark_applied "$DRIZZLE_MIG_DIR/$setup_file"
     done
-    setup_ready="$(psql_exec -At < "$REPO_ROOT/scripts/tenant-setup-ready.sql")"
+    setup_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/tenant-setup-ready.sql")"
     if [ "$setup_ready" != 't' ]; then
       log "FEHLER: Einrichtungsphase bleibt unvollstaendig"
       exit 1
     fi
   fi
+fi
+if [ -f "$REPO_ROOT/supabase/deploy/verify-live-release.sh" ]; then
+  # Existing protected main workflow already imports this runner from staging.
+  # Keep the mandatory gate here so older deploy.sh versions cannot bypass it.
+  if ! bash "$REPO_ROOT/supabase/deploy/verify-live-release.sh"; then
+    log "FEHLER: Release unvollstaendig; Frontend darf nicht aktiviert werden"
+    exit 1
+  fi
+  psql_exec -c "NOTIFY pgrst, 'reload schema';" > /dev/null
 fi
 log "Fertig: $applied_count neue, $skipped_count bereits appliziert, $autoheal_count per Auto-Heal geheilt."

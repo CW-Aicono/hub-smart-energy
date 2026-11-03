@@ -39,7 +39,7 @@ if ! "${REPO_ROOT}/scripts/apply-migrations.sh"; then
 fi
 
 log "Vollstaendigkeit der heutigen Live-Aenderungen pruefen"
-if ! bash "${REPO_ROOT}/scripts/verify-live-release.sh"; then
+if ! bash "${REPO_ROOT}/supabase/deploy/verify-live-release.sh"; then
   log "FEHLER: Release-Pruefung fehlgeschlagen. Starte Rollback."
   "${REPO_ROOT}/scripts/rollback.sh" "$TS" "$PREV_SHA"
   exit 1

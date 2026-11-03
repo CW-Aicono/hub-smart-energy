@@ -97,16 +97,16 @@ jobs:
           RELEASE_PATHS=(
             scripts/deploy.sh
             scripts/apply-migrations.sh
-            scripts/verify-live-release.sh
-            scripts/tenant-setup-ready.sql
-            scripts/live-release-check.sql
+            supabase/deploy/verify-live-release.sh
+            supabase/deploy/tenant-setup-ready.sql
+            supabase/deploy/live-release-check.sql
             docs/GO-LIVE.md
           )
           for path in "${RELEASE_PATHS[@]}"; do
             git cat-file -e "${STAGING_SHA}:${path}"
             git checkout "${STAGING_SHA}" -- "$path"
           done
-          bash -n scripts/deploy.sh scripts/apply-migrations.sh scripts/verify-live-release.sh
+          bash -n scripts/deploy.sh scripts/apply-migrations.sh supabase/deploy/verify-live-release.sh
 
           git add -A
           TARGET_TREE="$(git write-tree)"

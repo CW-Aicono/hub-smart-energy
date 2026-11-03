@@ -22,10 +22,10 @@ grep -q 'resolveSessionKind' "$REPO_ROOT/supabase/functions/support-session-impe
 grep -q 'session_kind' "$REPO_ROOT/supabase/functions/generate-monthly-invoices/index.ts"
 grep -q 'supports_connector_lock' "$REPO_ROOT/supabase/functions/ocpp-central/index.ts"
 
-ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/scripts/tenant-setup-ready.sql")"
+ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/tenant-setup-ready.sql")"
 if [ "$ready" != 't' ]; then
   printf 'FEHLER: Einrichtungsphase nicht vollstaendig installiert.\n' >&2
   exit 1
 fi
-docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$REPO_ROOT/scripts/live-release-check.sql"
+docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$REPO_ROOT/supabase/deploy/live-release-check.sql"
 printf 'Live-Release: Einrichtung, Vorlagen und Funktionsdateien vollstaendig.\n'

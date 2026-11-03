@@ -20,11 +20,11 @@ Eine nur per Serverbefehl ergänzte Einrichtungsphase wird vervollständigt;
 bereits übergebene Tenants werden nicht zurückgesetzt. Fehlende Bestandteile
 brechen den Deploy ab.
 
-**Einmalige Übernahme:** Der Workflow auf `main` ist bewusst geschützt und wird
-nicht aus `staging` überschrieben. Die Änderungen an
-`.github/workflows/deploy-prod.yml` müssen einmal in den geschützten Workflow
-auf `main` übernommen werden, bevor der normale LIVE-Lauf startet. Danach
-kommen die release-gekoppelten Prüfscripte automatisch aus `staging`.
+Die Pflichtprüfung liegt im bereits aus `staging` übernommenen Migrationsrunner;
+die Prüfscripte unter `supabase/deploy/` bleiben von der Main-CI-Ausnahme unberührt.
+Damit funktioniert diese Reparatur auch mit dem bisherigen geschützten Workflow.
+Zusätzliche Workflow-Härtung (Zielcommit-Script und SHA-Abgleich) muss separat in
+den geschützten Main-Workflow übernommen werden; die Pflichtprüfung wartet nicht darauf.
 
 Die separat auf Geräten installierte Gateway-/HA-Add-on-Software ist nicht Teil
 des EMS-Deploys. Direkter Gemini-Modbus-Betrieb braucht dort ein eigenes Update;

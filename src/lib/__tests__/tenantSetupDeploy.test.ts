@@ -29,7 +29,7 @@ beforeAll(async () => {
 afterAll(async () => { await db.close(); });
 describe("live setup migration repairs", () => {
   it("detects that merely adding columns does not install the setup workflow", async () => {
-    expect((await db.query<{tenant_setup_ready: boolean}>(read("scripts/tenant-setup-ready.sql"))).rows[0].tenant_setup_ready).toBe(false);
+    expect((await db.query<{tenant_setup_ready: boolean}>(read("supabase/deploy/tenant-setup-ready.sql"))).rows[0].tenant_setup_ready).toBe(false);
   });
   it("repairs the partial installation, keeps old tenants active and starts new ones in setup", async () => {
     await db.exec(read("drizzle/migrations/0070_tenant_setup_phase.sql"));
@@ -38,7 +38,7 @@ describe("live setup migration repairs", () => {
     expect((await db.query("SELECT id,setup_status FROM tenants ORDER BY id")).rows).toEqual([
       {id: originalTenant,setup_status: "active"}, {id: setupTenant,setup_status: "setup"},
     ]);
-    expect((await db.query<{tenant_setup_ready: boolean}>(read("scripts/tenant-setup-ready.sql"))).rows[0].tenant_setup_ready).toBe(true);
+    expect((await db.query<{tenant_setup_ready: boolean}>(read("supabase/deploy/tenant-setup-ready.sql"))).rows[0].tenant_setup_ready).toBe(true);
   });
   it("allows repeated application without changing existing tenant states", async () => {
     await db.exec(read("drizzle/migrations/0070_tenant_setup_phase.sql"));
