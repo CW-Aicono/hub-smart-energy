@@ -269,6 +269,18 @@ const SuperAdminTenantDetail = () => {
     (s) => !s.ended_at && new Date(s.expires_at).getTime() > Date.now()
   );
 
+  const inSetup = (tenant as any)?.setup_status === "setup";
+  const [completingSetup, setCompletingSetup] = useState(false);
+  const handleCompleteSetup = async () => {
+    if (!id || !window.confirm(t("tenant_setup.confirm" as any))) return;
+    setCompletingSetup(true);
+    const { error } = await supabase.rpc("complete_tenant_setup" as any, { _tenant_id: id } as any);
+    setCompletingSetup(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(t("tenant_setup.completed" as any));
+    queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
+    queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
+  };
   const [startingSupport, setStartingSupport] = useState(false);
   const handleStartRemoteSupport = async () => {
     if (!id || !user) return;
@@ -543,13 +555,21 @@ const SuperAdminTenantDetail = () => {
             <p className="text-sm text-muted-foreground mt-1">{tenant?.slug}</p>
           </div>
           <div className="flex items-center gap-2">
+            {inSetup && (
+              <Badge variant="secondary">{t("tenant_setup.badge" as any)}</Badge>
+            )}
+            {inSetup && (
+              <Button variant="outline" disabled={completingSetup} onClick={handleCompleteSetup}>
+                {t("tenant_setup.complete" as any)}
+              </Button>
+            )}
             <Button
-              variant={(tenant as any)?.remote_support_enabled ? "default" : "outline"}
-              disabled={!(tenant as any)?.remote_support_enabled || startingSupport}
+              variant={inSetup || (tenant as any)?.remote_support_enabled ? "default" : "outline"}
+              disabled={!(inSetup || (tenant as any)?.remote_support_enabled) || startingSupport}
               onClick={handleStartRemoteSupport}
             >
               <HeadsetIcon className="h-4 w-4 mr-2" />
-              {activeSession ? "Sitzung fortsetzen" : t("tenant_detail.remote_support")}
+              {activeSession ? "Sitzung fortsetzen" : inSetup ? t("tenant_setup.open" as any) : t("tenant_detail.remote_support")}
               {activeSession && <Badge variant="secondary" className="ml-2 bg-green-500/20 text-green-600">{t("common.active")}</Badge>}
             </Button>
             {activeSession && (
