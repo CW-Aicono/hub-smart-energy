@@ -20,7 +20,7 @@ beforeAll(async () => {
  CREATE TABLE license_billing_events(sale_id uuid,period_start date,period_end date,PRIMARY KEY(sale_id,period_start));
  CREATE TABLE partner_customer_invoices(id uuid default gen_random_uuid(),partner_id uuid,tenant_id uuid,source_ref text unique,period_start date,period_end date,amount numeric,line_items jsonb,document_type text,payment_method text,status text default 'draft',issued_at timestamptz);
  CREATE TABLE tenant_invoices(id uuid default gen_random_uuid(),tenant_id uuid,partner_id uuid,source_ref text unique,invoice_number text,invoice_kind text,status text,document_type text,period_start date,period_end date,amount numeric,module_total numeric,support_total numeric,line_items jsonb,issued_at timestamptz,lexware_invoice_id text);
- CREATE FUNCTION license_period_end(d date,c text) RETURNS date LANGUAGE sql AS $$ SELECT (date_trunc('month',d)+interval '1 month - 1 day')::date $$;
+ CREATE FUNCTION license_period_end(p_day date,p_cadence text) RETURNS date LANGUAGE sql AS $$ SELECT (date_trunc('month',p_day)+interval '1 month - 1 day')::date $$;
  CREATE FUNCTION booked_tenant_capacity(uuid,text) RETURNS int LANGUAGE sql AS $$ SELECT 10 $$;
  CREATE FUNCTION preflight_license_sale(uuid,text,text,int,text,numeric,date,text,uuid) RETURNS uuid LANGUAGE sql AS $$ SELECT null::uuid $$;
  CREATE FUNCTION create_custom_invoice_sale(uuid,jsonb,text,text,uuid,date) RETURNS uuid LANGUAGE sql AS $$ SELECT null::uuid $$;`);
