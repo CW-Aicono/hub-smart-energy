@@ -42,6 +42,7 @@ const WIDGET_LABEL_KEYS: Record<string, string> = {
   arbitrage_ai: "widget.arbitrageAi",
   integration_errors: "widget.integrationErrors",
   savings_share: "widget.savingsShare",
+  pv_flow_live: "widget.pvFlowLive",
   charge_point_power: "widget.chargePointPower",
   charge_station: "widget.chargeStation",
 };

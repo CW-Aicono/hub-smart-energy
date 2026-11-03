@@ -4071,6 +4071,7 @@ export const translations = {
   "widget.sizeOneQuarter": { de: "1/4 Breite", en: "1/4 Width", es: "1/4 del ancho", nl: "1/4 breedte" },
   "widget.sizeOneSixth": { de: "1/6 Breite", en: "1/6 Width", es: "1/6 del ancho", nl: "1/6 breedte" },
   "widget.chargeStation": { de: "Ladestationen (Detail)", en: "Charging stations (detail)", es: "Estaciones de carga (detalle)", nl: "Laadstations (detail)" },
+  "widget.pvFlowLive": { de: "PV-Überschuss live", en: "PV surplus live", es: "Excedente FV en vivo", nl: "PV-overschot live" },
   "widget.sizeOneThird": { de: "1/3 Breite", en: "1/3 Width", es: "1/3 del ancho", nl: "1/3 breedte" },
 
   // Dashboard widget titles (used in cards)

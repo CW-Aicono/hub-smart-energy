@@ -45,6 +45,7 @@ const WIDGET_HEIGHT_LIMITS: Record<string, { min?: number; max?: number }> = {
   integration_errors: { min: 360 },
   ppa_fleet: { min: 360 },
   savings_share: { min: 340, max: 520 },
+  pv_flow_live: { min: 520 },
 };
 
 
@@ -71,6 +72,7 @@ const ChargePointPowerWidget = lazy(() => import("@/components/dashboard/ChargeP
 const ChargeStationWidget = lazy(() => import("@/components/dashboard/ChargeStationWidget"));
 const PPAFleetWidget = lazy(() => import("@/components/dashboard/PPAFleetWidget"));
 const SavingsShareWidget = lazy(() => import("@/components/dashboard/SavingsShareWidget"));
+const PvFlowLiveWidget = lazy(() => import("@/components/dashboard/PvFlowLiveWidget"));
 
 interface WidgetProps {
   locationId: string | null;
@@ -101,6 +103,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   charge_station: ChargeStationWidget,
   ppa_fleet: PPAFleetWidget,
   savings_share: SavingsShareWidget,
+  pv_flow_live: PvFlowLiveWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {
@@ -133,6 +136,7 @@ const WIDGET_MODULE_MAP: Record<string, string> = {
   savings_share: "gain_sharing",
   charge_point_power: "ev_charging",
   charge_station: "ev_charging",
+  pv_flow_live: "ev_charging",
 };
 
 const getLocationWidget = (_locationId: string | null): string => {

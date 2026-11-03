@@ -48,6 +48,7 @@ const DEFAULT_WIDGETS = [
   { widget_type: "savings_share", position: 17, is_visible: true },
   { widget_type: "charge_point_power", position: 18, is_visible: false },
   { widget_type: "charge_station", position: 19, is_visible: false },
+  { widget_type: "pv_flow_live", position: 20, is_visible: true },
 ];
 
 export function useDashboardWidgets() {
