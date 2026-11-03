@@ -18,13 +18,11 @@ export default function PvFlowLiveWidget({ locationId }: { locationId: string | 
     queryFn: async () => {
       const { data: cfgs } = await supabase.from("solar_charging_config").select("*").eq("tenant_id", tenantId!);
       if (!cfgs?.length) return null;
-      const cpIds = cfgs.map((c: any) => c.charge_point_id).filter(Boolean);
-      const groupIds = cfgs.map((c: any) => c.group_id).filter(Boolean);
       const { data: cps } = await supabase.from("charge_points").select("id, group_id, location_id").eq("tenant_id", tenantId!);
       const locOf = (c: any) => (cps ?? []).find((p: any) => (c.group_id ? p.group_id === c.group_id : p.id === c.charge_point_id))?.location_id ?? null;
       const withLoc = cfgs.map((c: any) => ({ cfg: c, loc: locOf(c) })).filter((x) => x.loc);
-      void cpIds; void groupIds;
-      const match = withLoc.find((x) => !locationId || x.loc === locationId && x.cfg.is_active) ?? withLoc.find((x) => !locationId || x.loc === locationId);
+      const here = (x: { loc: string }) => !locationId || x.loc === locationId;
+      const match = withLoc.find((x) => here(x) && x.cfg.is_active) ?? withLoc.find(here) ?? null;
       return match ?? null;
     },
   });
