@@ -32,3 +32,6 @@
 - Tenant sale catalogs use the selected tenant's partner portfolio and refresh on open, focus and while open; partner grants invalidate dependent catalog caches — newly authorized packages must not remain locked by dashboard caching, while server authorization stays authoritative.
 - Live deployments execute the target commit's deploy script and verify actual schema/defaults/triggers/templates before frontend activation; release checks travel together from staging and only idempotent setup migrations replay on drift — tracking and HTTP reachability alone do not prove completeness.
 - Partner tenant lists tolerate additive schema rollout, remain scoped by partner ID and surface errors; missing setup state never grants setup access — deployment compatibility must not weaken remote-support consent.
+
+- Package corrections use authorized correct_license_sale and audit rows; draft-only periods may be rebuilt, issued documents are immutable and future changes retain EK — prevents duplicate billing and historical repricing.
+- Effective package entitlements are resolved by effective_tenant_modules for UI, scheduler and gateway sync; stored rules are retained and local rules carry known expiry — ends feature execution without deleting data or changing control algorithms.

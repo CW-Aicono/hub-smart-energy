@@ -1,0 +1,6 @@
+DO $$ DECLARE d text; BEGIN
+SELECT pg_get_functiondef('public.correct_license_sale(uuid,numeric,integer,text,numeric,date,date,text,text)'::regprocedure) INTO d; d:=replace(d,'NOT (can_portal_write(auth.uid(),''commercial'') OR can_manage_partner_billing(s.partner_id))','NOT (coalesce(can_portal_write(auth.uid(),''commercial''),false) OR coalesce(can_manage_partner_billing(s.partner_id),false))'); EXECUTE d;
+SELECT pg_get_functiondef('public.cancel_mistaken_license_sale(uuid,text)'::regprocedure) INTO d; d:=replace(d,'NOT (can_portal_write(auth.uid(),''commercial'') OR can_manage_partner_billing(s.partner_id))','NOT (coalesce(can_portal_write(auth.uid(),''commercial''),false) OR coalesce(can_manage_partner_billing(s.partner_id),false))'); EXECUTE d;
+SELECT pg_get_functiondef('public.effective_tenant_modules(uuid)'::regprocedure) INTO d; d:=replace(d,'can_portal_read(auth.uid(),''commercial'')','coalesce(can_portal_read(auth.uid(),''commercial''),false)'); d:=replace(d,'can_manage_partner_billing((SELECT partner_id FROM tenants WHERE id=p_tenant))','coalesce(can_manage_partner_billing((SELECT partner_id FROM tenants WHERE id=p_tenant)),false)'); EXECUTE d;
+END $$;
+NOTIFY pgrst,'reload schema';

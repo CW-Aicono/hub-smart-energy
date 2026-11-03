@@ -1,3 +1,4 @@
+import { useTranslation } from "@/hooks/useTranslation";
 import { useMemo, useState } from "react";
 import { PackageBillingOverviewCard, PartnerUsageNoticesCard } from "@/components/billing/PackagePricing";
 import { PartnerSalesPortfolioCard } from "@/components/billing/PartnerSalesPortfolioCard";
@@ -25,6 +26,7 @@ const fmtEur = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits:
 const fmtPct = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " %";
 
 export default function PartnerBilling() {
+  const { t } = useTranslation();
   const { partnerId, loading, permissions, isPartnerAdmin } = usePartnerAccess();
   const canEditPrices = permissions.viewBilling;
   const qc = useQueryClient();
@@ -275,6 +277,7 @@ export default function PartnerBilling() {
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
           {!isCommission && <TabsTrigger value="invoices">Rechnungen</TabsTrigger>}
           {!isCommission && <TabsTrigger value="sales">Pakete</TabsTrigger>}
+          <TabsTrigger value="requests">{t("partner.billing.discountRequests" as any)}</TabsTrigger>
           <TabsTrigger value="prices">{isCommission ? "Provision" : "Preise & Margen"}</TabsTrigger>
         </TabsList>
 
@@ -297,13 +300,8 @@ export default function PartnerBilling() {
           </TabsContent>
         )}
 
+        <TabsContent value="requests"><PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} /></TabsContent>
         <TabsContent value="prices" className="space-y-4">
-      {partnerId && (
-        <details className="rounded-lg border bg-card">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Rabatt bei AICONO anfragen</summary>
-          <div className="p-3 pt-0"><PartnerDiscountRequestsCard partnerId={partnerId} canRequest={isPartnerAdmin} /></div>
-        </details>
-      )}
       {isCommission ? (
         <Card>
           <CardHeader>

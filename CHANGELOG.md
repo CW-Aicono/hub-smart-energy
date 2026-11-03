@@ -1,5 +1,12 @@
 # Änderungsprotokoll (intern)
 
+## v1.38.0 – 03.11.2026
+- Paketkorrektur mit Begründung und Audit: Entwürfe positionsweise neu berechnen, ausgestellte Dokumente sperren; EK unverändert.
+- Je Position Intervall inkl. jährlich, Euro-Abzug, Zeitraum und Ablaufwahl. Partner-Rabattanfragen eigener sichtbarer Reiter.
+- Effektive Freischaltungen berücksichtigen Paketende, Daten bleiben; Automationslogik unverändert, nur Berechtigungsprüfung ergänzt. Lokales HA-Add-on benötigt getrennten Deploy.
+- 57 Tests erfolgreich. Angemeldet Jahresbuchung (49 €/Monat), Korrektur auf 50 € und Fehlbuchungsrücknahme geprüft; Endkundenentwurf 100 €, EK 148 € unverändert. Testdaten entfernt, nichts versendet. Antragsformular sichtbar geprüft. Hetzner-Live/HA-Add-on offen; ESB-Verträge unverändert.
+
+
 ## v1.37.2 – 2026-11-03
 - Live-Deploy startet deploy.sh des Zielcommits; Image und Server-Code müssen denselben Commit haben. Release-gekoppelte Deploy-Skripte und Prüfungen gemeinsam aus Staging übernehmen.
 - Vor Frontend-Wechsel: Setup-Default, Übergabe-Trigger/RPC/Rechte, Audit-Funktion, Gemini/ELMI-Vorlagen und Vestel-Register prüfen; PostgREST-Schema neu laden.
