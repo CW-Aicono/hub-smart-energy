@@ -1727,8 +1727,11 @@ export type Database = {
           auto_reboot_skip_if_charging: boolean
           auto_reboot_time: string
           auto_reboot_type: string
+          cable_attached: boolean | null
           certificate_required: boolean
           certificate_type: string | null
+          charger_model_id: string | null
+          charger_variant: string | null
           cheap_charging_schedule: Json | null
           connection_protocol: string
           connector_count: number
@@ -1758,6 +1761,7 @@ export type Database = {
           status: string
           supports_change_configuration: boolean | null
           supports_charging_profile: boolean | null
+          supports_connector_lock: boolean | null
           tenant_id: string
           updated_at: string
           vendor: string | null
@@ -1773,8 +1777,11 @@ export type Database = {
           auto_reboot_skip_if_charging?: boolean
           auto_reboot_time?: string
           auto_reboot_type?: string
+          cable_attached?: boolean | null
           certificate_required?: boolean
           certificate_type?: string | null
+          charger_model_id?: string | null
+          charger_variant?: string | null
           cheap_charging_schedule?: Json | null
           connection_protocol?: string
           connector_count?: number
@@ -1804,6 +1811,7 @@ export type Database = {
           status?: string
           supports_change_configuration?: boolean | null
           supports_charging_profile?: boolean | null
+          supports_connector_lock?: boolean | null
           tenant_id: string
           updated_at?: string
           vendor?: string | null
@@ -1819,8 +1827,11 @@ export type Database = {
           auto_reboot_skip_if_charging?: boolean
           auto_reboot_time?: string
           auto_reboot_type?: string
+          cable_attached?: boolean | null
           certificate_required?: boolean
           certificate_type?: string | null
+          charger_model_id?: string | null
+          charger_variant?: string | null
           cheap_charging_schedule?: Json | null
           connection_protocol?: string
           connector_count?: number
@@ -1850,6 +1861,7 @@ export type Database = {
           status?: string
           supports_change_configuration?: boolean | null
           supports_charging_profile?: boolean | null
+          supports_connector_lock?: boolean | null
           tenant_id?: string
           updated_at?: string
           vendor?: string | null
@@ -1857,6 +1869,13 @@ export type Database = {
           ws_connected_since?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "charge_points_charger_model_id_fkey"
+            columns: ["charger_model_id"]
+            isOneToOne: false
+            referencedRelation: "charger_models"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "charge_points_group_id_fkey"
             columns: ["group_id"]
@@ -1891,40 +1910,57 @@ export type Database = {
         Row: {
           charging_type: string
           created_at: string
+          dlm_notes: string | null
           id: string
           is_active: boolean
+          modbus_template_id: string | null
           model: string
           notes: string | null
           power_kw: number | null
           protocol: string
           updated_at: string
+          variants: Json | null
           vendor: string
         }
         Insert: {
           charging_type?: string
           created_at?: string
+          dlm_notes?: string | null
           id?: string
           is_active?: boolean
+          modbus_template_id?: string | null
           model: string
           notes?: string | null
           power_kw?: number | null
           protocol?: string
           updated_at?: string
+          variants?: Json | null
           vendor: string
         }
         Update: {
           charging_type?: string
           created_at?: string
+          dlm_notes?: string | null
           id?: string
           is_active?: boolean
+          modbus_template_id?: string | null
           model?: string
           notes?: string | null
           power_kw?: number | null
           protocol?: string
           updated_at?: string
+          variants?: Json | null
           vendor?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "charger_models_modbus_template_id_fkey"
+            columns: ["modbus_template_id"]
+            isOneToOne: false
+            referencedRelation: "wallbox_modbus_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       charging_access_log: {
         Row: {
