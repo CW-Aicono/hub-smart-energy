@@ -42,13 +42,17 @@ export function useTenantModules(tenantId: string | null) {
   const { data: modules = [], isLoading } = useQuery({
     queryKey: ["tenant-modules", tenantId],
     enabled: !!tenantId,
+    refetchInterval: 60000,
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("tenant_modules")
         .select("*")
-        .eq("tenant_id", tenantId!);
+        .eq("tenant_id", tenantId);
       if (error) throw error;
-      return data;
+      const { data: effective, error: effectiveError } = await (supabase as any).rpc("effective_tenant_modules", { p_tenant: tenantId });
+      if (effectiveError) throw effectiveError;
+      return data.map(mod => ({ ...mod, is_enabled: effective?.find((e: any) => e.module_code === mod.module_code)?.is_enabled === true }));
     },
   });
 

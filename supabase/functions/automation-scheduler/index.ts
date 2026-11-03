@@ -399,8 +399,15 @@ Deno.serve(async (req) => {
 
     const LEASE_SECONDS = 90;
     const nowMs = Date.now();
+    const allowedTenants = new Set<string>();
+    for (const tenant of new Set(automations.map(a => a.tenant_id))) {
+      const { data: modules, error: moduleError } = await supabase.rpc("effective_tenant_modules", { p_tenant: tenant });
+      if (moduleError) throw moduleError;
+      if (modules?.some((m: any) => m.module_code === "automation_building" && m.is_enabled)) allowedTenants.add(tenant);
+    }
 
     for (const auto of automations) {
+      if (!allowedTenants.has(auto.tenant_id)) { skippedCount++; continue; }
       const automationId = auto.id;
       const tenantId = auto.tenant_id;
       const timezone = (auto as any).locations?.timezone || "Europe/Berlin";

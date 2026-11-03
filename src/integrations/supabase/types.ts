@@ -6855,6 +6855,51 @@ export type Database = {
           },
         ]
       }
+      license_sale_corrections: {
+        Row: {
+          actor_id: string | null
+          after_data: Json
+          before_data: Json
+          created_at: string
+          id: string
+          sale_id: string
+          tenant_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          after_data: Json
+          before_data: Json
+          created_at?: string
+          id?: string
+          sale_id: string
+          tenant_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          after_data?: Json
+          before_data?: Json
+          created_at?: string
+          id?: string
+          sale_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "license_sale_corrections_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "license_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "license_sale_corrections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       license_sales: {
         Row: {
           auto_renew: boolean
@@ -6863,6 +6908,7 @@ export type Database = {
           created_by: string | null
           custom_lines: Json | null
           customer_discount_pct: number
+          discount_after: string
           discount_ends_on: string | null
           discount_starts_on: string | null
           ended_on: string | null
@@ -6891,6 +6937,7 @@ export type Database = {
           created_by?: string | null
           custom_lines?: Json | null
           customer_discount_pct?: number
+          discount_after?: string
           discount_ends_on?: string | null
           discount_starts_on?: string | null
           ended_on?: string | null
@@ -6919,6 +6966,7 @@ export type Database = {
           created_by?: string | null
           custom_lines?: Json | null
           customer_discount_pct?: number
+          discount_after?: string
           discount_ends_on?: string | null
           discount_starts_on?: string | null
           ended_on?: string | null
@@ -16442,6 +16490,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cancel_mistaken_license_sale: {
+        Args: { p_reason: string; p_sale: string }
+        Returns: undefined
+      }
       cancel_partner_customer_invoice: {
         Args: { p_invoice: string }
         Returns: {
@@ -16588,6 +16640,20 @@ export type Database = {
         Args: { p_floor_id: string }
         Returns: string
       }
+      correct_license_sale: {
+        Args: {
+          p_after: string
+          p_cadence: string
+          p_discount: number
+          p_from: string
+          p_price: number
+          p_quantity: number
+          p_reason: string
+          p_sale: string
+          p_to: string
+        }
+        Returns: string
+      }
       create_custom_invoice_sale: {
         Args: {
           p_cadence: string
@@ -16643,6 +16709,14 @@ export type Database = {
           status: string
         }[]
       }
+      effective_tenant_modules: {
+        Args: { p_tenant: string }
+        Returns: {
+          is_enabled: boolean
+          module_code: string
+          valid_until: string
+        }[]
+      }
       email_exists_anywhere: {
         Args: { _email: string }
         Returns: {
@@ -16685,6 +16759,25 @@ export type Database = {
       }
       finalize_license_sale_discount: {
         Args: {
+          p_cadence: string
+          p_code: string
+          p_discount?: number
+          p_discount_from?: string
+          p_discount_to?: string
+          p_kind: string
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_reason?: string
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
+        Returns: string
+      }
+      finalize_license_sale_options: {
+        Args: {
+          p_after?: string
           p_cadence: string
           p_code: string
           p_discount?: number

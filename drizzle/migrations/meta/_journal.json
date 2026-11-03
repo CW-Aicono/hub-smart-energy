@@ -519,6 +519,41 @@
       "when": 1793687957998,
       "tag": "0073_vestel_modbus_registers",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793694804595,
+      "tag": "0074_package_sale_corrections_yearly",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1793694922326,
+      "tag": "0075_package_effective_entitlements",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1793695017702,
+      "tag": "0076_package_correction_security_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793695416761,
+      "tag": "0077_package_correction_collective_invoice_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793695519510,
+      "tag": "0078_package_correction_fail_closed_auth",
+      "breakpoints": true
     }
   ]
 }

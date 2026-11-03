@@ -1,5 +1,16 @@
 # Roadmap
 
+## Paketkorrekturen und individuelle Abrechnung (03.11., Dirk)
+- [x] v1.38.0: Bestehend: Einzel-Prozentrabatt/manueller VK, Laufzeitpflege und Partner-Antragsweg (zuvor eingeklappt). Ergänzt: Korrektur und Fehlbuchung zurücknehmen, Intervall je Position inkl. jährlich, Euro-Abzug und eigener Zeitraum/Ablaufwahl.
+- [x] 57 Tests erfolgreich: Korrektur/ausgestellte Rechnungen, unveränderter EK, Jahresbeträge, Entitlements/Datenbehalt und bestehende Regeln. Handbuch vier Sprachen und Versionshinweise gepflegt.
+- [x] Angemeldet: Jahresbuchung Monitoring mit 50-Euro-Abzug, Korrektur auf 50-Euro-VK und Rücknahme geprüft; 100-Euro-Endkundenentwurf und 148-Euro-EK geprüft. Probebuchung, Entwürfe und neue Testfreischaltungen entfernt; keine Rechnung versendet. Einzelintervall mit Ladepunkt sowie Antragsformular sichtbar geprüft.
+- [ ] Wartet auf externen Deploy: Hetzner-Live und separates HA-Add-on für Ablaufprüfung lokal/offline. Bestehende ESB-Verträge nicht automatisch verändert. Gemeinsame neue Ladepunkt-Buchung nicht Ende-zu-Ende gespeichert; vorhandene Tests decken Mengen/Gruppierung ab.
+
+## Vollständiger Live-Deploy vom 03.11.
+- [x] v1.37.2: Pflichtprüfung im vorhandenen Migrationsrunner; unvollständige Setup-Installation trotz Tracking automatisch mit 0070/0071 vervollständigen. Übergabe, Gemini/ELMI, Vestel-Register und Funktionsdateien prüfen; API-Schema neu laden. Bestehende Tenants unverändert.
+- [x] 18 Regressionstests erfolgreich, einschließlich echter SQL-Reparatur/Übergabe und simuliertem Deploy-Abbruch; Partner-Tenant-Liste angemeldet sichtbar. Handbuch vier Sprachen, Version und Versionshinweise gepflegt; Cloud-Release-Checks erfolgreich.
+- [ ] Wartet auf Nutzer: LIVE-Deploy auf Hetzner ausführen und dort Einrichtung prüfen; Serverzugriff hier nicht verfügbar. Zusätzliche Workflow-SHA-Härtung separat auf geschütztes main übernehmen; Pflichtprüfung greift auch ohne diese Übernahme.
+
 ## Partner-Freigaben in Tenant-Paketauswahl (02.11.)
 - [x] v1.35.1: Neue Partner-Freigaben beim Öffnen/Fokus und alle 15 Sekunden im offenen Buchungsfenster aktualisieren; Portal-Auswahl nach Partner des ausgewählten Tenants eingrenzen.
 - [x] 13 Tests erfolgreich; angemeldet bei Bolan Test Monitoring + Analyse auswählbar, Vorschau 148 €, Auswahl nach Aktualisierung erhalten. Handbuch in vier Sprachen gepflegt; keine Buchung oder Rechnung ausgelöst.
