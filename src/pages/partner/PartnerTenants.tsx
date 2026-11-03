@@ -12,6 +12,7 @@ import { Plus, LifeBuoy, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 import { beginImpersonation } from "@/lib/supportView";
 import { useTenantOptional } from "@/hooks/useTenant";
 import { setAreaPreference } from "@/lib/areaPreference";
@@ -23,6 +24,7 @@ interface Row {
   slug: string;
   contact_email: string | null;
   created_at: string;
+  setup_status?: string | null;
 }
 
 type SortKey = "name" | "slug" | "contact" | "created_at";
@@ -80,7 +82,7 @@ export default function PartnerTenants() {
     setLoading(true);
     const { data } = await supabase
       .from("tenants")
-      .select("id, name, slug, contact_email, created_at")
+      .select("id, name, slug, contact_email, created_at, setup_status")
       .eq("partner_id", partnerId)
       .order("created_at", { ascending: false });
     setRows((data as Row[]) ?? []);
@@ -134,6 +136,14 @@ export default function PartnerTenants() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleCompleteSetup = async (tenantId: string) => {
+    if (!window.confirm("Einrichtung abschließen und an den Kunden übergeben? Danach ist Fernzugriff nur noch mit Freigabe des Kunden möglich.")) return;
+    const { error } = await supabase.rpc("complete_tenant_setup" as any, { _tenant_id: tenantId } as any);
+    if (error) { toast({ title: "Übergabe fehlgeschlagen", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Tenant übergeben" });
+    await load();
   };
 
   const handleStartRemoteSupport = async (tenantId: string) => {
@@ -275,7 +285,12 @@ export default function PartnerTenants() {
                     className="cursor-pointer hover:bg-muted/40"
                     onClick={() => navigate(`/partner/tenants/${r.id}`)}
                   >
-                    <TableCell className="font-medium">{r.name ?? "—"}</TableCell>
+                    <TableCell className="font-medium">
+                      {r.name ?? "—"}
+                      {r.setup_status === "setup" && (
+                        <Badge variant="secondary" className="ml-2">In Einrichtung</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{r.slug}</TableCell>
                     <TableCell className="text-muted-foreground">{r.contact_email ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
@@ -294,7 +309,17 @@ export default function PartnerTenants() {
                           ) : (
                             <LifeBuoy className="h-3.5 w-3.5 mr-1" />
                           )}
-                          EMS öffnen
+                          {r.setup_status === "setup" ? "Einrichtung öffnen" : "EMS öffnen"}
+                        </Button>
+                      )}
+                      {isPartnerAdmin && r.setup_status === "setup" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-1"
+                          onClick={() => handleCompleteSetup(r.id)}
+                        >
+                          Übergeben
                         </Button>
                       )}
                     </TableCell>

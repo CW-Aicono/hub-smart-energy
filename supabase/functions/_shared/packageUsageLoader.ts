@@ -23,7 +23,7 @@ export async function loadUsage(admin: any, tenants: { id: string; partner_id: s
     q(admin.from("charge_points").select("id,tenant_id").in("tenant_id", ids).gte("last_heartbeat", from)),
     q(admin.from("charging_invoices").select("tenant_id, charging_invoice_sessions(count)").in("tenant_id", ids).neq("status", "draft").gte("invoice_date", b.start).lte("invoice_date", b.end)),
     q(admin.from("adhoc_payment_sessions").select("tenant_id").in("tenant_id", ids).in("state", ["captured", "partially_refunded"]).gte("started_at", from).lt("started_at", to)),
-    q(admin.from("support_sessions").select("id,tenant_id,started_at,ended_at,duration_minutes,reason").in("tenant_id", ids).gte("started_at", from).lt("started_at", to)),
+    q(admin.from("support_sessions").select("id,tenant_id,started_at,ended_at,duration_minutes,reason").in("tenant_id", ids).eq("session_kind", "support").gte("started_at", from).lt("started_at", to)),
     q(admin.from("partner_discount_requests").select("tenant_id,partner_id,approved_module_codes,discount_type,value,valid_from,duration_months,reason").eq("status", "approved").lte("valid_from", b.end)),
   ]);
   const pkgDefs: PkgDef[] = defs.map((d: any) => ({ code: d.code, name: d.name, uvp: Number(d.uvp), ek: Number(d.ek), always_active: !!d.always_active, modules: mods.filter((m: any) => m.package_code === d.code).map((m: any) => m.module_code) }));

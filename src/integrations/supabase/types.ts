@@ -14121,6 +14121,7 @@ export type Database = {
           is_manual: boolean
           notes: string | null
           reason: string | null
+          session_kind: string
           started_at: string
           super_admin_user_id: string
           tenant_id: string
@@ -14135,6 +14136,7 @@ export type Database = {
           is_manual?: boolean
           notes?: string | null
           reason?: string | null
+          session_kind?: string
           started_at?: string
           super_admin_user_id: string
           tenant_id: string
@@ -14149,6 +14151,7 @@ export type Database = {
           is_manual?: boolean
           notes?: string | null
           reason?: string | null
+          session_kind?: string
           started_at?: string
           super_admin_user_id?: string
           tenant_id?: string
@@ -15593,6 +15596,9 @@ export type Database = {
           sepa_iban: string | null
           sepa_mandate_date: string | null
           sepa_mandate_ref: string | null
+          setup_completed_at: string | null
+          setup_completed_by: string | null
+          setup_status: string
           show_empty_widgets: boolean
           show_manual_meters: boolean
           slug: string
@@ -15647,6 +15653,9 @@ export type Database = {
           sepa_iban?: string | null
           sepa_mandate_date?: string | null
           sepa_mandate_ref?: string | null
+          setup_completed_at?: string | null
+          setup_completed_by?: string | null
+          setup_status?: string
           show_empty_widgets?: boolean
           show_manual_meters?: boolean
           slug: string
@@ -15701,6 +15710,9 @@ export type Database = {
           sepa_iban?: string | null
           sepa_mandate_date?: string | null
           sepa_mandate_ref?: string | null
+          setup_completed_at?: string | null
+          setup_completed_by?: string | null
+          setup_status?: string
           show_empty_widgets?: boolean
           show_manual_meters?: boolean
           slug?: string
@@ -16259,6 +16271,10 @@ export type Database = {
     Functions: {
       _can_restructure_location: { Args: { p_loc: string }; Returns: string }
       _complex_of: { Args: { p_loc: string }; Returns: string }
+      _finish_tenant_setup: {
+        Args: { _by: string; _reason: string; _tenant_id: string }
+        Returns: boolean
+      }
       _move_floor_to: {
         Args: { p_floor: string; p_target: string }
         Returns: undefined
@@ -16520,6 +16536,7 @@ export type Database = {
           deleted_raw: number
         }[]
       }
+      complete_tenant_setup: { Args: { _tenant_id: string }; Returns: boolean }
       compute_daily_totals_from_5min: {
         Args: { p_day?: string }
         Returns: number

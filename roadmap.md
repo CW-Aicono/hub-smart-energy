@@ -143,3 +143,5 @@
 - [ ] Energieanalyse leer auf Live – Prüfbefehle ausführen, dann Fix (wartet auf Nutzer)
 - [ ] E-Mail-Adresse ändern (Profil + Admin)
 - [ ] Inbetriebnahme-/Abnahmeprotokoll – Musterprotokolle/Mail benötigt (wartet auf Nutzer)
+
+- [x] Einrichtungsphase für neue Tenants (v1.36.0)

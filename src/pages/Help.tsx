@@ -102,6 +102,7 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.36.0", date: "2026-11-03", changes: [{ type: "feature", textKey: "manual.tenantSetup136" }] },
     { version: "1.35.1", date: "2026-11-02", changes: [{ type: "fix", textKey: "manual.billing.partnerAvailability1351" }] },
     { version: "1.35.0", date: "2026-11-02", changes: [{ type: "feature", textKey: "manual.billing.discount135" }] },
     { version: "1.34.0", date: "2026-11-02", changes: [{ type: "feature", textKey: "manual.billing.capacity134" }] },

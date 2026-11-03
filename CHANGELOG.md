@@ -1,5 +1,11 @@
 # Änderungsprotokoll (intern)
 
+## v1.36.0 – 2026-11-03
+- Einrichtungsphase für neue Tenants: `tenants.setup_status` (Bestand `active`, neue Tenants `setup`), Rückkehr per Trigger gesperrt (Migrationen 0070/0071).
+- `support-session-impersonate` erlaubt ohne Kundenfreigabe nur Sitzungen der Art `setup` während der Einrichtungsphase; gleiche Rollenprüfung, `support_sessions.session_kind` gespeichert.
+- Übergabe via RPC `complete_tenant_setup` (Portal-Admin/zuständiger Partner-Admin) oder automatisch bei erster Anmeldung eines echten Tenant-Admins; offene Setup-Sitzungen werden beendet, Audit-Log.
+- Abrechnung/Nutzungslauf zählen nur `session_kind = 'support'`. Handbuch in vier Sprachen.
+
 ## v1.35.1 – 2026-11-02
 - Partner-Paketauswahl umgeht den fünfminütigen Dashboard-Cache: Aktualisierung beim Öffnen/Fokus und alle 15 Sekunden im offenen Dialog; Freigaben invalidieren abhängige Ansichten.
 - Portal-Buchungsfenster berücksichtigt das Partnerportfolio des ausgewählten Tenants; entzogene Pakete nicht mehr als ausgewählt übermitteln. Serverseitige Rechte, Voraussetzungen und Preise unverändert.
