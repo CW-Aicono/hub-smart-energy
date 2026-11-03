@@ -1,5 +1,10 @@
 # Roadmap
 
+## Live-Einrichtung dauerhaft absichern (03.11., Hendrik)
+- [ ] Neue Tenants in beiden Portalen explizit in Einrichtung anlegen; fehlendes Einrichtungsschema verweigert Zugriff statt Remote-Support-Fallback.
+- [ ] Release-Prüfung, Reparatur und Funktionsaktualisierung beim nächsten Live-Deploy verpflichtend; bestehende Tenants und Daten erhalten.
+- [ ] Regressionstests, Handbuch vier Sprachen und Versionshinweise aktualisieren. Hetzner-Prüfung wartet auf externen Deploy/Serverzugriff.
+
 ## Paketkorrekturen und individuelle Abrechnung (03.11., Dirk)
 - [x] v1.38.0: Bestehend: Einzel-Prozentrabatt/manueller VK, Laufzeitpflege und Partner-Antragsweg (zuvor eingeklappt). Ergänzt: Korrektur und Fehlbuchung zurücknehmen, Intervall je Position inkl. jährlich, Euro-Abzug und eigener Zeitraum/Ablaufwahl.
 - [x] 57 Tests erfolgreich: Korrektur/ausgestellte Rechnungen, unveränderter EK, Jahresbeträge, Entitlements/Datenbehalt und bestehende Regeln. Handbuch vier Sprachen und Versionshinweise gepflegt.
