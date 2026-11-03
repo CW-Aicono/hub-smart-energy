@@ -6855,6 +6855,51 @@ export type Database = {
           },
         ]
       }
+      license_sale_corrections: {
+        Row: {
+          actor_id: string | null
+          after_data: Json
+          before_data: Json
+          created_at: string
+          id: string
+          sale_id: string
+          tenant_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          after_data: Json
+          before_data: Json
+          created_at?: string
+          id?: string
+          sale_id: string
+          tenant_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          after_data?: Json
+          before_data?: Json
+          created_at?: string
+          id?: string
+          sale_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "license_sale_corrections_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "license_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "license_sale_corrections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       license_sales: {
         Row: {
           auto_renew: boolean
@@ -16658,6 +16703,14 @@ export type Database = {
           live_kwh: number
           meter_id: string
           status: string
+        }[]
+      }
+      effective_tenant_modules: {
+        Args: { p_tenant: string }
+        Returns: {
+          is_enabled: boolean
+          module_code: string
+          valid_until: string
         }[]
       }
       email_exists_anywhere: {

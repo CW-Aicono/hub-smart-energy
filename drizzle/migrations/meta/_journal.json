@@ -526,6 +526,13 @@
       "when": 1793694804595,
       "tag": "0074_package_sale_corrections_yearly",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1793694922326,
+      "tag": "0075_package_effective_entitlements",
+      "breakpoints": true
     }
   ]
 }
