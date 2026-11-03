@@ -498,6 +498,13 @@
       "when": 1793686358345,
       "tag": "0070_tenant_setup_phase",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1793686413289,
+      "tag": "0071_tenant_setup_phase_audit_fix",
+      "breakpoints": true
     }
   ]
 }
