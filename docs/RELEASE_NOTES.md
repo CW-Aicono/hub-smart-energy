@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.36.0 – 03.11.2026
+- Neue Tenants können vor der Übergabe an den Kunden vollständig eingerichtet werden („Einrichtung öffnen“), ohne dass Remote-Support freigegeben sein muss.
+- Mit „Einrichtung abschließen & übergeben“ oder der ersten Anmeldung des Tenant-Admins endet die Einrichtung dauerhaft; Einrichtungssitzungen werden nicht als Support-Zeit berechnet.
+
 ## v1.35.1 – 02.11.2026
 - Für Partner freigeschaltete Pakete erscheinen ohne Neuladen in der Paketauswahl ihrer Tenants.
 - Auch im AICONO Portal berücksichtigt die Auswahl die Freigaben des Partners des gewählten Tenants; Paketvoraussetzungen bleiben erhalten.
