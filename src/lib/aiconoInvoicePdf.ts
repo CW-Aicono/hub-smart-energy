@@ -10,6 +10,7 @@ export interface AiconoBillingSettings {
   email?: string | null; phone?: string | null; website?: string | null;
   payment_terms_days?: number | null; vat_rate?: number | null; footer_note?: string | null;
   logo_url?: string | null;
+  primary_color?: string | null; secondary_color?: string | null; accent_color?: string | null;
 }
 
 export interface InvoiceRecipient { name: string; contact?: string | null; street?: string | null; postalCity?: string | null; country?: string | null; postalCode?: string | null; city?: string | null; vatId?: string | null; email?: string | null; leitwegId?: string | null }
@@ -72,10 +73,15 @@ export async function buildAiconoInvoicePdf(opts: {
   const { settings: s, recipient: r, invoice: inv } = opts;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const ml = 20, mr = 190;
-  const brand: [number, number, number] = [16, 64, 112];
+  const fallback: [number, number, number] = [16, 64, 112];
+  const color = (value: string | null | undefined, otherwise: [number, number, number]): [number, number, number] =>
+    value && /^#[0-9a-f]{6}$/i.test(value) ? [parseInt(value.slice(1, 3), 16), parseInt(value.slice(3, 5), 16), parseInt(value.slice(5, 7), 16)] : otherwise;
+  const brand = opts.partnerBranding ? color(s.primary_color, fallback) : fallback;
+  const secondary = opts.partnerBranding ? color(s.secondary_color, brand) : brand;
+  const accent = opts.partnerBranding ? color(s.accent_color, brand) : brand;
 
   const logo = opts.partnerBranding && !s.logo_url ? null : await loadLogo(opts.partnerBranding ? s.logo_url || "" : aiconoLogo);
-  if (logo) { const h = 14; const w = (logo.w / logo.h) * h; doc.addImage(logo.data, "PNG", 105 - w / 2, 14, (logo.w / logo.h) * h, h); }
+  if (logo) { const scale = Math.min(110 / logo.w, 20 / logo.h); const w = logo.w * scale, h = logo.h * scale; doc.addImage(logo.data, "PNG", 105 - w / 2, 14, w, h); }
   else { doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(...brand); doc.text(s.company_name, 105, 22, { align: "center" }); }
 
   const sender = [s.company_name, s.street, [s.postal_code, s.city].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
@@ -107,8 +113,9 @@ export async function buildAiconoInvoicePdf(opts: {
     y += 4;
   }
 
-  doc.setFillColor(...brand); doc.rect(ml, y - 5, mr - ml, 7, "F");
-  doc.setFontSize(9); doc.setTextColor(255);
+  doc.setFillColor(...secondary); doc.rect(ml, y - 5, mr - ml, 7, "F");
+  const luminance = secondary.map(c => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  doc.setFontSize(9); doc.setTextColor(0.2126 * luminance[0] + 0.7152 * luminance[1] + 0.0722 * luminance[2] > 0.179 ? 0 : 255);
   doc.text("Pos.", ml + 2, y); doc.text("Bezeichnung", ml + 14, y);
   doc.text("Menge", 128, y, { align: "right" }); doc.text("Einzelpreis", 157, y, { align: "right" }); doc.text("Gesamt", mr - 2, y, { align: "right" });
   y += 7;
@@ -134,7 +141,7 @@ export async function buildAiconoInvoicePdf(opts: {
   const row = (k: string, v: string, bold = false) => { doc.setFont("helvetica", bold ? "bold" : "normal"); doc.text(k, 140, y); doc.text(v, mr - 2, y, { align: "right" }); y += 5.5; };
   row("Summe netto", eur(t.net));
   row(`zzgl. ${vatRate.toLocaleString("de-DE")} % USt.`, eur(t.vat));
-  doc.setDrawColor(...brand); doc.line(140, y - 3.5, mr, y - 3.5);
+  doc.setDrawColor(...accent); doc.line(140, y - 3.5, mr, y - 3.5);
   row(inv.document_type === "credit_note" ? "Gutschriftbetrag" : "Rechnungsbetrag", eur(t.gross), true);
 
   y += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(9);
@@ -148,7 +155,7 @@ export async function buildAiconoInvoicePdf(opts: {
   const pages = doc.getNumberOfPages();
   for (let p = 1; p <= pages; p++) {
     doc.setPage(p);
-    doc.setDrawColor(...brand); doc.line(ml, 270, mr, 270);
+    doc.setDrawColor(...accent); doc.line(ml, 270, mr, 270);
     doc.setFontSize(7); doc.setTextColor(90);
     const col1 = [s.company_name, s.street, [s.postal_code, s.city].filter(Boolean).join(" ")].filter(Boolean) as string[];
     const col2 = [s.register_court && s.register_number ? `${s.register_court} ${s.register_number}` : null, s.managing_director ? `Geschäftsführer: ${s.managing_director}` : null, s.vat_id ? `USt-IdNr.: ${s.vat_id}` : null, s.tax_number ? `Steuernr.: ${s.tax_number}` : null].filter(Boolean) as string[];

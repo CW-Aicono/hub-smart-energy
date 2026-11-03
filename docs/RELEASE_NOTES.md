@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.38.2 – 03.11.2026
+- Partner-Rechnungen berücksichtigen Logo und Farben aus den Partner-Einstellungen, auch in der Vorschau.
+- Das Design wird bei Freigabe gespeichert; spätere Änderungen lassen ausgestellte Rechnungen unverändert.
+
 ## v1.38.1 – 03.11.2026
 - Neue Tenants starten in beiden Portalen ausdrücklich „In Einrichtung“; ohne Sitzungsprotokoll kein Fernzugriff.
 - Live-Deploy prüft auch die heutigen Paketänderungen und ausgelieferten Funktionen vor der Freigabe.

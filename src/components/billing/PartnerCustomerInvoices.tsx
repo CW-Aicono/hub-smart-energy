@@ -24,7 +24,9 @@ export function PartnerCustomerInvoices({ partnerId, canEdit }: { partnerId: str
   const showPreview=async(i:any)=>{setBusy(true);try{
     let recipient=i.recipient_snapshot;
     if(!i.issued_at){const {data,error}=await db.from("tenants").select("name,contact_person,street,house_number,postal_code,city,contact_email").eq("id",i.tenant_id).eq("partner_id",partnerId).single();if(error)throw error;recipient={name:data.name,contact:data.contact_person,street:[data.street,data.house_number].filter(Boolean).join(" "),postalCity:[data.postal_code,data.city].filter(Boolean).join(" "),email:data.contact_email};}
-    const parties=invoicePreviewParties(i,settings||{company_name:""},recipient);
+    let previewSettings=settings||{company_name:""};
+    if(!i.issued_at){const {data,error}=await db.from("partners").select("logo_url,primary_color,secondary_color,accent_color").eq("id",partnerId).single();if(error)throw error;previewSettings={...previewSettings,...data};}
+    const parties=invoicePreviewParties(i,previewSettings,recipient);
     const pdf=await buildEInvoicePdf({settings:parties.settings,recipient:parties.recipient,invoice:{...i,vat_rate:parties.vatRate,cancels_number:invoices.find((x:any)=>x.id===i.cancels_invoice_id)?.invoice_number??null},partnerBranding:true});
     setPreview({blob:pdf.blob,title:`${T("preview")} – ${i.invoice_number} – ${i.tenants?.name??""}`});
   }catch(e:any){toast.error(e.message);}finally{setBusy(false);}};
