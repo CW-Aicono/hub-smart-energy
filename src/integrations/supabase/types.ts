@@ -6863,6 +6863,7 @@ export type Database = {
           created_by: string | null
           custom_lines: Json | null
           customer_discount_pct: number
+          discount_after: string
           discount_ends_on: string | null
           discount_starts_on: string | null
           ended_on: string | null
@@ -6891,6 +6892,7 @@ export type Database = {
           created_by?: string | null
           custom_lines?: Json | null
           customer_discount_pct?: number
+          discount_after?: string
           discount_ends_on?: string | null
           discount_starts_on?: string | null
           ended_on?: string | null
@@ -6919,6 +6921,7 @@ export type Database = {
           created_by?: string | null
           custom_lines?: Json | null
           customer_discount_pct?: number
+          discount_after?: string
           discount_ends_on?: string | null
           discount_starts_on?: string | null
           ended_on?: string | null
@@ -16588,6 +16591,20 @@ export type Database = {
         Args: { p_floor_id: string }
         Returns: string
       }
+      correct_license_sale: {
+        Args: {
+          p_after: string
+          p_cadence: string
+          p_discount: number
+          p_from: string
+          p_price: number
+          p_quantity: number
+          p_reason: string
+          p_sale: string
+          p_to: string
+        }
+        Returns: string
+      }
       create_custom_invoice_sale: {
         Args: {
           p_cadence: string
@@ -16685,6 +16702,25 @@ export type Database = {
       }
       finalize_license_sale_discount: {
         Args: {
+          p_cadence: string
+          p_code: string
+          p_discount?: number
+          p_discount_from?: string
+          p_discount_to?: string
+          p_kind: string
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_reason?: string
+          p_request: string
+          p_start: string
+          p_tenant: string
+        }
+        Returns: string
+      }
+      finalize_license_sale_options: {
+        Args: {
+          p_after?: string
           p_cadence: string
           p_code: string
           p_discount?: number

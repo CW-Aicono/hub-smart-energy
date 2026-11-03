@@ -519,6 +519,13 @@
       "when": 1793687957998,
       "tag": "0073_vestel_modbus_registers",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793694804595,
+      "tag": "0074_package_sale_corrections_yearly",
+      "breakpoints": true
     }
   ]
 }
