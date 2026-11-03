@@ -4,6 +4,7 @@
 - Pakete korrigieren; Entwürfe neu berechnen, ausgestellte Rechnungen schützen.
 - Jährliche Abrechnung und je Paket individuelle Prozent-/Euro-Rabatte mit Zeitraum und Ablaufwahl.
 - Partner-Rabattanfragen direkt erreichbar; Daten bleiben bei Paketende erhalten.
+- Fehlbuchungen vor Rechnungsausstellung sofort zurücknehmen; Pakete danach erneut buchbar. Lokale Gateway-Ablaufprüfung benötigt separates Gateway-Update.
 
 
 ## v1.37.2 – 03.11.2026

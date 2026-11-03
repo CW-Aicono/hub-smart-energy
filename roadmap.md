@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Paketkorrekturen und individuelle Abrechnung (03.11., Dirk)
-- [ ] Bestehende Möglichkeiten prüfen: Korrektur/Wiederbuchung, Intervall je Paket, befristeter Einzelrabatt, Euro-Rabatt, Ablaufwahl, Partner-Rabattanfragen, jährliche Abrechnung.
-- [ ] Fehlendes im bestehenden Verkaufs-/Abrechnungsweg ergänzen; Bestandsdaten und technische Steuerung erhalten; Tests, Handbuch vier Sprachen und Versionshinweise.
-- [ ] Angemeldete Paketverwaltung und Rechnungsentwürfe prüfen; Live-Ausführung bleibt abhängig vom Hetzner-Deploy.
+- [x] v1.38.0: Bestehend: Einzel-Prozentrabatt/manueller VK, Laufzeitpflege und Partner-Antragsweg (zuvor eingeklappt). Ergänzt: Korrektur und Fehlbuchung zurücknehmen, Intervall je Position inkl. jährlich, Euro-Abzug und eigener Zeitraum/Ablaufwahl.
+- [x] 56 Tests erfolgreich: Korrektur/ausgestellte Rechnungen, unveränderter EK, Jahresbeträge, Entitlements/Datenbehalt und bestehende Regeln. Handbuch vier Sprachen und Versionshinweise gepflegt.
+- [x] Angemeldet: Jahresbuchung Monitoring mit 50-Euro-Abzug, Korrektur auf 50-Euro-VK und Rücknahme geprüft; 100-Euro-Endkundenentwurf und 148-Euro-EK geprüft. Probebuchung, Entwürfe und neue Testfreischaltungen entfernt; keine Rechnung versendet. Einzelintervall mit Ladepunkt sowie Antragsformular sichtbar geprüft.
+- [ ] Wartet auf externen Deploy: Hetzner-Live und separates HA-Add-on für Ablaufprüfung lokal/offline. Bestehende ESB-Verträge nicht automatisch verändert. Gemeinsame neue Ladepunkt-Buchung nicht Ende-zu-Ende gespeichert; vorhandene Tests decken Mengen/Gruppierung ab.
 
 ## Vollständiger Live-Deploy vom 03.11.
 - [x] v1.37.2: Pflichtprüfung im vorhandenen Migrationsrunner; unvollständige Setup-Installation trotz Tracking automatisch mit 0070/0071 vervollständigen. Übergabe, Gemini/ELMI, Vestel-Register und Funktionsdateien prüfen; API-Schema neu laden. Bestehende Tenants unverändert.
