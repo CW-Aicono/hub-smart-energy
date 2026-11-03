@@ -1,4 +1,5 @@
 import { CHARGE_POINT_STATUS_META } from "@/lib/chargePointStatusPresentation";
+import { canUnlockConnector } from "@/lib/chargerTemplates";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
@@ -908,9 +909,11 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Status abfragen")}>
                           <RefreshCw className="h-4 w-4" /> Status abfragen
                         </Button>
+                        {canUnlockConnector(cp as any) && (
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Kabel entriegeln")}>
                           <Unlock className="h-4 w-4" /> {t("cpd.unlockCable" as any)}
                         </Button>
+                        )}
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Auf inaktiv setzen")}>
                           <Power className="h-4 w-4" /> {t("cpd.setInactive" as any)}
                         </Button>

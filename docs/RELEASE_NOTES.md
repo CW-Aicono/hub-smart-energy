@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.37.0 – 03.11.2026
+- „Ladepunkt hinzufügen“ startet mit einer Vorlage; festgelegte Werte wie Steckertyp, Leistung und Kabel sind nicht mehr falsch einstellbar.
+- Neue Vorlage Vestel AC Gemini Dual; ELMI All-in-One nur noch mit CCS.
+- Bei fest angeschlagenem Kabel wird „Kabel entriegeln“ nicht mehr angeboten.
+
 ## v1.36.0 – 03.11.2026
 - Neue Tenants können vor der Übergabe an den Kunden vollständig eingerichtet werden („Einrichtung öffnen“), ohne dass Remote-Support freigegeben sein muss.
 - Mit „Einrichtung abschließen & übergeben“ oder der ersten Anmeldung des Tenant-Admins endet die Einrichtung dauerhaft; Einrichtungssitzungen werden nicht als Support-Zeit berechnet.

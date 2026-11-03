@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.37.0 – 2026-11-03
+- Ladestations-Vorlagen: `charger_models.variants/dlm_notes/modbus_template_id`, `charge_points.charger_model_id/charger_variant/cable_attached/supports_connector_lock`; Trigger `enforce_charger_template` erzwingt Stecker, Anzahl, Max-Leistung, Kabel/Verriegelung (Migration 0072).
+- Vorlagen Vestel AC Gemini Dual (6 Varianten aus Datenblatt 05/2024) und ELMI All-in-One 180/360 (DC, CCS, Kabel fest); Modbus-Vorlage Vestel EVC10 (Port 502, Unit 255) inaktiv bis Registerliste vorliegt.
+- `ocpp-central` lehnt UnlockConnector bei fest angeschlagenem Kabel ab; UI blendet „Kabel entriegeln“ aus. Handbuch in vier Sprachen.
+
 ## v1.36.0 – 2026-11-03
 - Einrichtungsphase für neue Tenants: `tenants.setup_status` (Bestand `active`, neue Tenants `setup`), Rückkehr per Trigger gesperrt (Migrationen 0070/0071).
 - `support-session-impersonate` erlaubt ohne Kundenfreigabe nur Sitzungen der Art `setup` während der Einrichtungsphase; gleiche Rollenprüfung, `support_sessions.session_kind` gespeichert.

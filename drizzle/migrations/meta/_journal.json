@@ -505,6 +505,13 @@
       "when": 1793686413289,
       "tag": "0071_tenant_setup_phase_audit_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1793687586437,
+      "tag": "0072_charger_templates_variants",
+      "breakpoints": true
     }
   ]
 }
