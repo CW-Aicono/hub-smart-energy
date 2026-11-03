@@ -575,6 +575,13 @@
       "when": 1793720263539,
       "tag": "0081_pv_surplus_transparency",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1793722605189,
+      "tag": "0082_vestel_modbus_spec_v115",
+      "breakpoints": true
     }
   ]
 }

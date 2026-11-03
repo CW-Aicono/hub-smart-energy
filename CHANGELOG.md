@@ -1,5 +1,9 @@
 # Änderungsprotokoll (intern)
 
+## v1.39.1
+- Zähler löschen: Fehler werden angezeigt (auch 0 gelöschte Zeilen), Liste aktualisiert sofort.
+- Vestel-Modbus-Vorlage auf Spezifikation v1.15 (Input-Register 0x04, Zusatzregister) – Migration 0082.
+
 ## v1.39.0 – 03.11.2026
 - PV-Überschuss transparent: PvSurplusMonitor (Live-Fluss SVG, animierte Regelentscheidung, Tagesanalyse mit KPIs/Entscheidungsmarkern, Prüfliste) in GroupSolarChargingConfig und als Dashboard-Widget pv_flow_live.
 - solar-charging-scheduler: gemeinsame Rechenlogik _shared/pvSurplusDecision.ts, Entscheidung als solar_charging_log.decision (+config_id, charge_point_id); ELMI-Kopplung (storage_coupled, NULL = automatisch bei elmi_aio): beim Laden Entladen immer erlaubt (minSocPct 0), Entladeleistung nicht als Überschuss. Ohne Speicher unverändert nur Bezugszähler.

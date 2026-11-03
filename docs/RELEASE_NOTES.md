@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.39.1
+- Gelöschte Zähler verschwinden sofort; schlägt das Löschen fehl, erscheint eine Meldung.
+- Vestel AC: Ladestationsvorlage nach neuer Herstellerspezifikation aktualisiert.
+
 ## v1.39.0 – 03.11.2026
 - PV-Überschussladen sichtbar: Live-Energiefluss, Regelentscheidungen Schritt für Schritt, Tagesanalyse und Prüfliste in der Ladegruppe und als Dashboard-Widget.
 - Funktioniert auch ohne Speicher; ELMI-Speicher darf beim Laden immer entladen. Regelung alle 3 Minuten.
