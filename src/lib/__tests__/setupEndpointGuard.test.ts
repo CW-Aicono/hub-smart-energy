@@ -40,6 +40,27 @@ async function invoke(tenantError: boolean, sessionError: boolean) {
 }
 
 describe("setup access requires deployed schema", () => {
+  for (const file of ["supabase/functions/partner-create-tenant/index.ts", "src/pages/SuperAdminTenants.tsx", "src/hooks/useTenants.tsx"]) {
+    it(`initializes a new tenant in setup in ${file}`, () => {
+      const source = ts.createSourceFile(file,readFileSync(file,"utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+      const initialStates: string[] = [];
+      const walk = (node: ts.Node) => {
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "insert") {
+          const payload = node.arguments[0];
+          if (payload && ts.isObjectLiteralExpression(payload)) {
+            for (const property of payload.properties) {
+              if (ts.isPropertyAssignment(property) && property.name.getText(source) === "setup_status" && ts.isStringLiteral(property.initializer)) {
+                initialStates.push(property.initializer.text);
+              }
+            }
+          }
+        }
+        ts.forEachChild(node,walk);
+      };
+      walk(source);
+      expect(initialStates).toEqual(["setup"]);
+    });
+  }
   it("missing tenant setup column starts no support user or session", async () => {
     const result = await invoke(true, false);
     expect(result.response.status).toBe(503);

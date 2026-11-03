@@ -5,6 +5,7 @@
 - Migration 0079 sichert Standards/Constraints ab, ohne bestehende Tenant-Zustände oder Sitzungen umzuschreiben. Fehlende/ungültige Werte führen zum sicheren Abbruch.
 - Pflichtdateien, Einrichtung und heutige Paketfunktionen werden vor Aktivierung geprüft; Funktionen zuerst neu starten und sämtliche ausgelieferten Dateien mit Zielversion vergleichen.
 - Automatischer Deploy-Rollback stellt Code und vorheriges Image wieder her; kein pg_dumpall-Restore in laufende Datenbank (Erhalt paralleler Schreibvorgänge). Handbuch vier Sprachen gepflegt. Hetzner und separat installierte Gateways weiterhin extern zu prüfen.
+- Angemeldet Test-Tenant ohne Einladung angelegt, Einrichtung geöffnet und beendet; Prüfzugang, Tenant und Sitzungen entfernt. Geschützter Main-Workflow braucht für den ersten Lauf die aktualisierte Workflow-Datei; danach nimmt er seine Release-Version mit.
 
 ## v1.38.0 – 03.11.2026
 - Paketkorrektur mit Begründung und Audit: Entwürfe positionsweise neu berechnen, ausgestellte Dokumente sperren; EK unverändert.

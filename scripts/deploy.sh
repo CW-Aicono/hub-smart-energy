@@ -48,7 +48,7 @@ if [[ "$NEW_SHA" != "$SHA"* ]]; then
 fi
 
 log "3/6 Neue Supabase-Migrations applyen"
-if ! "${REPO_ROOT}/scripts/apply-migrations.sh"; then
+if ! bash "${REPO_ROOT}/scripts/apply-migrations.sh"; then
   log "FEHLER: Migrations fehlgeschlagen. Starte Rollback."
   false
 fi

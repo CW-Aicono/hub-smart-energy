@@ -1,9 +1,10 @@
 # Roadmap
 
 ## Live-Einrichtung dauerhaft absichern (03.11., Hendrik)
-- [ ] Neue Tenants in beiden Portalen explizit in Einrichtung anlegen; fehlendes Einrichtungsschema verweigert Zugriff statt Remote-Support-Fallback.
-- [ ] Release-Prüfung, Reparatur und Funktionsaktualisierung beim nächsten Live-Deploy verpflichtend; bestehende Tenants und Daten erhalten.
-- [ ] Regressionstests, Handbuch vier Sprachen und Versionshinweise aktualisieren. Hetzner-Prüfung wartet auf externen Deploy/Serverzugriff.
+- [x] v1.38.1: Neue Tenants in beiden Portalen und useTenants explizit in Einrichtung; fehlendes Sitzungs-/Tenant-Schema verweigert Zugriff vor Nutzer-/Token-Erstellung.
+- [x] Einrichtungsschema reparieren; heutige Paketfunktionen und Funktionsdateien vor Frontend-Aktivierung prüfen. App-Rollback mit vorherigem Image, ohne Datenbank-Dump-Restore.
+- [x] Angemeldet Test-Tenant angelegt, Einrichtung geöffnet und beendet; Testzugang, Tenant und Prüfsitzungen entfernt. Handbuch vier Sprachen, Versionshinweise und Regressionstests gepflegt.
+- [ ] Wartet auf externen Hetzner-Deploy/Serverzugriff sowie erste Übernahme des aktualisierten geschützten Main-Workflows. Bereits falsch übergebene Live-Tenants nicht automatisch zurückgesetzt; lokale Gateway-Updates bleiben separat.
 
 ## Paketkorrekturen und individuelle Abrechnung (03.11., Dirk)
 - [x] v1.38.0: Bestehend: Einzel-Prozentrabatt/manueller VK, Laufzeitpflege und Partner-Antragsweg (zuvor eingeklappt). Ergänzt: Korrektur und Fehlbuchung zurücknehmen, Intervall je Position inkl. jährlich, Euro-Abzug und eigener Zeitraum/Ablaufwahl.
