@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.39.0 – 03.11.2026
+- PV-Überschuss transparent: PvSurplusMonitor (Live-Fluss SVG, animierte Regelentscheidung, Tagesanalyse mit KPIs/Entscheidungsmarkern, Prüfliste) in GroupSolarChargingConfig und als Dashboard-Widget pv_flow_live.
+- solar-charging-scheduler: gemeinsame Rechenlogik _shared/pvSurplusDecision.ts, Entscheidung als solar_charging_log.decision (+config_id, charge_point_id); ELMI-Kopplung (storage_coupled, NULL = automatisch bei elmi_aio): beim Laden Entladen immer erlaubt (minSocPct 0), Entladeleistung nicht als Überschuss. Ohne Speicher unverändert nur Bezugszähler.
+- Migration 0081: Spalten, Indizes, Cron auf */3, tägliche Log-Bereinigung > 30 Tage. 8 neue Tests.
+
 ## v1.38.4 – 03.11.2026
 - ocpp-persistent-api verdichtet OCPP-Leistungswerte nach jedem Insert live in meter_power_readings_5min (source ocpp_live, Neuberechnung betroffener Buckets aus Rohdaten); nächtliche Verdichtung unverändert. 2 Tests.
 

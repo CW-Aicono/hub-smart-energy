@@ -1,5 +1,9 @@
 # Roadmap
 
+## PV-Überschuss → Ladestation → Speicher (03.11., Hendrik)
+- [x] v1.39.0: Live-Energiefluss, animierte Regelentscheidung, Analyse, Prüfliste (Ladegruppe + Dashboard-Widget); ohne Speicher nur mit Zähler; ELMI-Speicher beim Laden immer entladen; Takt 3 Minuten.
+- [ ] Wartet auf Nutzer: ESB-Bezugszähler „Shelly Pro 3 Hauptzuleitung“ liefert keine aktuellen Werte – Zähler prüfen oder anderen Zähler wählen. Hetzner-Live-Deploy (Migration 0081) extern.
+
 ## Partner-Rechnungsbranding (03.11., Dirk)
 - [x] v1.38.2: Logo und drei Partnerfarben in Vorschau/PDF übernehmen; beim Ausstellen einfrieren, Abrechnung unverändert. Migration 0080 im nächsten Live-Deploy enthalten.
 - [x] 18 Tests erfolgreich; angemeldet vorhandenen Entwurf geöffnet, gespeichertes Logo und Blau/Rot/Orange sichtbar geprüft, weiterhin 99 € netto/Entwurf. Handbuch vier Sprachen gepflegt; nichts freigegeben oder versendet.

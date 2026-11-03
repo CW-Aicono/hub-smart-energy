@@ -37,3 +37,5 @@
 - Package corrections use authorized correct_license_sale and audit rows; draft-only periods may be rebuilt, issued documents are immutable and future changes retain EK — prevents duplicate billing and historical repricing.
 - Effective package entitlements are resolved by effective_tenant_modules for UI, scheduler and gateway sync; stored rules are retained and local rules carry known expiry — ends feature execution without deleting data or changing control algorithms.
 - Partner invoice previews resolve visual branding from the issuing partner; issuance freezes it in sender_snapshot, and PDFs use only that snapshot afterwards — keeps historical documents independent of later branding changes.
+
+- PV surplus control decisions are computed in `supabase/functions/_shared/pvSurplusDecision.ts` and stored in `solar_charging_log.decision`; UI views only read that log — what the user sees is exactly what the controller decided.

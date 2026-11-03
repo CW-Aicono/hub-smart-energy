@@ -559,6 +559,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             </h3>
             <p className="text-muted-foreground mb-4">{T("manual.ev.intro")}</p>
             <p className="text-sm text-muted-foreground mb-4">{T("manual.ocppLive1384")}</p>
+            <p className="text-sm text-muted-foreground mb-4">{T("manual.pvSurplus1390")}</p>
           </section>
 
           <Separator />
