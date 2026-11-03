@@ -1,5 +1,12 @@
 # Änderungsprotokoll (intern)
 
+## v1.37.2 – 2026-11-03
+- Live-Deploy startet deploy.sh des Zielcommits; Image und Server-Code müssen denselben Commit haben. Release-gekoppelte Deploy-Skripte und Prüfungen gemeinsam aus Staging übernehmen.
+- Vor Frontend-Wechsel: Setup-Default, Übergabe-Trigger/RPC/Rechte, Audit-Funktion, Gemini/ELMI-Vorlagen und Vestel-Register prüfen; PostgREST-Schema neu laden.
+- Bei unvollständiger Einrichtung trotz Bootstrap/Server-Sofortreparatur idempotente Migrationen 0070/0071 erneut ausführen, ohne bestehende Tenants zurückzusetzen.
+- Partner-Tenant-Liste toleriert additive Spaltenänderungen und zeigt Ladefehler mit Wiederholung. Handbuch und Version in vier Sprachen gepflegt.
+- Hetzner-Ausführung und echte Stationen hier nicht prüfbar; geschützter Main-Workflow braucht einmalige Übernahme, HA-Add-on bleibt separater Deploy.
+
 ## v1.37.1 – 2026-11-03
 - Vestel EVC10/Gemini Modbus-Vorlage mit Registern aus EVC04 Modbus TCP Spec v1.8 aktiviert (Status 1000, Kabel 1004, Fehler 1006, Ströme 1008–1012, Leistung 1020, Zähler 1036, Grenzen 1100–1106; Schreiben 2000/2002/5004/6000) – Migration 0073.
 - Neue Spalte `wallbox_modbus_templates.bridge_mode` (`dlm_only` = keine OCPP-Emulation); Referenz-Bridge `docs/ha-addon/modbus-wallbox-bridge.ts` schreibt Failsafe/Ladestrom beim Verbindungsaufbau und Alive periodisch.

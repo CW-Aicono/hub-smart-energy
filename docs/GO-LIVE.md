@@ -12,6 +12,24 @@ geändert hast. Nur was du hier siehst, wird gleich live gehen.
 
 Wenn alles gut aussieht – weiter zu Schritt 1.
 
+### Vollständigkeit seit v1.37.2
+
+Der Deploy verwendet die Deploy-Skripte der Zielversion und prüft vor dem
+Frontend-Wechsel Einrichtung, Übergabe, Gemini-/ELMI-Vorlagen und Vestel-Register.
+Eine nur per Serverbefehl ergänzte Einrichtungsphase wird vervollständigt;
+bereits übergebene Tenants werden nicht zurückgesetzt. Fehlende Bestandteile
+brechen den Deploy ab.
+
+**Einmalige Übernahme:** Der Workflow auf `main` ist bewusst geschützt und wird
+nicht aus `staging` überschrieben. Die Änderungen an
+`.github/workflows/deploy-prod.yml` müssen einmal in den geschützten Workflow
+auf `main` übernommen werden, bevor der normale LIVE-Lauf startet. Danach
+kommen die release-gekoppelten Prüfscripte automatisch aus `staging`.
+
+Die separat auf Geräten installierte Gateway-/HA-Add-on-Software ist nicht Teil
+des EMS-Deploys. Direkter Gemini-Modbus-Betrieb braucht dort ein eigenes Update;
+Loxone bleibt ein eigener Modbus-Master.
+
 ---
 
 ## Schritt 1: GitHub öffnen
