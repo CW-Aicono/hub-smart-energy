@@ -6,6 +6,7 @@
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-/opt/hub-smart-energy}"
+export REPO_ROOT
 MIG_DIR="${REPO_ROOT}/supabase/migrations"
 DRIZZLE_MIG_DIR="${REPO_ROOT}/drizzle/migrations"
 DB_CONTAINER="${DB_CONTAINER:-supabase-db}"
@@ -27,10 +28,12 @@ filter_psql_noise() {
   grep -vE '^(ALTER|CREATE|DROP|GRANT|REVOKE|COMMENT|COPY|SET|CALL|TRUNCATE|INSERT|UPDATE|DELETE|VALUES|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|REINDEX|VACUUM|ANALYZE|CLUSTER|LOCK|LISTEN|NOTIFY|SELECT|FETCH|MOVE|CLOSE|DECLARE|PREPARE|EXECUTE|DEALLOCATE|EXPLAIN|REASSIGN|SECURITY|REFRESH|IMPORT|LOAD|CHECKPOINT|DISCARD|SHOW|RESET) ?[A-Z0-9_-]*$|^[[:space:]]*setval[[:space:]]*$|^[[:space:]]*-+[[:space:]]*$|^[[:space:]]*[0-9]+[[:space:]]*$|^\([0-9]+ rows?\)$|^[[:space:]]*$' || true
 }
 
-if [ ! -d "$MIG_DIR" ] && [ ! -d "$DRIZZLE_MIG_DIR" ]; then
-  log "Keine Migrations-Verzeichnisse gefunden - skipping."
-  exit 0
-fi
+for required in supabase/deploy/verify-live-release.sh supabase/deploy/tenant-setup-ready.sql supabase/deploy/live-release-check.sql drizzle/migrations/0070_tenant_setup_phase.sql drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql drizzle/migrations/0079_tenant_setup_deploy_contract.sql; do
+  if [ ! -s "$REPO_ROOT/$required" ]; then
+    log "FEHLER: Pflichtdatei fehlt: $required"
+    exit 1
+  fi
+done
 
 log "Stelle Tracking-Tabelle _deploy_migrations sicher"
 psql_exec <<'SQL' 2>&1 | filter_psql_noise
@@ -452,7 +455,7 @@ if [ -f "$DRIZZLE_MIG_DIR/0070_tenant_setup_phase.sql" ]; then
   setup_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/tenant-setup-ready.sql")"
   if [ "$setup_ready" != 't' ]; then
     log "Reparatur: Einrichtungsphase unvollstaendig trotz Migrationsstand"
-    for setup_file in 0070_tenant_setup_phase.sql 0071_tenant_setup_phase_audit_fix.sql; do
+    for setup_file in 0070_tenant_setup_phase.sql 0071_tenant_setup_phase_audit_fix.sql 0079_tenant_setup_deploy_contract.sql; do
       if ! run_migration_with_autoheal "$DRIZZLE_MIG_DIR/$setup_file"; then
         log "FEHLER: Einrichtungsphase konnte nicht vervollstaendigt werden"
         exit 1
