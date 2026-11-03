@@ -1,5 +1,10 @@
 # Roadmap
 
+## Vollständiger Live-Deploy vom 03.11.
+- [ ] Deployment von Einrichtungsphase, Tenant-Sichtbarkeit und heutigen Ladestationsvorlagen absichern; Migrationen, Funktionsdateien und Versionsstand prüfen.
+- [ ] Automatisierte Regressionstests, Handbuch in vier Sprachen und Versionshinweise aktualisieren.
+- [ ] Live-Ausführung prüfen – benötigt Zugriff auf den Hetzner-Deploy.
+
 ## Partner-Freigaben in Tenant-Paketauswahl (02.11.)
 - [x] v1.35.1: Neue Partner-Freigaben beim Öffnen/Fokus und alle 15 Sekunden im offenen Buchungsfenster aktualisieren; Portal-Auswahl nach Partner des ausgewählten Tenants eingrenzen.
 - [x] 13 Tests erfolgreich; angemeldet bei Bolan Test Monitoring + Analyse auswählbar, Vorschau 148 €, Auswahl nach Aktualisierung erhalten. Handbuch in vier Sprachen gepflegt; keine Buchung oder Rechnung ausgelöst.
