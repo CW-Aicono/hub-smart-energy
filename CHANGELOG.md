@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.38.4 – 03.11.2026
+- ocpp-persistent-api verdichtet OCPP-Leistungswerte nach jedem Insert live in meter_power_readings_5min (source ocpp_live, Neuberechnung betroffener Buckets aus Rohdaten); nächtliche Verdichtung unverändert. 2 Tests.
+
 ## v1.38.3 – 03.11.2026
 - Partnerliste im AICONO Portal zeigt Abrechnungsmodell als „Wiederverkauf“/„Provision“ statt technischem Wert; gespeicherte Werte unverändert.
 

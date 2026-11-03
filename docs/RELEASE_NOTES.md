@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.38.4 – 03.11.2026
+- Ladevorgänge erscheinen jetzt noch am selben Tag in der Energieanalyse.
+
 ## v1.38.3 – 03.11.2026
 - Partnerliste zeigt das Abrechnungsmodell verständlich als „Wiederverkauf“ oder „Provision“.
 
