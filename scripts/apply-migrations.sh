@@ -445,5 +445,25 @@ for file in "${migration_files[@]}"; do
   applied_count=$((applied_count + 1))
 done
 
-//PLACEHOLDER
+# A manual column repair or bootstrap marker is not proof of a complete setup
+# release. Replay only the two idempotent setup migrations when their actual
+# schema/default/triggers are missing; never reset existing tenants to setup.
+if [ -f "$DRIZZLE_MIG_DIR/0070_tenant_setup_phase.sql" ]; then
+  setup_ready="$(psql_exec -At < "$REPO_ROOT/scripts/tenant-setup-ready.sql")"
+  if [ "$setup_ready" != 't' ]; then
+    log "Reparatur: Einrichtungsphase unvollstaendig trotz Migrationsstand"
+    for setup_file in 0070_tenant_setup_phase.sql 0071_tenant_setup_phase_audit_fix.sql; do
+      if ! run_migration_with_autoheal "$DRIZZLE_MIG_DIR/$setup_file"; then
+        log "FEHLER: Einrichtungsphase konnte nicht vervollstaendigt werden"
+        exit 1
+      fi
+      mark_applied "$DRIZZLE_MIG_DIR/$setup_file"
+    done
+    setup_ready="$(psql_exec -At < "$REPO_ROOT/scripts/tenant-setup-ready.sql")"
+    if [ "$setup_ready" != 't' ]; then
+      log "FEHLER: Einrichtungsphase bleibt unvollstaendig"
+      exit 1
+    fi
+  fi
+fi
 log "Fertig: $applied_count neue, $skipped_count bereits appliziert, $autoheal_count per Auto-Heal geheilt."

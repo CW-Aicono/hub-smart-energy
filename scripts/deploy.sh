@@ -3,7 +3,7 @@
 # Arbeitet idempotent: wenn nichts Neues da ist, ist der Lauf ein No-Op.
 set -euo pipefail
 
-SHA="${1:?short-sha argument required}"
+SHA="${1:?commit-sha argument required}"
 REPO_ROOT="/opt/hub-smart-energy"
 BACKUP_DIR="${REPO_ROOT}/backups"
 IMAGE="ghcr.io/cw-aicono/hub-smart-energy:${SHA}"
@@ -26,6 +26,10 @@ git fetch origin main
 git reset --hard origin/main
 NEW_SHA="$(git rev-parse HEAD)"
 log "Neuer Commit: $NEW_SHA"
+if [[ "$NEW_SHA" != "$SHA"* ]]; then
+  log "FEHLER: Image und Server-Code stammen nicht aus demselben Commit."
+  exit 1
+fi
 
 log "3/6 Neue Supabase-Migrations applyen"
 if ! "${REPO_ROOT}/scripts/apply-migrations.sh"; then
@@ -33,6 +37,15 @@ if ! "${REPO_ROOT}/scripts/apply-migrations.sh"; then
   "${REPO_ROOT}/scripts/rollback.sh" "$TS" "$PREV_SHA"
   exit 1
 fi
+
+log "Vollstaendigkeit der heutigen Live-Aenderungen pruefen"
+if ! bash "${REPO_ROOT}/scripts/verify-live-release.sh"; then
+  log "FEHLER: Release-Pruefung fehlgeschlagen. Starte Rollback."
+  "${REPO_ROOT}/scripts/rollback.sh" "$TS" "$PREV_SHA"
+  exit 1
+fi
+# PostgREST must discover new columns and RPCs before the new frontend starts.
+docker exec -i "${DB_CONTAINER:-supabase-db}" psql -U "${DB_USER:-supabase_admin}" -d postgres -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
 
 log "Stammdaten-Pruefung (nur lesend)"
 docker exec -i "${DB_CONTAINER:-supabase-db}" psql -U "${DB_USER:-supabase_admin}" -d postgres -At <<'SQL' || log "WARNUNG: Stammdaten-Pruefung fehlgeschlagen"
