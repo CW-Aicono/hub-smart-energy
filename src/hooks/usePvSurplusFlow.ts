@@ -53,7 +53,9 @@ async function readSeries(meterId: string, since: string) {
     .gte("bucket", since)
     .order("bucket", { ascending: true })
     .limit(400);
-  return (data ?? []) as { bucket: string; power_avg: number | null }[];
+  // Unplausible Ausreißer (> 500 kW) wie in der Regelung verwerfen.
+  return ((data ?? []) as { bucket: string; power_avg: number | null }[])
+    .filter((r) => r.power_avg === null || Math.abs(Number(r.power_avg)) <= 500);
 }
 
 export function usePvSurplusFlow(config: PvFlowConfig | null | undefined, locationId: string | null | undefined) {
