@@ -1,5 +1,9 @@
 # Roadmap
 
+## Partner-Rechnungsbranding (03.11., Dirk)
+- [ ] Logo und drei Partnerfarben in Vorschau/PDF übernehmen; beim Ausstellen einfrieren, Abrechnung unverändert.
+- [ ] Regressionstests, angemeldete Vorschau und Dokumentation vier Sprachen prüfen.
+
 ## Live-Einrichtung dauerhaft absichern (03.11., Hendrik)
 - [x] v1.38.1: Neue Tenants in beiden Portalen und useTenants explizit in Einrichtung; fehlendes Sitzungs-/Tenant-Schema verweigert Zugriff vor Nutzer-/Token-Erstellung.
 - [x] Einrichtungsschema reparieren; heutige Paketfunktionen und Funktionsdateien vor Frontend-Aktivierung prüfen. App-Rollback mit vorherigem Image, ohne Datenbank-Dump-Restore.
