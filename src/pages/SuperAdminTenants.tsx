@@ -115,6 +115,7 @@ const SuperAdminTenants = () => {
           support_owner: newPartnerId ? "partner" : "platform",
           tenant_type: "gewerbe_industrie",
           is_kommune: false,
+          setup_status: "setup",
         })
         .select()
         .single();
