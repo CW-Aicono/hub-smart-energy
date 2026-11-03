@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.38.1 – 03.11.2026
+- Neue Tenants starten in beiden Portalen ausdrücklich „In Einrichtung“; ohne Sitzungsprotokoll kein Fernzugriff.
+- Live-Deploy prüft auch die heutigen Paketänderungen und ausgelieferten Funktionen vor der Freigabe.
+- Bei Deploy-Fehlern bleibt die Datenbank erhalten; übergebene Tenants und Kundenfreigaben bleiben unverändert.
+
 ## v1.38.0 – 03.11.2026
 - Pakete korrigieren; Entwürfe neu berechnen, ausgestellte Rechnungen schützen.
 - Jährliche Abrechnung und je Paket individuelle Prozent-/Euro-Rabatte mit Zeitraum und Ablaufwahl.

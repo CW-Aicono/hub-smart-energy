@@ -20,6 +20,13 @@ Eine nur per Serverbefehl ergänzte Einrichtungsphase wird vervollständigt;
 bereits übergebene Tenants werden nicht zurückgesetzt. Fehlende Bestandteile
 brechen den Deploy ab.
 
+Seit v1.38.1 werden auch Jahresabrechnung, Paketkorrekturen und die tatsächlich
+ausgelieferten Funktionsdateien geprüft. Neue Tenants starten in beiden Portalen
+ausdrücklich in Einrichtung. Fehlt die Sitzungsprotokollierung, startet kein
+Fernzugriff. Bei Deploy-Fehlern werden App und Funktionen zurückgenommen, ohne
+die laufende Datenbank mit einer Sicherung zu überschreiben. Bereits fälschlich
+als übergeben angelegte Tenants werden nicht automatisch zurückgesetzt.
+
 Die Pflichtprüfung liegt im bereits aus `staging` übernommenen Migrationsrunner;
 die Prüfscripte unter `supabase/deploy/` bleiben von der Main-CI-Ausnahme unberührt.
 Damit funktioniert diese Reparatur auch mit dem bisherigen geschützten Workflow.

@@ -4,7 +4,9 @@
 set -euo pipefail
 
 SHA="${1:?commit-sha argument required}"
-REPO_ROOT="/opt/hub-smart-energy"
+REPO_ROOT="${REPO_ROOT:-/opt/hub-smart-energy}"
+export REPO_ROOT
+umask 077
 BACKUP_DIR="${REPO_ROOT}/backups"
 IMAGE="ghcr.io/cw-aicono/hub-smart-energy:${SHA}"
 TS="$(date +%Y%m%d-%H%M%S)"
@@ -42,7 +44,7 @@ NEW_SHA="$(git rev-parse HEAD)"
 log "Neuer Commit: $NEW_SHA"
 if [[ "$NEW_SHA" != "$SHA"* ]]; then
   log "FEHLER: Image und Server-Code stammen nicht aus demselben Commit."
-  exit 1
+  false
 fi
 
 log "3/6 Neue Supabase-Migrations applyen"

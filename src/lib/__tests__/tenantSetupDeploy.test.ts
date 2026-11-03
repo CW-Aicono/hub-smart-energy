@@ -45,6 +45,15 @@ describe("live setup migration repairs", () => {
     await db.exec(read("drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql"));
     expect((await db.query("SELECT setup_status FROM tenants ORDER BY id")).rows).toEqual([{setup_status:"active"},{setup_status:"setup"}]);
   });
+  it("repairs wrong session defaults without rewriting existing sessions or reopening tenants", async () => {
+    await db.exec(`INSERT INTO support_sessions(tenant_id,session_kind) VALUES('${originalTenant}','support');
+      ALTER TABLE support_sessions ALTER COLUMN session_kind SET DEFAULT 'setup';`);
+    expect((await db.query<{tenant_setup_ready:boolean}>(read("supabase/deploy/tenant-setup-ready.sql"))).rows[0].tenant_setup_ready).toBe(false);
+    await db.exec(read("drizzle/migrations/0079_tenant_setup_deploy_contract.sql"));
+    expect((await db.query<{tenant_setup_ready:boolean}>(read("supabase/deploy/tenant-setup-ready.sql"))).rows[0].tenant_setup_ready).toBe(true);
+    expect((await db.query("SELECT session_kind FROM support_sessions")).rows).toEqual([{session_kind:"support"}]);
+    expect((await db.query("SELECT setup_status FROM tenants WHERE id=$1",[originalTenant])).rows).toEqual([{setup_status:"active"}]);
+  });
   it("hands over at the first tenant-admin login, closes setup sessions and writes the audit record", async () => {
     await db.exec(`INSERT INTO auth.users(id) VALUES('${admin}');
       INSERT INTO profiles VALUES('${admin}','${setupTenant}');
