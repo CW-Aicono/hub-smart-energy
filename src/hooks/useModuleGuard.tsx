@@ -3,63 +3,8 @@ import { useTenantModules } from "./useTenantModules";
 import { useDemoMode } from "@/contexts/DemoMode";
 import { useTenant } from "./useTenant";
 import { useMyPermissions } from "./useMyPermissions";
+import { resolveRouteModule } from "@/lib/routeModules";
 
-/**
- * Maps route paths to module codes.
- * Routes not listed here are always accessible.
- */
-const ROUTE_MODULE_MAP: Record<string, string> = {
-  "/integrations": "integrations",
-  "/energy-data": "energy_monitoring",
-  "/meters": "energy_monitoring",
-  "/live-values": "live_values",
-  "/charging/points": "ev_charging",
-  "/charging/billing": "ev_charging",
-  "/automation": "automation_multi",
-  "/network": "network_infra",
-  "/tasks": "task_management",
-  "/settings/branding": "integrations",
-  "/arbitrage": "arbitrage_trading",
-  "/peak-shaving": "peak_shaving",
-  "/tenant-electricity": "tenant_electricity",
-  "/energy-report": "energy_report",
-  "/savings-share": "gain_sharing",
-  "/energy-sharing": "energy_sharing",
-  "/ppa": "ppa_onsite|ppa_offsite",
-  "/ppa/onsite": "ppa_onsite",
-  "/ppa/offsite": "ppa_offsite",
-  "/super-admin/savings-share": "gain_sharing",
-  "/documents": "documentation",
-  "/charging/transactions": "adhoc_payment",
-  "/analytics-studio": "analytics_studio",
-};
-
-/**
- * Maps sidebar nav item paths to module codes for visibility filtering.
- */
-const NAV_MODULE_MAP: Record<string, string> = {
-  "/integrations": "integrations",
-  "/energy-data": "energy_monitoring",
-  "/meters": "energy_monitoring",
-  "/live-values": "live_values",
-  "/charging/points": "ev_charging",
-  "/charging/billing": "ev_charging",
-  "/automation": "automation_multi",
-  "/network": "network_infra",
-  "/tasks": "task_management",
-  "/arbitrage": "arbitrage_trading",
-  "/peak-shaving": "peak_shaving",
-  "/tenant-electricity": "tenant_electricity",
-  "/energy-report": "energy_report",
-  "/savings-share": "gain_sharing",
-  "/energy-sharing": "energy_sharing",
-  "/ppa": "ppa_onsite|ppa_offsite",
-  "/ppa/onsite": "ppa_onsite",
-  "/ppa/offsite": "ppa_offsite",
-  "/documents": "documentation",
-  "/charging/transactions": "adhoc_payment",
-  "/analytics-studio": "analytics_studio",
-};
 
 export function useModuleGuard() {
   const isDemo = useDemoMode();
@@ -84,31 +29,19 @@ export function useModuleGuard() {
     return !strictMode;
   };
 
-  const isRouteAllowed = (path: string): boolean => {
+  // Route guard and sidebar share one resolver; unknown paths are fail-closed.
+  const isPathAllowed = (path: string): boolean => {
     if (isDemo) return true;
     if (!perms.isPathPermitted(path)) return false;
     if (isLoading || !tenant) return true;
-
-    const moduleCode = ROUTE_MODULE_MAP[path];
-    if (!moduleCode) {
-      const matchedRoute = Object.keys(ROUTE_MODULE_MAP).find(
-        (route) => path.startsWith(route + "/")
-      );
-      if (!matchedRoute) return true;
-      return checkModule(ROUTE_MODULE_MAP[matchedRoute]);
-    }
-
-    return checkModule(moduleCode);
+    const res = resolveRouteModule(path);
+    if (res.kind === "public") return true;
+    if (res.kind === "unknown") return false;
+    return checkModule(res.code);
   };
 
-  const isNavItemVisible = (path: string): boolean => {
-    if (isDemo) return true;
-    if (!perms.isPathPermitted(path)) return false;
-    if (isLoading || !tenant) return true;
-    const moduleCode = NAV_MODULE_MAP[path];
-    if (!moduleCode) return true;
-    return checkModule(moduleCode);
-  };
+  const isRouteAllowed = isPathAllowed;
+  const isNavItemVisible = isPathAllowed;
 
   /** Whether the full locations module (multiple locations) is enabled */
   const locationsFullEnabled = useMemo(() => {

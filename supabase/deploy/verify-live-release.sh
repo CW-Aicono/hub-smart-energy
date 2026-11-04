@@ -17,6 +17,8 @@ for file in \
   drizzle/migrations/0077_package_correction_collective_invoice_guard.sql \
   drizzle/migrations/0078_package_correction_fail_closed_auth.sql \
   drizzle/migrations/0079_tenant_setup_deploy_contract.sql \
+  drizzle/migrations/0083_effective_modules_auth_fix.sql \
+  supabase/deploy/package-entitlements-ready.sql \
   supabase/functions/_shared/supportSessionKind.ts; do
   if [ ! -s "$REPO_ROOT/$file" ]; then
     printf 'FEHLER: Release-Datei fehlt: %s\n' "$file" >&2
@@ -36,6 +38,11 @@ grep -q 'entitlement_enabled' "$REPO_ROOT/supabase/functions/gateway-ingest/inde
 ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/tenant-setup-ready.sql")"
 if [ "$ready" != 't' ]; then
   printf 'FEHLER: Einrichtungsphase nicht vollstaendig installiert.\n' >&2
+  exit 1
+fi
+pkg="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/package-entitlements-ready.sql")"
+if [ "$pkg" != 't' ]; then
+  printf 'FEHLER: Pakete/Modulrechte unvollstaendig (Tabellen, Funktionen oder effective_tenant_modules-Fix 0083 fehlen).\n' >&2
   exit 1
 fi
 docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$REPO_ROOT/supabase/deploy/live-release-check.sql"
