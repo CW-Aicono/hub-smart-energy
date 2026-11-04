@@ -36,6 +36,8 @@ export const ALL_MODULES = [
   { code: "analytics_studio", label: "Analyse-Studio" },
 ] as const;
 
+const BASE_MODULES: string[] = ["dashboard", "locations", "floor_plans", "documentation"];
+
 export function useTenantModules(tenantId: string | null) {
   const queryClient = useQueryClient();
 
@@ -43,6 +45,7 @@ export function useTenantModules(tenantId: string | null) {
     queryKey: ["tenant-modules", tenantId],
     enabled: !!tenantId,
     refetchInterval: 60000,
+    retry: 1,
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
@@ -51,7 +54,11 @@ export function useTenantModules(tenantId: string | null) {
         .eq("tenant_id", tenantId);
       if (error) throw error;
       const { data: effective, error: effectiveError } = await (supabase as any).rpc("effective_tenant_modules", { p_tenant: tenantId });
-      if (effectiveError) throw effectiveError;
+      if (effectiveError) {
+        // Fail closed but never block the app: only base areas stay usable.
+        console.error("effective_tenant_modules failed", effectiveError);
+        return data.map(mod => ({ ...mod, is_enabled: BASE_MODULES.includes(mod.module_code) && mod.is_enabled }));
+      }
       return data.map(mod => ({ ...mod, is_enabled: effective?.find((e: any) => e.module_code === mod.module_code)?.is_enabled === true }));
     },
   });

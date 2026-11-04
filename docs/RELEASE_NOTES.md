@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.39.2 – 04.11.2026
+- Im Menü erscheinen nur noch gebuchte Bereiche; sichtbare Menüpunkte lassen sich immer öffnen.
+- Keine leeren Seiten mehr, wenn die Paketfreischaltung kurz nicht geladen werden kann.
+
 ## v1.39.1
 - Gelöschte Zähler verschwinden sofort; schlägt das Löschen fehl, erscheint eine Meldung.
 - Vestel AC: Ladestationsvorlage nach neuer Herstellerspezifikation aktualisiert.

@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.39.2 – 04.11.2026
+- Routen/Menü: eine Zuordnung `src/lib/routeModules.ts` für ModuleGuard und Sidebar, Unterpfade erben, unbekannte Pfade fail-closed; Test prüft alle `<M>`-Routen und Sidebar-Links. `/charging/*` jetzt durchgehend ev_charging.
+- useTenantModules: Fehler von effective_tenant_modules → nur Basismodule statt endloser Ladezustand (weiße Seite).
+- Migration 0083: effective_tenant_modules prüft profiles.user_id und support_sessions.super_admin_user_id (Live-Fehler). verify-live-release.sh bricht ab, wenn Paket-Tabellen/-Funktionen oder der Fix fehlen.
+
 ## v1.39.1
 - Zähler löschen: Fehler werden angezeigt (auch 0 gelöschte Zeilen), Liste aktualisiert sofort.
 - Vestel-Modbus-Vorlage auf Spezifikation v1.15 (Input-Register 0x04, Zusatzregister) – Migration 0082.

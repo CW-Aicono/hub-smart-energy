@@ -582,6 +582,13 @@
       "when": 1793722605189,
       "tag": "0082_vestel_modbus_spec_v115",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1793806626209,
+      "tag": "0083_effective_modules_auth_fix",
+      "breakpoints": true
     }
   ]
 }
