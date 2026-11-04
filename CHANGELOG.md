@@ -1,5 +1,32 @@
 # Änderungsprotokoll (intern)
 
+## v1.39.1
+- Zähler löschen: Fehler werden angezeigt (auch 0 gelöschte Zeilen), Liste aktualisiert sofort.
+- Vestel-Modbus-Vorlage auf Spezifikation v1.15 (Input-Register 0x04, Zusatzregister) – Migration 0082.
+
+## v1.39.0 – 03.11.2026
+- PV-Überschuss transparent: PvSurplusMonitor (Live-Fluss SVG, animierte Regelentscheidung, Tagesanalyse mit KPIs/Entscheidungsmarkern, Prüfliste) in GroupSolarChargingConfig und als Dashboard-Widget pv_flow_live.
+- solar-charging-scheduler: gemeinsame Rechenlogik _shared/pvSurplusDecision.ts, Entscheidung als solar_charging_log.decision (+config_id, charge_point_id); ELMI-Kopplung (storage_coupled, NULL = automatisch bei elmi_aio): beim Laden Entladen immer erlaubt (minSocPct 0), Entladeleistung nicht als Überschuss. Ohne Speicher unverändert nur Bezugszähler.
+- Migration 0081: Spalten, Indizes, Cron auf */3, tägliche Log-Bereinigung > 30 Tage. 8 neue Tests.
+
+## v1.38.4 – 03.11.2026
+- ocpp-persistent-api verdichtet OCPP-Leistungswerte nach jedem Insert live in meter_power_readings_5min (source ocpp_live, Neuberechnung betroffener Buckets aus Rohdaten); nächtliche Verdichtung unverändert. 2 Tests.
+
+## v1.38.3 – 03.11.2026
+- Partnerliste im AICONO Portal zeigt Abrechnungsmodell als „Wiederverkauf“/„Provision“ statt technischem Wert; gespeicherte Werte unverändert.
+
+## v1.38.2 – 03.11.2026
+- Partner-Rechnungsvorschau liest Logo und drei Farben aus Partner-Einstellungen; PDF verwendet Primärfarbe für Titel, Sekundärfarbe für Tabellenkopf und Akzentfarbe für Linien, mit lesbarem Kontrast und begrenzten Logomaßen.
+- Beim Ausstellen wird das Design im bestehenden sender_snapshot eingefroren; Altbelege, Preise, Rechte und ZUGFeRD-Daten bleiben unverändert. Idempotente Migration für den nächsten Live-Deploy; Handbuch vier Sprachen gepflegt.
+- 18 Tests erfolgreich; angemeldete Vorschau eines vorhandenen Partner-Entwurfs zeigt gespeichertes Logo und alle drei Farben, 99 € netto und Status Entwurf unverändert. Nichts ausgestellt/versendet; Live-Deploy extern offen.
+
+## v1.38.1 – 03.11.2026
+- Beide Portal-Anlegewege und useTenants schreiben setup_status explizit; Support-Einstieg prüft Sitzungsprotokoll vor User-/Token-Erstellung, kein Fallback ohne Protokollierung.
+- Migration 0079 sichert Standards/Constraints ab, ohne bestehende Tenant-Zustände oder Sitzungen umzuschreiben. Fehlende/ungültige Werte führen zum sicheren Abbruch.
+- Pflichtdateien, Einrichtung und heutige Paketfunktionen werden vor Aktivierung geprüft; Funktionen zuerst neu starten und sämtliche ausgelieferten Dateien mit Zielversion vergleichen.
+- Automatischer Deploy-Rollback stellt Code und vorheriges Image wieder her; kein pg_dumpall-Restore in laufende Datenbank (Erhalt paralleler Schreibvorgänge). Handbuch vier Sprachen gepflegt. Hetzner und separat installierte Gateways weiterhin extern zu prüfen.
+- Angemeldet Test-Tenant ohne Einladung angelegt, Einrichtung geöffnet und beendet; Prüfzugang, Tenant und Sitzungen entfernt. Geschützter Main-Workflow braucht für den ersten Lauf die aktualisierte Workflow-Datei; danach nimmt er seine Release-Version mit.
+
 ## v1.38.0 – 03.11.2026
 - Paketkorrektur mit Begründung und Audit: Entwürfe positionsweise neu berechnen, ausgestellte Dokumente sperren; EK unverändert.
 - Je Position Intervall inkl. jährlich, Euro-Abzug, Zeitraum und Ablaufwahl. Partner-Rabattanfragen eigener sichtbarer Reiter.

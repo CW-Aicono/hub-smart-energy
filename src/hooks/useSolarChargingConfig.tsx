@@ -13,6 +13,9 @@ export interface SolarChargingConfig {
   safety_buffer_w: number;
   priority_mode: string;
   is_active: boolean;
+  storage_id?: string | null;
+  storage_coupled?: boolean | null;
+  storage_priority?: string | null;
   created_at: string;
   updated_at: string;
 }

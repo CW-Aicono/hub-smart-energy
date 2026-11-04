@@ -316,6 +316,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.partnerAvailability1351")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.tenantSetup136")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.liveDeploy1372")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.liveDeploy1381")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.chargerTemplates137")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.vestelDlm1371")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.salesFlow")}</p>
@@ -327,6 +328,8 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.customInvoices")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.packages130")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.partner.settings131")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.partner.invoiceBranding1382")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.partner.billingModeLabel1383")}</p>
           </section>
           <section>
             <h4 className="font-semibold mb-2">{T("manual.energy.widgetTitle")}</h4>
@@ -555,6 +558,8 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               {T("manual.ev.title")}
             </h3>
             <p className="text-muted-foreground mb-4">{T("manual.ev.intro")}</p>
+            <p className="text-sm text-muted-foreground mb-4">{T("manual.ocppLive1384")}</p>
+            <p className="text-sm text-muted-foreground mb-4">{T("manual.pvSurplus1390")}</p>
           </section>
 
           <Separator />

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { fetchLatestMeterPowerKw } from "../_shared/meterPower.ts";
 import { computeStorageSetpointKw } from "../_shared/elmiAio.ts";
+import { computeSurplus, isStorageCoupled } from "../_shared/pvSurplusDecision.ts";
 
 /**
  * Setzt den Speicher-Sollwert (kW, + laden / − entladen) auf einen virtuellen
@@ -10,14 +11,20 @@ import { computeStorageSetpointKw } from "../_shared/elmiAio.ts";
  * in Register 1200 und erzeugt den Heartbeat (1204) lokal.
  * Netzentladung ist ausgeschlossen (siehe computeStorageSetpointKw).
  */
-async function dispatchStorageSetpoint(admin: any, config: any, gridKw: number) {
+async function dispatchStorageSetpoint(admin: any, config: any, gridKw: number, evCharging: boolean) {
   const { data: s } = await admin
     .from("energy_storages")
-    .select("id, tenant_id, control_mode, allow_self_discharge, min_setpoint_kw, max_charge_kw, max_discharge_kw, current_soc_pct, last_setpoint_kw, setpoint_integration_id, setpoint_control_uuid")
+    .select("id, tenant_id, device_template, control_mode, allow_self_discharge, min_setpoint_kw, max_charge_kw, max_discharge_kw, current_soc_pct, last_setpoint_kw, setpoint_integration_id, setpoint_control_uuid")
     .eq("id", config.storage_id)
     .eq("tenant_id", config.tenant_id)
     .maybeSingle();
-  if (!s || s.control_mode !== "pv_surplus" || !s.setpoint_integration_id || !s.setpoint_control_uuid) return null;
+  if (!s) return null;
+  const coupled = isStorageCoupled(config.storage_coupled, s.device_template);
+  if (s.control_mode !== "pv_surplus" || !s.setpoint_integration_id || !s.setpoint_control_uuid) {
+    return { targetKw: null, deltaKw: 0, error: "Speicher ist nicht auf PV-Überschuss gestellt oder ohne Sollwert-Ausgang", coupled, socPct: s.current_soc_pct, skipped: true };
+  }
+  // ELMI: Speicher gehört zur Ladestation und darf beim Laden immer entladen.
+  const forceDischarge = coupled && evCharging;
 
   const current = Number(s.last_setpoint_kw ?? 0);
   const target = computeStorageSetpointKw({
@@ -28,7 +35,8 @@ async function dispatchStorageSetpoint(admin: any, config: any, gridKw: number) 
     maxChargeKw: Number(s.max_charge_kw ?? 0),
     maxDischargeKw: Number(s.max_discharge_kw ?? 0),
     socPct: s.current_soc_pct != null ? Number(s.current_soc_pct) : null,
-    allowSelfDischarge: !!s.allow_self_discharge,
+    allowSelfDischarge: forceDischarge || !!s.allow_self_discharge,
+    minSocPct: forceDischarge ? 0 : 5,
   });
 
   let error: string | null = null;
@@ -56,7 +64,7 @@ async function dispatchStorageSetpoint(admin: any, config: any, gridKw: number) 
     last_setpoint_error: error,
   }).eq("id", s.id);
 
-  return { targetKw: target, deltaKw: error ? 0 : target - current, error };
+  return { targetKw: error ? current : target, deltaKw: error ? 0 : target - current, error, coupled, socPct: s.current_soc_pct, skipped: false };
 }
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -100,131 +108,115 @@ Deno.serve(async (req) => {
 
     for (const config of configs) {
       try {
-        // Get latest power (kW) from the reference meter — supports plain,
-        // simulation and virtual meters (with charge-point sources etc.).
         const latestKw = await fetchLatestMeterPowerKw(admin, config.reference_meter_id);
         if (latestKw === null) {
-          await logExecution(admin, config, 0, 0, 0, "no_data", "Keine aktuellen Messwerte");
+          await logExecution(admin, config, 0, 0, 0, "no_data", "Keine aktuellen Messwerte vom Bezugszähler", undefined, {
+            reason: "Bezugszähler liefert seit über 5 Minuten keine Werte. Ohne aktuellen Wert wird nicht geregelt.",
+            steps: [],
+          });
           results.push({ group_id: config.group_id, status: "no_data" });
           continue;
         }
 
-        // Negative kW = feed-in = surplus
-        const powerW = latestKw * 1000;
-        const surplusW = powerW < 0 ? Math.abs(powerW) - config.safety_buffer_w : 0;
-        let availableSurplus = Math.max(0, surplusW);
-
-        // ELMI AiO / Batteriespeicher: Sollwert über Loxone Miniserver setzen.
-        if (config.storage_id) {
-          const st = await dispatchStorageSetpoint(admin, config, latestKw);
-          if (st && config.storage_priority === "storage_first" && st.deltaKw > 0) {
-            availableSurplus = Math.max(0, availableSurplus - st.deltaKw * 1000);
-          }
-        }
-
-        // Get charge points: either by group_id or single charge_point_id
+        // Ladepunkte des Geltungsbereichs
         let chargePoints: { id: string }[] | null = null;
         if (config.group_id) {
-          const { data } = await admin
-            .from("charge_points")
-            .select("id")
-            .eq("group_id", config.group_id)
-            .eq("tenant_id", config.tenant_id);
+          const { data } = await admin.from("charge_points").select("id")
+            .eq("group_id", config.group_id).eq("tenant_id", config.tenant_id);
           chargePoints = data;
         } else if (config.charge_point_id) {
-          const { data } = await admin
-            .from("charge_points")
-            .select("id")
-            .eq("id", config.charge_point_id)
-            .eq("tenant_id", config.tenant_id);
+          const { data } = await admin.from("charge_points").select("id")
+            .eq("id", config.charge_point_id).eq("tenant_id", config.tenant_id);
           chargePoints = data;
         }
+        const cpIds = (chargePoints ?? []).map((cp: any) => cp.id);
 
-        const scopeKey = config.group_id
-          ? { group_id: config.group_id }
-          : { charge_point_id: config.charge_point_id };
+        let pvConnectors: any[] = [];
+        if (cpIds.length > 0) {
+          const { data } = await admin.from("charge_point_connectors").select("*")
+            .in("charge_point_id", cpIds).in("charging_mode", ["pv_surplus_only", "pv_priority"]);
+          pvConnectors = data ?? [];
+        }
+        const activeConnectors = pvConnectors.filter((c: any) => c.status === "charging");
 
-        if (!chargePoints || chargePoints.length === 0) {
-          await logExecution(admin, config, availableSurplus, 0, 0, "success", null);
-          results.push({ ...scopeKey, status: "no_chargepoints" });
+        // Speicher (optional). Ohne Speicher regelt nur der Bezugszähler.
+        let st: any = null;
+        if (config.storage_id) {
+          st = await dispatchStorageSetpoint(admin, config, latestKw, activeConnectors.length > 0);
+        }
+        const surplus = computeSurplus({
+          gridKw: latestKw,
+          bufferW: Number(config.safety_buffer_w ?? 0),
+          storageTargetKw: st?.targetKw ?? null,
+          storageDeltaKw: st?.deltaKw ?? null,
+          storagePriority: config.storage_priority,
+          storageCoupled: !!st?.coupled,
+        });
+        const availableSurplus = surplus.availableW;
+        const baseDecision = {
+          grid_kw: latestKw,
+          steps: surplus.steps,
+          storage: st ? {
+            target_kw: st.targetKw, delta_kw: st.deltaKw, coupled: st.coupled,
+            soc_pct: st.socPct, error: st.error ?? null,
+          } : null,
+          mode: config.storage_id ? "with_storage" : "meter_only",
+        };
+
+        if (cpIds.length === 0) {
+          await logExecution(admin, config, availableSurplus, 0, 0, "success", null, undefined, { ...baseDecision, reason: "Keine Ladepunkte im Geltungsbereich." });
+          results.push({ group_id: config.group_id, status: "no_chargepoints" });
           continue;
         }
-
-        const cpIds = chargePoints.map((cp: any) => cp.id);
-
-        // Get connectors in PV modes
-        const { data: pvConnectors } = await admin
-          .from("charge_point_connectors")
-          .select("*")
-          .in("charge_point_id", cpIds)
-          .in("charging_mode", ["pv_surplus_only", "pv_priority"]);
-
-        const activeConnectors = pvConnectors?.filter(
-          (c: any) => c.status === "charging"
-        ) || [];
-
         if (activeConnectors.length === 0) {
-          await logExecution(admin, config, availableSurplus, 0, 0, "success", null);
+          await logExecution(admin, config, availableSurplus, 0, 0, "success", null, undefined, {
+            ...baseDecision,
+            reason: pvConnectors.length === 0
+              ? "Kein Ladepunkt steht auf PV-Modus."
+              : "Kein Fahrzeug lädt gerade an einem Ladepunkt im PV-Modus.",
+          });
           results.push({ group_id: config.group_id, status: "no_active_pv_sessions" });
           continue;
         }
 
-        // Distribute surplus
         let allocatedW = 0;
         const actions: any[] = [];
-
         if (config.priority_mode === "equal_split") {
           const perConnector = Math.floor(availableSurplus / activeConnectors.length);
           for (const conn of activeConnectors) {
             const assignedW = Math.max(perConnector, conn.charging_mode === "pv_priority" ? config.min_charge_power_w : 0);
             allocatedW += assignedW;
-            actions.push({
-              connector_id: conn.id,
-              charge_point_id: conn.charge_point_id,
-              assigned_w: assignedW,
-              action: assignedW >= config.min_charge_power_w ? "charge" : "pause",
-            });
+            actions.push({ connector_id: conn.id, charge_point_id: conn.charge_point_id, assigned_w: assignedW,
+              action: assignedW >= config.min_charge_power_w ? "charge" : "pause" });
           }
         } else {
           let remaining = availableSurplus;
           for (const conn of activeConnectors) {
-            const minW = conn.charging_mode === "pv_priority" ? config.min_charge_power_w : config.min_charge_power_w;
+            const minW = config.min_charge_power_w;
             if (remaining >= minW) {
-              const assignedW = remaining;
-              allocatedW += assignedW;
+              allocatedW += remaining;
+              actions.push({ connector_id: conn.id, charge_point_id: conn.charge_point_id, assigned_w: remaining, action: "charge" });
               remaining = 0;
-              actions.push({
-                connector_id: conn.id,
-                charge_point_id: conn.charge_point_id,
-                assigned_w: assignedW,
-                action: "charge",
-              });
             } else if (conn.charging_mode === "pv_priority") {
               allocatedW += config.min_charge_power_w;
-              actions.push({
-                connector_id: conn.id,
-                charge_point_id: conn.charge_point_id,
-                assigned_w: config.min_charge_power_w,
-                action: "charge_min",
-              });
+              actions.push({ connector_id: conn.id, charge_point_id: conn.charge_point_id, assigned_w: config.min_charge_power_w, action: "charge_min" });
             } else {
-              actions.push({
-                connector_id: conn.id,
-                charge_point_id: conn.charge_point_id,
-                assigned_w: 0,
-                action: "pause",
-              });
+              actions.push({ connector_id: conn.id, charge_point_id: conn.charge_point_id, assigned_w: 0, action: "pause" });
             }
           }
         }
 
-        // Queue OCPP SetChargingProfile commands per active connector with
-        // stackLevel=1 so it sits below DLM (stackLevel=2) but above
-        // power_limit (stackLevel=0) inside the wallbox.
         await dispatchPvSurplus(admin, actions, cpIds);
 
-        await logExecution(admin, config, availableSurplus, allocatedW, activeConnectors.length, "success", null, actions);
-        results.push({ ...scopeKey, surplus_w: availableSurplus, allocated_w: allocatedW, connectors: activeConnectors.length });
+        const paused = actions.filter((a) => a.action === "pause").length;
+        await logExecution(admin, config, availableSurplus, allocatedW, activeConnectors.length, "success", null, actions, {
+          ...baseDecision,
+          steps: [...surplus.steps, { key: "allocated", label: "Zugeteilt an Ladepunkte", w: allocatedW }],
+          reason: paused === actions.length
+            ? `Überschuss unter Mindestleistung (${config.min_charge_power_w} W) – Laden pausiert.`
+            : `Überschuss auf ${actions.length - paused} Ladepunkt(e) verteilt.`,
+        });
+        results.push({ group_id: config.group_id, surplus_w: availableSurplus, allocated_w: allocatedW, connectors: activeConnectors.length });
       } catch (err) {
         await logExecution(admin, config, 0, 0, 0, "error", (err as Error).message);
         results.push({ group_id: config.group_id, charge_point_id: config.charge_point_id, status: "error", error: (err as Error).message });
@@ -250,7 +242,8 @@ async function logExecution(
   activeConnectors: number,
   status: string,
   errorMessage: string | null,
-  actions?: any[]
+  actions?: any[],
+  decision?: Record<string, unknown>,
 ) {
   await admin.from("solar_charging_log").insert({
     tenant_id: config.tenant_id,
@@ -261,6 +254,9 @@ async function logExecution(
     status,
     error_message: errorMessage,
     actions_taken: actions || null,
+    config_id: config.id,
+    charge_point_id: config.charge_point_id ?? null,
+    decision: decision ?? null,
   });
 }
 

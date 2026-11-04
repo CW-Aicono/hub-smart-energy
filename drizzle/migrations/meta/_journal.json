@@ -554,6 +554,34 @@
       "when": 1793695519510,
       "tag": "0078_package_correction_fail_closed_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793707235400,
+      "tag": "0079_tenant_setup_deploy_contract",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1793708039845,
+      "tag": "0080_partner_invoice_branding_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1793720263539,
+      "tag": "0081_pv_surplus_transparency",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1793722605189,
+      "tag": "0082_vestel_modbus_spec_v115",
+      "breakpoints": true
     }
   ]
 }

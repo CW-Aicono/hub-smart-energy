@@ -37,6 +37,8 @@ export interface StorageSetpointInput {
   socPct: number | null;
   /** Entladen zur Deckung des eigenen Verbrauchs erlaubt. */
   allowSelfDischarge: boolean;
+  /** Ladestand, unter dem nicht mehr entladen wird (Standard 5 %). */
+  minSocPct?: number;
 }
 
 /**
@@ -59,7 +61,8 @@ export function computeStorageSetpointKw(i: StorageSetpointInput): number {
 
   // Netzbezug → ggf. entladen (nur Eigenverbrauch)
   if (!i.allowSelfDischarge) return 0;
-  if (i.socPct !== null && i.socPct <= 5) return 0;
+  const minSoc = i.minSocPct ?? 5;
+  if (i.socPct !== null && i.socPct <= minSoc) return 0;
   const target = baseGridKw - i.bufferKw;
   if (target < min) return 0;
   return -round1(Math.min(target, Math.max(0, i.maxDischargeKw)));

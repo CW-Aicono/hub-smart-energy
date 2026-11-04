@@ -1,5 +1,28 @@
 # Versionshinweise
 
+## v1.39.1
+- Gelöschte Zähler verschwinden sofort; schlägt das Löschen fehl, erscheint eine Meldung.
+- Vestel AC: Ladestationsvorlage nach neuer Herstellerspezifikation aktualisiert.
+
+## v1.39.0 – 03.11.2026
+- PV-Überschussladen sichtbar: Live-Energiefluss, Regelentscheidungen Schritt für Schritt, Tagesanalyse und Prüfliste in der Ladegruppe und als Dashboard-Widget.
+- Funktioniert auch ohne Speicher; ELMI-Speicher darf beim Laden immer entladen. Regelung alle 3 Minuten.
+
+## v1.38.4 – 03.11.2026
+- Ladevorgänge erscheinen jetzt noch am selben Tag in der Energieanalyse.
+
+## v1.38.3 – 03.11.2026
+- Partnerliste zeigt das Abrechnungsmodell verständlich als „Wiederverkauf“ oder „Provision“.
+
+## v1.38.2 – 03.11.2026
+- Partner-Rechnungen berücksichtigen Logo und Farben aus den Partner-Einstellungen, auch in der Vorschau.
+- Das Design wird bei Freigabe gespeichert; spätere Änderungen lassen ausgestellte Rechnungen unverändert.
+
+## v1.38.1 – 03.11.2026
+- Neue Tenants starten in beiden Portalen ausdrücklich „In Einrichtung“; ohne Sitzungsprotokoll kein Fernzugriff.
+- Live-Deploy prüft auch die heutigen Paketänderungen und ausgelieferten Funktionen vor der Freigabe.
+- Bei Deploy-Fehlern bleibt die Datenbank erhalten; übergebene Tenants und Kundenfreigaben bleiben unverändert.
+
 ## v1.38.0 – 03.11.2026
 - Pakete korrigieren; Entwürfe neu berechnen, ausgestellte Rechnungen schützen.
 - Jährliche Abrechnung und je Paket individuelle Prozent-/Euro-Rabatte mit Zeitraum und Ablaufwahl.

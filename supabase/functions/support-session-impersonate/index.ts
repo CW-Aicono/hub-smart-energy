@@ -4,18 +4,12 @@
 // nicht vorhanden.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { resolveSessionKind } from "../_shared/supportSessionKind.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 // Kein Arbeits-Zeitlimit: Sitzung läuft bis "Beenden". 24h = nur Aufräum-Grenze
 // für vergessene Sitzungen (close_stale_support_sessions).
@@ -37,6 +31,9 @@ function randomPassword() {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY) {
+    return json({ error: "Server configuration incomplete" }, 503);
+  }
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -69,7 +66,9 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const targetTenantId = String(body.target_tenant_id || "");
     const reason = body.reason ? String(body.reason) : "Remote-Support Sitzung";
-    if (!targetTenantId) return json({ error: "target_tenant_id required" }, 400);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetTenantId) || reason.length > 2000) {
+      return json({ error: "Valid target_tenant_id and reason (max. 2000 characters) required" }, 400);
+    }
 
     if (!isSuper) {
       // Partner-Admin darf nur eigene Tenants impersonieren
@@ -90,7 +89,14 @@ Deno.serve(async (req) => {
       .select("id, name, remote_support_enabled, setup_status")
       .eq("id", targetTenantId)
       .maybeSingle();
-    if (tenantErr || !tenant) return json({ error: "Tenant not found" }, 404);
+    if (tenantErr) return json({ error: "Einrichtung nicht verfügbar: Live-Installation prüfen. Es wurde kein Fernzugriff gestartet." }, 503);
+    if (!tenant) return json({ error: "Tenant not found" }, 404);
+
+    // Check the actual API schema before creating a support user or issuing tokens.
+    // Missing classification must never become an unlogged support fallback.
+    const { error: sessionSchemaError } = await admin.from("support_sessions")
+      .select("id, session_kind").limit(0);
+    if (sessionSchemaError) return json({ error: "Einrichtung nicht verfügbar: Sitzungsprotokoll fehlt. Live-Installation prüfen." }, 503);
 
     // Kundenzustimmung ist Pflicht – gilt auch für Super-Admins.
     // Ausnahme nur während der geplanten Einrichtungsphase (vor Übergabe).
@@ -149,6 +155,8 @@ Deno.serve(async (req) => {
       if (mapErr) return json({ error: `mapping failed: ${mapErr.message}` }, 500);
     }
 
+    if (!supportUserId || !supportEmail) return json({ error: "Support mapping incomplete" }, 500);
+
     // 3b) Sicherstellen, dass der Support-User Zugriff auf ALLE Locations des
     //     Tenants hat. RLS auf `locations` und `pv_actual_hourly` prüft
     //     zusätzlich zu `admin`-Rolle bzw. tenant_id auch `user_location_access`.
@@ -161,7 +169,7 @@ Deno.serve(async (req) => {
         .eq("tenant_id", targetTenantId);
       if (locs && locs.length > 0) {
         const rows = locs.map((l: { id: string }) => ({
-          user_id: supportUserId!,
+          user_id: supportUserId,
           location_id: l.id,
         }));
         await admin
@@ -196,7 +204,7 @@ Deno.serve(async (req) => {
     // 5) Magic-Link generieren und serverseitig gegen Tokens tauschen
     const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
       type: "magiclink",
-      email: supportEmail!,
+      email: supportEmail,
     });
     if (linkErr || !linkData?.properties?.hashed_token) {
       return json({ error: `generateLink failed: ${linkErr?.message}` }, 500);

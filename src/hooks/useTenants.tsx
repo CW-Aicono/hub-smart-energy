@@ -25,7 +25,7 @@ export function useTenants() {
     mutationFn: async (values: { name: string; slug: string; contact_email?: string }) => {
       const { data, error } = await supabase
         .from("tenants")
-        .insert(values)
+        .insert({ ...values, setup_status: "setup" })
         .select()
         .single();
       if (error) throw error;

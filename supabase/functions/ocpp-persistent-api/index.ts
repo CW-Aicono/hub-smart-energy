@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizeRfidTag, type RfidReadMode } from "../_shared/rfidNormalize.ts";
+import { refreshLive5min } from "./livePower5min.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -720,6 +721,10 @@ async function handle(action: string, body: Record<string, unknown>) {
       if (powerRows.length > 0) {
         const { error: pErr } = await admin.from("meter_power_readings").insert(powerRows);
         if (pErr) console.warn("[insert-meter-samples] power insert failed", pErr.message);
+        else {
+          try { await refreshLive5min(admin, powerRows as any); }
+          catch (e) { console.warn("[insert-meter-samples] live 5min failed", e); }
+        }
       }
       if (cumulativeRows.length > 0) {
         const { error: cErr } = await admin

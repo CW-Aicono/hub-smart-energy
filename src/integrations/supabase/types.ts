@@ -13945,6 +13945,7 @@ export type Database = {
           priority_mode: string
           reference_meter_id: string | null
           safety_buffer_w: number
+          storage_coupled: boolean | null
           storage_id: string | null
           storage_priority: string
           tenant_id: string
@@ -13960,6 +13961,7 @@ export type Database = {
           priority_mode?: string
           reference_meter_id?: string | null
           safety_buffer_w?: number
+          storage_coupled?: boolean | null
           storage_id?: string | null
           storage_priority?: string
           tenant_id: string
@@ -13975,6 +13977,7 @@ export type Database = {
           priority_mode?: string
           reference_meter_id?: string | null
           safety_buffer_w?: number
+          storage_coupled?: boolean | null
           storage_id?: string | null
           storage_priority?: string
           tenant_id?: string
@@ -14023,6 +14026,9 @@ export type Database = {
           actions_taken: Json | null
           active_connectors: number | null
           allocated_w: number | null
+          charge_point_id: string | null
+          config_id: string | null
+          decision: Json | null
           error_message: string | null
           executed_at: string
           group_id: string | null
@@ -14035,6 +14041,9 @@ export type Database = {
           actions_taken?: Json | null
           active_connectors?: number | null
           allocated_w?: number | null
+          charge_point_id?: string | null
+          config_id?: string | null
+          decision?: Json | null
           error_message?: string | null
           executed_at?: string
           group_id?: string | null
@@ -14047,6 +14056,9 @@ export type Database = {
           actions_taken?: Json | null
           active_connectors?: number | null
           allocated_w?: number | null
+          charge_point_id?: string | null
+          config_id?: string | null
+          decision?: Json | null
           error_message?: string | null
           executed_at?: string
           group_id?: string | null
@@ -16549,6 +16561,7 @@ export type Database = {
       cleanup_sensor_readings_daily: { Args: never; Returns: number }
       cleanup_sensor_readings_hourly: { Args: never; Returns: number }
       cleanup_sensor_readings_raw: { Args: never; Returns: undefined }
+      cleanup_solar_charging_log: { Args: never; Returns: undefined }
       cleanup_stale_integration_errors: { Args: never; Returns: number }
       close_orphan_gateway_ws_sessions: { Args: never; Returns: number }
       close_orphan_loxone_ws_sessions: {

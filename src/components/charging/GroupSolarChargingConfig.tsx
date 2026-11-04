@@ -12,6 +12,7 @@ import { useChargePoints } from "@/hooks/useChargePoints";
 import { useLocations } from "@/hooks/useLocations";
 import { useNavigate } from "react-router-dom";
 import { useEnergyStorages } from "@/hooks/useEnergyStorages";
+import PvSurplusMonitor from "@/components/charging/pv/PvSurplusMonitor";
 
 interface Props {
   groupId: string;
@@ -41,6 +42,7 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
   const [isActive, setIsActive] = useState(true);
   const [storageId, setStorageId] = useState("");
   const [storagePriority, setStoragePriority] = useState("ev_first");
+  const [storageCoupled, setStorageCoupled] = useState<boolean | null>(null);
   const { storages } = useEnergyStorages();
   const locationStorages = useMemo(
     () => storages.filter((s: any) => !locationId || s.location_id === locationId),
@@ -56,6 +58,7 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
       setIsActive(config.is_active);
       setStorageId((config as any).storage_id || "");
       setStoragePriority((config as any).storage_priority || "ev_first");
+      setStorageCoupled(config.storage_coupled ?? null);
     }
   }, [config]);
 
@@ -80,6 +83,7 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
       is_active: isActive,
       storage_id: storageId || null,
       storage_priority: storagePriority,
+      storage_coupled: storageId ? storageCoupled : null,
     } as any);
   };
 
@@ -150,6 +154,13 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
         </div>
       </div>
 
+      {/* Modus */}
+      <p className="text-xs text-muted-foreground">
+        {storageId
+          ? "Modus: mit Speicher – Überschuss wird zwischen Speicher und Ladepunkten aufgeteilt."
+          : "Modus: nur Bezugszähler – kein Speicher nötig, geregelt wird allein nach dem gewählten Zähler."}
+      </p>
+
       {/* Batteriespeicher (z. B. ELMI All-in-One) */}
       {locationStorages.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
@@ -176,11 +187,33 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
         </div>
       )}
 
+      {storageId && (() => {
+        const st: any = locationStorages.find((s: any) => s.id === storageId);
+        const auto = st?.device_template === "elmi_aio";
+        const effective = storageCoupled ?? auto;
+        return (
+          <div className="flex items-start justify-between gap-3 rounded-md border p-2">
+            <div>
+              <Label className="text-xs">Speicher gehört zur Ladestation (z. B. ELMI)</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Beim Laden darf der Speicher immer entladen. Seine Entladeleistung zählt nicht als PV-Überschuss.{auto && storageCoupled === null ? " Automatisch erkannt (ELMI-Vorlage)." : ""}
+              </p>
+            </div>
+            <Switch checked={effective} onCheckedChange={(v) => setStorageCoupled(v)} disabled={!isAdmin} />
+          </div>
+        );
+      })()}
+
       {isAdmin && (
         <Button size="sm" onClick={handleSave} disabled={upsert.isPending} className="gap-1.5">
           <Save className="h-3.5 w-3.5" />
           {upsert.isPending ? "Speichern…" : "Speichern"}
         </Button>
+      )}
+      {config && locationId && (
+        <div className="pt-2 border-t">
+          <PvSurplusMonitor config={config as any} locationId={locationId} />
+        </div>
       )}
     </div>
   );

@@ -1,5 +1,20 @@
 # Roadmap
 
+## PV-Überschuss → Ladestation → Speicher (03.11., Hendrik)
+- [x] v1.39.0: Live-Energiefluss, animierte Regelentscheidung, Analyse, Prüfliste (Ladegruppe + Dashboard-Widget); ohne Speicher nur mit Zähler; ELMI-Speicher beim Laden immer entladen; Takt 3 Minuten.
+- [ ] Wartet auf Nutzer: ESB-Bezugszähler „Shelly Pro 3 Hauptzuleitung“ liefert keine aktuellen Werte – Zähler prüfen oder anderen Zähler wählen. Hetzner-Live-Deploy (Migration 0081) extern.
+
+## Partner-Rechnungsbranding (03.11., Dirk)
+- [x] v1.38.2: Logo und drei Partnerfarben in Vorschau/PDF übernehmen; beim Ausstellen einfrieren, Abrechnung unverändert. Migration 0080 im nächsten Live-Deploy enthalten.
+- [x] 18 Tests erfolgreich; angemeldet vorhandenen Entwurf geöffnet, gespeichertes Logo und Blau/Rot/Orange sichtbar geprüft, weiterhin 99 € netto/Entwurf. Handbuch vier Sprachen gepflegt; nichts freigegeben oder versendet.
+- [ ] Wartet auf externen Hetzner-Live-Deploy; echte Freigabe bewusst nicht ausgelöst, Einfrieren mit SQL-Regression geprüft.
+
+## Live-Einrichtung dauerhaft absichern (03.11., Hendrik)
+- [x] v1.38.1: Neue Tenants in beiden Portalen und useTenants explizit in Einrichtung; fehlendes Sitzungs-/Tenant-Schema verweigert Zugriff vor Nutzer-/Token-Erstellung.
+- [x] Einrichtungsschema reparieren; heutige Paketfunktionen und Funktionsdateien vor Frontend-Aktivierung prüfen. App-Rollback mit vorherigem Image, ohne Datenbank-Dump-Restore.
+- [x] Angemeldet Test-Tenant angelegt, Einrichtung geöffnet und beendet; Testzugang, Tenant und Prüfsitzungen entfernt. Handbuch vier Sprachen, Versionshinweise und Regressionstests gepflegt.
+- [ ] Wartet auf externen Hetzner-Deploy/Serverzugriff sowie erste Übernahme des aktualisierten geschützten Main-Workflows. Bereits falsch übergebene Live-Tenants nicht automatisch zurückgesetzt; lokale Gateway-Updates bleiben separat.
+
 ## Paketkorrekturen und individuelle Abrechnung (03.11., Dirk)
 - [x] v1.38.0: Bestehend: Einzel-Prozentrabatt/manueller VK, Laufzeitpflege und Partner-Antragsweg (zuvor eingeklappt). Ergänzt: Korrektur und Fehlbuchung zurücknehmen, Intervall je Position inkl. jährlich, Euro-Abzug und eigener Zeitraum/Ablaufwahl.
 - [x] 57 Tests erfolgreich: Korrektur/ausgestellte Rechnungen, unveränderter EK, Jahresbeträge, Entitlements/Datenbehalt und bestehende Regeln. Handbuch vier Sprachen und Versionshinweise gepflegt.
