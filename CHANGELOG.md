@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.39.3 – 04.11.2026
+- Migration 0084: Aufgabenverwaltung in Paket Monitoring, Gebäudeautomation (einzeln) in Paket Gebäudeautomation; Zusatzleistung Remote-Support schaltet Modul remote_support frei. Vorbereitung Umstellung Becker/Jüke.
+
 ## v1.39.2 – 04.11.2026
 - Routen/Menü: eine Zuordnung `src/lib/routeModules.ts` für ModuleGuard und Sidebar, Unterpfade erben, unbekannte Pfade fail-closed; Test prüft alle `<M>`-Routen und Sidebar-Links. `/charging/*` jetzt durchgehend ev_charging.
 - useTenantModules: Fehler von effective_tenant_modules → nur Basismodule statt endloser Ladezustand (weiße Seite).
