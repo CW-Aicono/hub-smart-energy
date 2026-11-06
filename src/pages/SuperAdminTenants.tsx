@@ -116,34 +116,17 @@ const SuperAdminTenants = () => {
           tenant_type: "gewerbe_industrie",
           is_kommune: false,
           setup_status: "setup",
-        })
+          handover_admin_email: adminEmail ? adminEmail.trim().toLowerCase() : null,
+          handover_admin_name: adminName || null,
+        } as any)
         .select()
         .single();
 
       if (tenantError) throw new Error(tenantError.message);
 
-      const { data: inviteData, error: inviteError } = await supabase.functions.invoke("invite-tenant-admin", {
-        body: {
-          tenantId: tenant.id,
-          adminEmail,
-          adminName: adminName || undefined,
-          redirectTo: `https://ems-pro.aicono.org/set-password`,
-        },
-      });
-
-      let result = typeof inviteData === "string" ? JSON.parse(inviteData) : inviteData;
-      if (inviteError) {
-        const bodyText = (inviteError as { context?: { text?: string } })?.context?.text;
-        if (bodyText) {
-          try { result = JSON.parse(bodyText); } catch { /* ignore */ }
-        }
-        if (!result?.error) throw new Error(inviteError.message);
-      }
-      if (!result?.success) throw new Error(result?.error || "Einladung fehlgeschlagen");
-
       toast({
         title: "Tenant angelegt",
-        description: `Eine Einladungsmail wurde an ${adminEmail} gesendet.`,
+        description: `${adminEmail} erhält die Zugangsmail erst bei der Übergabe.`,
       });
       setDialogOpen(false);
       resetForm();
@@ -237,7 +220,7 @@ const SuperAdminTenants = () => {
                   <div className="flex items-start gap-2 p-3 bg-accent/10 rounded-lg border border-accent/20">
                     <AlertCircle className="h-4 w-4 text-accent mt-0.5 shrink-0" />
                     <p className="text-xs text-muted-foreground">
-                      Nach dem Anlegen wird automatisch eine Einladungsmail an den Administrator gesendet. Der Administrator vergibt sich darüber selbst ein Passwort.
+                      Der Administrator erhält seine Zugangsmail erst, wenn der Tenant über „Übergeben“ an den Kunden übergeben wird. Darüber vergibt er sich selbst ein Passwort.
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -258,7 +241,7 @@ const SuperAdminTenants = () => {
                   disabled={creating || !newName || !newSlug || !adminEmail}
                   className="w-full"
                 >
-                  {creating ? "Wird angelegt..." : "Tenant anlegen & Einladung senden"}
+                  {creating ? "Wird angelegt..." : "Tenant anlegen"}
                 </Button>
               </div>
             </DialogContent>

@@ -56,6 +56,8 @@ serve(async (req: Request) => {
         name,
         slug,
         contact_email: contactEmail,
+        handover_admin_email: body.handover_admin_email ? String(body.handover_admin_email).trim().toLowerCase().slice(0, 254) : null,
+        handover_admin_name: body.handover_admin_name ? String(body.handover_admin_name).trim().slice(0, 200) : null,
         partner_id: membership.partner_id,
         setup_status: "setup",
       })

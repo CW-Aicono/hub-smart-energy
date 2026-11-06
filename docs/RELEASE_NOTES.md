@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.41.0 – 06.11.2026
+- Der Tenant-Admin erhält seine Zugangsmail erst, wenn auf „Übergeben“ geklickt wird.
+
 ## v1.40.0 – 06.11.2026
 - Pakete für Tenants in Einrichtung schalten sofort frei; Abrechnung und Einrichtungsgebühr beginnen erst am Tag der Übergabe.
 

@@ -1,3 +1,4 @@
+import { sendHandoverInvite } from "@/lib/handoverInvite";
 import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { PackageBookingCard } from "@/components/billing/PackagePricing";
 import { TenantSalesOverviewCard } from "@/components/super-admin/TenantSalesOverviewCard";
@@ -278,6 +279,8 @@ const SuperAdminTenantDetail = () => {
     setCompletingSetup(false);
     if (error) { toast.error(error.message); return; }
     toast.success(t("tenant_setup.completed" as any));
+    const msg = await sendHandoverInvite(id);
+    if (msg.ok) toast.success(msg.text); else toast.error(msg.text);
     queryClient.invalidateQueries({ queryKey: ["tenant-detail", id] });
     queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
   };

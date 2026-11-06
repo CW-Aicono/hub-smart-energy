@@ -66,11 +66,15 @@ const handler = async (req: Request): Promise<Response> => {
     // Get tenant info for branding
     const { data: tenant } = await supabase
       .from("tenants")
-      .select("name, branding")
+      .select("name, branding, setup_status")
       .eq("id", tenantId)
       .single();
 
     if (!tenant) throw new Error("Tenant not found");
+    // Zugang per Mail erst nach Übergabe (Klick auf „Übergeben“)
+    if ((tenant as { setup_status?: string }).setup_status === "setup") {
+      throw new Error("Tenant ist noch in Einrichtung – die Zugangsmail wird erst bei der Übergabe versendet.");
+    }
 
     const tenantName = tenant.name;
     const branding = (tenant.branding as Record<string, string>) || {};

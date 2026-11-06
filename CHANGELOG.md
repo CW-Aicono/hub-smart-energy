@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.41.0 – 06.11.2026
+- Migration 0086: `tenants.handover_admin_email/_name`. Tenant-Anlage (Portal/Partner) speichert den Kunden-Admin statt sofort einzuladen; „Übergeben“ ruft nach `complete_tenant_setup` `sendHandoverInvite`. `invite-tenant-admin` verweigert Einladungen für Tenants in Einrichtung.
+
 ## v1.40.0 – 06.11.2026
 - Migration 0085: `bill_license_sale` erzeugt für Tenants in Einrichtung keine Rechnung (next_period NULL); `_finish_tenant_setup` setzt starts_on/next_period nicht abgerechneter Buchungen auf das Übergabedatum und löst die Erstabrechnung aus; Einrichtungsgebühr (`create_setup_invoice`) erst beim Wechsel setup→active. Buchungsdialog/Liste zeigen „Startet bei Übergabe“.
 

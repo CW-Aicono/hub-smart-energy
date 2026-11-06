@@ -603,6 +603,13 @@
       "when": 1793989355304,
       "tag": "0085_billing_starts_at_handover",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1793989587885,
+      "tag": "0086_tenant_handover_admin_contact",
+      "breakpoints": true
     }
   ]
 }
