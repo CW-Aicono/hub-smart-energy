@@ -101,6 +101,8 @@ jobs:
             supabase/deploy/verify-live-release.sh
             supabase/deploy/tenant-setup-ready.sql
             supabase/deploy/live-release-check.sql
+            supabase/deploy/package-entitlements-ready.sql
+            supabase/deploy/package-corrections-ready.sql
             docs/GO-LIVE.md
           )
           for path in "${RELEASE_PATHS[@]}"; do

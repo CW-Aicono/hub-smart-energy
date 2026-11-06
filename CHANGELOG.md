@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.39.4 – 06.11.2026
+- Deploy: `apply-migrations.sh` prüft per `package-corrections-ready.sql` die echte Existenz von Fehlbuchung/Paketkorrektur und spielt 0074–0078/0083 neu ein, auch wenn `_deploy_migrations` sie als erledigt führt (Bootstrap-Drift). Prüfdatei in verify-live-release und Workflow-RELEASE_PATHS; Runner-Tests ergänzt.
+
 ## v1.39.3 – 04.11.2026
 - Migration 0084: Aufgabenverwaltung in Paket Monitoring, Gebäudeautomation (einzeln) in Paket Gebäudeautomation; Zusatzleistung Remote-Support schaltet Modul remote_support frei. Vorbereitung Umstellung Becker/Jüke.
 

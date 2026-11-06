@@ -8,7 +8,7 @@ afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: tru
 function fixture(failRelease = false) {
   const dir = mkdtempSync(join(tmpdir(), "live-runner-")); dirs.push(dir);
   for (const folder of ["bin", "scripts", "supabase/deploy", "supabase/migrations", "drizzle/migrations", "supabase/functions/_shared", "supabase/functions/support-session-impersonate", "supabase/functions/generate-monthly-invoices", "supabase/functions/ocpp-central", "supabase/functions/partner-create-tenant", "supabase/functions/license-sale", "supabase/functions/automation-scheduler", "supabase/functions/gateway-ingest"]) mkdirSync(join(dir, folder), { recursive: true });
-  for (const file of ["scripts/apply-migrations.sh", "supabase/deploy/tenant-setup-ready.sql", "supabase/deploy/live-release-check.sql", "supabase/deploy/verify-live-release.sh", "drizzle/migrations/0070_tenant_setup_phase.sql", "drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql", "drizzle/migrations/0072_charger_templates_variants.sql", "drizzle/migrations/0073_vestel_modbus_registers.sql", "drizzle/migrations/0074_package_sale_corrections_yearly.sql", "drizzle/migrations/0075_package_effective_entitlements.sql", "drizzle/migrations/0076_package_correction_security_guard.sql", "drizzle/migrations/0077_package_correction_collective_invoice_guard.sql", "drizzle/migrations/0078_package_correction_fail_closed_auth.sql", "drizzle/migrations/0079_tenant_setup_deploy_contract.sql", "supabase/functions/_shared/supportSessionKind.ts"]) copyFileSync(file, join(dir,file));
+  for (const file of ["scripts/apply-migrations.sh", "supabase/deploy/tenant-setup-ready.sql", "supabase/deploy/live-release-check.sql", "supabase/deploy/verify-live-release.sh", "drizzle/migrations/0070_tenant_setup_phase.sql", "drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql", "drizzle/migrations/0072_charger_templates_variants.sql", "drizzle/migrations/0073_vestel_modbus_registers.sql", "drizzle/migrations/0074_package_sale_corrections_yearly.sql", "drizzle/migrations/0075_package_effective_entitlements.sql", "drizzle/migrations/0076_package_correction_security_guard.sql", "drizzle/migrations/0077_package_correction_collective_invoice_guard.sql", "drizzle/migrations/0078_package_correction_fail_closed_auth.sql", "drizzle/migrations/0079_tenant_setup_deploy_contract.sql", "drizzle/migrations/0083_effective_modules_auth_fix.sql", "supabase/deploy/package-entitlements-ready.sql", "supabase/deploy/package-corrections-ready.sql", "supabase/functions/_shared/supportSessionKind.ts"]) copyFileSync(file, join(dir,file));
   writeFileSync(join(dir,"supabase/functions/support-session-impersonate/index.ts"), "resolveSessionKind sessionSchemaError");
   writeFileSync(join(dir,"supabase/functions/partner-create-tenant/index.ts"), 'setup_status: "setup"');
   writeFileSync(join(dir,"supabase/functions/license-sale/index.ts"), 'finalize_license_sale_options');
@@ -28,6 +28,12 @@ input="$(cat)"
 printf '%s\\n' "$input" >> "$REPO_ROOT/queries.log"
 if [[ "$input" == *"AS tenant_setup_ready"* ]]; then
   if [ -f "$REPO_ROOT/repaired" ]; then echo t; else echo f; fi
+elif [[ "$input" == *"license_sale_corrections') IS NOT NULL"* ]]; then
+  if [ -f "$REPO_ROOT/corrected" ] || [ -f "$REPO_ROOT/corrections_present" ]; then echo t; else echo f; fi
+elif [[ "$input" == *"pricing_package_modules') IS NOT NULL"* ]]; then
+  echo t
+elif [[ "$input" == *"CREATE OR REPLACE FUNCTION public.cancel_mistaken_license_sale"* ]]; then
+  touch "$REPO_ROOT/corrected"
 elif [[ "$input" == *"CREATE OR REPLACE FUNCTION public._finish_tenant_setup"* && "$input" == *"actor_user_id"* ]]; then
   touch "$REPO_ROOT/repaired"
 elif [[ "$input" == *'DO $release_check$'* && "${failRelease ? "1" : "0"}" == 1 ]]; then
@@ -44,6 +50,18 @@ describe("live migration runner release gate", () => {
     expect(existsSync(join(dir,"repaired"))).toBe(true);
     expect(existsSync(join(dir,"notified"))).toBe(true);
     expect(readFileSync(join(dir,"queries.log"),"utf8")).toContain("trg_prevent_tenant_setup_reopen");
+  });
+  it("reinstalls the mistaken-booking reversal even if tracking marks 0074-0078 as applied", () => {
+    const { dir,run } = fixture();
+    run();
+    expect(existsSync(join(dir,"corrected"))).toBe(true);
+    expect(readFileSync(join(dir,"queries.log"),"utf8")).toContain("cancel_mistaken_license_sale");
+  });
+  it("does not replay correction migrations when they are already installed", () => {
+    const { dir,run } = fixture();
+    writeFileSync(join(dir,"corrections_present"),"");
+    run();
+    expect(existsSync(join(dir,"corrected"))).toBe(false);
   });
   it("fails the existing deploy when the actual release check fails, without reloading the API", () => {
     const { dir,run } = fixture(true);

@@ -483,6 +483,27 @@ if [ -f "$DRIZZLE_MIG_DIR/0070_tenant_setup_phase.sql" ]; then
     fi
   fi
 fi
+# Tracking rows are not proof that package corrections exist (bootstrap/manual
+# markers skipped them before). Replay the idempotent correction migrations
+# whenever the real functions/table are missing or outdated.
+if [ -f "$REPO_ROOT/supabase/deploy/package-corrections-ready.sql" ]; then
+  corrections_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/package-corrections-ready.sql")"
+  if [ "$corrections_ready" != 't' ]; then
+    log "Reparatur: Paketkorrekturen/Fehlbuchung fehlen trotz Migrationsstand"
+    for correction_file in 0074_package_sale_corrections_yearly.sql 0075_package_effective_entitlements.sql 0076_package_correction_security_guard.sql 0077_package_correction_collective_invoice_guard.sql 0078_package_correction_fail_closed_auth.sql 0083_effective_modules_auth_fix.sql; do
+      if ! run_migration_with_autoheal "$DRIZZLE_MIG_DIR/$correction_file"; then
+        log "FEHLER: Paketkorrekturen konnten nicht installiert werden ($correction_file)"
+        exit 1
+      fi
+      mark_applied "$DRIZZLE_MIG_DIR/$correction_file"
+    done
+    corrections_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/package-corrections-ready.sql")"
+    if [ "$corrections_ready" != 't' ]; then
+      log "FEHLER: Paketkorrekturen bleiben unvollstaendig"
+      exit 1
+    fi
+  fi
+fi
 if [ -f "$REPO_ROOT/supabase/deploy/verify-live-release.sh" ]; then
   # Existing protected main workflow already imports this runner from staging.
   # Keep the mandatory gate here so older deploy.sh versions cannot bypass it.
