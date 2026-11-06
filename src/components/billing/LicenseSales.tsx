@@ -56,10 +56,10 @@ export function LicenseSales({ partnerId, tenantId, canEdit = true }: { partnerI
   const updateOption = (key: string, patch: PackageOptions) => setOptions(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   const [startPickerOpen, setStartPickerOpen] = useState(false);
   const billingStart = customMode ? today : startsOn;
-  const inSetup = (tenants as any[]).find((x: any) => x.id === tenant)?.setup_status === "setup";
   const calendarLocale = { de, en: enGB, es, nl }[language];
   const { data: sales = [], error: salesError } = useQuery({ queryKey: ["license-sales", partnerId, tenantId], queryFn: async () => { let q = db.from("license_sales").select("*, tenants(name,setup_status)").order("created_at", { ascending: false }); if (partnerId) q = q.eq("partner_id", partnerId); if (tenantId) q = q.eq("tenant_id", tenantId); const { data, error } = await q; if (error) throw error; return data || []; } });
   const { data: tenants = [] } = useQuery({ queryKey: ["license-sale-tenants", partnerId], enabled: open, queryFn: async () => { let q = db.from("tenants").select("id,name,partner_id,setup_status").is("deleted_at", null).order("name"); if (partnerId) q = q.eq("partner_id", partnerId); const { data, error } = await q; if (error) throw error; return data || []; } });
+  const inSetup = (tenants as any[]).find((x: any) => x.id === tenant)?.setup_status === "setup";
   const catalogPartnerId = saleCatalogPartner(partnerId, tenants.find((x: any) => x.id === tenant));
   const { data: catalog = [], error: catalogError, isFetching: catalogFetching } = useQuery({ ...partnerCatalogRefresh, queryKey: ["license-sale-catalog", catalogPartnerId], enabled: open, queryFn: async () => {
     const results = await Promise.all([db.from("pricing_packages").select("code,name,uvp,ek,always_active,requires_package,requires_any_other").eq("active", true).order("sort"), db.from("pricing_unit_prices").select("code,name,uvp,ek,new_sale_uvp,partner_available")]);
