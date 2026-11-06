@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.40.0 – 06.11.2026
+- Migration 0085: `bill_license_sale` erzeugt für Tenants in Einrichtung keine Rechnung (next_period NULL); `_finish_tenant_setup` setzt starts_on/next_period nicht abgerechneter Buchungen auf das Übergabedatum und löst die Erstabrechnung aus; Einrichtungsgebühr (`create_setup_invoice`) erst beim Wechsel setup→active. Buchungsdialog/Liste zeigen „Startet bei Übergabe“.
+
 ## v1.39.4 – 06.11.2026
 - Deploy: `apply-migrations.sh` prüft per `package-corrections-ready.sql` die echte Existenz von Fehlbuchung/Paketkorrektur und spielt 0074–0078/0083 neu ein, auch wenn `_deploy_migrations` sie als erledigt führt (Bootstrap-Drift). Prüfdatei in verify-live-release und Workflow-RELEASE_PATHS; Runner-Tests ergänzt.
 
