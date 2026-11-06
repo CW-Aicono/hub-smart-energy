@@ -19,6 +19,7 @@ for file in \
   drizzle/migrations/0079_tenant_setup_deploy_contract.sql \
   drizzle/migrations/0083_effective_modules_auth_fix.sql \
   supabase/deploy/package-entitlements-ready.sql \
+  supabase/deploy/package-corrections-ready.sql \
   supabase/functions/_shared/supportSessionKind.ts; do
   if [ ! -s "$REPO_ROOT/$file" ]; then
     printf 'FEHLER: Release-Datei fehlt: %s\n' "$file" >&2
