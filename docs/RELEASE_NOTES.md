@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.42.0 – 07.11.2026
+- Tenants ohne gebuchte Pakete sehen nur noch Dashboard und Einstellungen.
+
 ## v1.41.0 – 06.11.2026
 - Der Tenant-Admin erhält seine Zugangsmail erst, wenn auf „Übergeben“ geklickt wird.
 

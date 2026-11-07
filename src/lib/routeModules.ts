@@ -44,6 +44,20 @@ export const ALWAYS_ALLOWED_PATHS: string[] = [
   "/help",
 ];
 
+const BASE_MODULE_CODES = ["dashboard", "locations", "floor_plans", "documentation"];
+
+/** True when a tenant has no enabled module beyond the free base package. */
+export function hasOnlyBaseModules(modules: { module_code: string; is_enabled: boolean }[]): boolean {
+  return !modules.some((m) => m.is_enabled && !BASE_MODULE_CODES.includes(m.module_code));
+}
+
+/** Without booked packages only dashboard and settings are shown (profile stays reachable directly). */
+export function isAllowedWithoutPackages(rawPath: string, forMenu: boolean): boolean {
+  const path = normalize(rawPath);
+  const bases = forMenu ? ["/", "/settings"] : ["/", "/settings", "/profile"];
+  return bases.some((b) => matchesPrefix(path, b));
+}
+
 export type RouteModuleResolution =
   | { kind: "public" }
   | { kind: "module"; code: string }

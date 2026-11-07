@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.42.0 – 07.11.2026
+- `useModuleGuard`: Tenants ohne Nicht-Basis-Modul sehen im Menü nur `/` und `/settings`; Routen zusätzlich `/profile`. Logik in `routeModules.ts` (`hasOnlyBaseModules`, `isAllowedWithoutPackages`) + Test.
+
 ## v1.41.0 – 06.11.2026
 - Migration 0086: `tenants.handover_admin_email/_name`. Tenant-Anlage (Portal/Partner) speichert den Kunden-Admin statt sofort einzuladen; „Übergeben“ ruft nach `complete_tenant_setup` `sendHandoverInvite`. `invite-tenant-admin` verweigert Einladungen für Tenants in Einrichtung.
 
