@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.43.0 – 07.11.2026
+- Zahlweise „Einmalig“ berechnet Laufzeit × Monatspreis in einer Rechnung.
+- Quartalsweise wird immer zu Quartalsbeginn im Voraus abgerechnet.
+
 ## v1.42.0 – 07.11.2026
 - Tenants ohne gebuchte Pakete sehen nur noch Dashboard und Einstellungen.
 

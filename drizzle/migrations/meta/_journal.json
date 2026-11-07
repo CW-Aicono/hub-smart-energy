@@ -610,6 +610,13 @@
       "when": 1793989587885,
       "tag": "0086_tenant_handover_admin_contact",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1794065933759,
+      "tag": "0087_once_payment_term_total",
+      "breakpoints": true
     }
   ]
 }

@@ -102,6 +102,7 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.43.0", date: "2026-11-07", changes: [{ type: "feature", textKey: "manual.onceTerm1430" }] },
     { version: "1.42.0", date: "2026-11-07", changes: [{ type: "feature", textKey: "manual.baseOnlyMenu1420" }] },
     { version: "1.41.0", date: "2026-11-06", changes: [{ type: "feature", textKey: "manual.inviteHandover1410" }] },
     { version: "1.40.0", date: "2026-11-06", changes: [{ type: "feature", textKey: "manual.billingHandover1400" }] },

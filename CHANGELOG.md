@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.43.0 – 07.11.2026
+- Migration 0087: `bill_catalog_license_sale` rechnet Einmalzahlung (außer `setup`) als Laufzeit × Monatspreis (Halbmonatsraster) mit Zeitraum bis Laufzeitende; ohne Laufzeit keine Rechnung. `set_license_sale_term` erzwingt Laufzeit für Einmalzahlung und löst die Rechnung aus. `license-sale` verlangt Laufzeit und setzt sie (ohne Verlängerung). Quartalsweise geprüft: Rechnung zu Quartalsbeginn im Voraus (unverändert). Test `onceTermBilling.test.ts`.
+
 ## v1.42.0 – 07.11.2026
 - `useModuleGuard`: Tenants ohne Nicht-Basis-Modul sehen im Menü nur `/` und `/settings`; Routen zusätzlich `/profile`. Logik in `routeModules.ts` (`hasOnlyBaseModules`, `isAllowedWithoutPackages`) + Test.
 

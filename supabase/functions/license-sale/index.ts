@@ -57,6 +57,10 @@ Deno.serve(async req => {
     // Listenpreis = Endkundenpreis (VK/UVP), auch bei Partnerkunden; der Partner zahlt AICONO separat den EK.
     // Partnerrabatt nur für Partnerkunden: Prozent auf den VK, EK bleibt unverändert. Abweichung nur mit Begründung.
     const pct = p.customer_discount_pct ?? 0;
+    // Einmalzahlung (außer Einrichtung) = Laufzeit × Monatspreis in einer Rechnung
+    const onceTerm = p.cadence==="once" && p.product_code!=="setup";
+    if(onceTerm && p.term_months==null) return json({error:"Einmalzahlung: bitte Laufzeit in Monaten angeben"},400);
+    if(onceTerm && p.discount_after==="end") return json({error:"Einmalzahlung: Vertrag endet mit der Laufzeit – Rabatt bitte mit „weiterlaufen“ buchen"},400);
     let vk: number | null = null;
     if(p.product_kind==="package"){const {data:d}=await admin.from("pricing_packages").select("uvp").eq("code",p.product_code).maybeSingle(); if(d) vk=Number(d.uvp);}
     else if(p.product_kind==="unit"){const {data:u}=await admin.from("pricing_unit_prices").select("uvp,new_sale_uvp").eq("code",p.product_code).maybeSingle(); if(u) vk=Number(u.new_sale_uvp??u.uvp);}
@@ -87,6 +91,7 @@ Deno.serve(async req => {
     }
     const {data,error}=await client.rpc("finalize_license_sale_options",{...args,p_after:p.discount_after??"continue",p_discount:pct,p_discount_from:p.discount_starts_on??null,p_discount_to:p.discount_ends_on??null,p_reason:p.price_reason??null});
     if(error){await rollback();return json({error:error.message},400);}
+    if(onceTerm){const {error:termError}=await client.rpc("set_license_sale_term",{p_sale:data,p_term_months:p.term_months,p_auto_renew:false}); if(termError) return json({error:"Einmalzahlung: "+termError.message},400); return json({id:data});}
     if(p.discount_after!=="end"&&(p.term_months!=null||p.auto_renew===false)){const {error:termError}=await client.rpc("set_license_sale_term",{p_sale:data,p_term_months:p.term_months??null,p_auto_renew:p.auto_renew??true}); if(termError) return json({id:data,warning:"Laufzeit nicht gespeichert: "+termError.message});}
     return json({id:data});
   } catch(e) { return json({error:(e as Error).message},500); }

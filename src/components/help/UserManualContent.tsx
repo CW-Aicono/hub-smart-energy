@@ -330,6 +330,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground mt-2">{T("manual.partner.settings131")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.partner.invoiceBranding1382")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.baseOnlyMenu1420")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.onceTerm1430")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.partner.billingModeLabel1383")}</p>
           </section>
           <section>

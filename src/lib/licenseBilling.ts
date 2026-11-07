@@ -56,3 +56,9 @@ export function discountPeriodAmount(sale: number, list: number, quantity: numbe
   }
   return Math.round(amount * 100) / 100;
 }
+/** Einmalzahlung (außer Einrichtung): Laufzeit in Monaten × Monatspreis, Halbmonatsraster, in einer Summe. */
+export function onceTermAmount(sale: number, list: number, quantity: number, from: string, termMonths: number, discountFrom?: string, discountTo?: string) {
+  const d = new Date(`${from}T00:00:00Z`);
+  const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + termMonths, d.getUTCDate() - 1)).toISOString().slice(0, 10);
+  return discountPeriodAmount(sale, list, quantity, from, end, "monthly", discountFrom, discountTo);
+}
