@@ -1,5 +1,20 @@
 # Änderungsprotokoll (intern)
 
+## v1.43.1 – 10.11.2026
+- Einladungslinks: `appOrigin.ts` erlaubt ems.aicono.org, partner.aicono.org, aicono.org; Fallback abhängig von SUPABASE_URL (Lovable Cloud → staging, eigener Server → ems.aicono.org) statt fest ems-pro (Staging). `handoverInvite.ts`/`UserManagement.tsx` nutzen `window.location.origin`; `activate-invited-user` Fallback ebenso. Test `appOriginLive.test.ts`.
+
+## v1.43.0 – 07.11.2026
+- Migration 0087: `bill_catalog_license_sale` rechnet Einmalzahlung (außer `setup`) als Laufzeit × Monatspreis (Halbmonatsraster) mit Zeitraum bis Laufzeitende; ohne Laufzeit keine Rechnung. `set_license_sale_term` erzwingt Laufzeit für Einmalzahlung und löst die Rechnung aus. `license-sale` verlangt Laufzeit und setzt sie (ohne Verlängerung). Quartalsweise geprüft: Rechnung zu Quartalsbeginn im Voraus (unverändert). Test `onceTermBilling.test.ts`.
+
+## v1.42.0 – 07.11.2026
+- `useModuleGuard`: Tenants ohne Nicht-Basis-Modul sehen im Menü nur `/` und `/settings`; Routen zusätzlich `/profile`. Logik in `routeModules.ts` (`hasOnlyBaseModules`, `isAllowedWithoutPackages`) + Test.
+
+## v1.41.0 – 06.11.2026
+- Migration 0086: `tenants.handover_admin_email/_name`. Tenant-Anlage (Portal/Partner) speichert den Kunden-Admin statt sofort einzuladen; „Übergeben“ ruft nach `complete_tenant_setup` `sendHandoverInvite`. `invite-tenant-admin` verweigert Einladungen für Tenants in Einrichtung.
+
+## v1.40.0 – 06.11.2026
+- Migration 0085: `bill_license_sale` erzeugt für Tenants in Einrichtung keine Rechnung (next_period NULL); `_finish_tenant_setup` setzt starts_on/next_period nicht abgerechneter Buchungen auf das Übergabedatum und löst die Erstabrechnung aus; Einrichtungsgebühr (`create_setup_invoice`) erst beim Wechsel setup→active. Buchungsdialog/Liste zeigen „Startet bei Übergabe“.
+
 ## v1.39.4 – 06.11.2026
 - Deploy: `apply-migrations.sh` prüft per `package-corrections-ready.sql` die echte Existenz von Fehlbuchung/Paketkorrektur und spielt 0074–0078/0083 neu ein, auch wenn `_deploy_migrations` sie als erledigt führt (Bootstrap-Drift). Prüfdatei in verify-live-release und Workflow-RELEASE_PATHS; Runner-Tests ergänzt.
 

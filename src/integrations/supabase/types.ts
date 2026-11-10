@@ -15666,6 +15666,8 @@ export type Database = {
           contact_phone: string | null
           created_at: string
           deleted_at: string | null
+          handover_admin_email: string | null
+          handover_admin_name: string | null
           house_number: string | null
           id: string
           is_aicono_member: boolean
@@ -15723,6 +15725,8 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           deleted_at?: string | null
+          handover_admin_email?: string | null
+          handover_admin_name?: string | null
           house_number?: string | null
           id?: string
           is_aicono_member?: boolean
@@ -15780,6 +15784,8 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           deleted_at?: string | null
+          handover_admin_email?: string | null
+          handover_admin_name?: string | null
           house_number?: string | null
           id?: string
           is_aicono_member?: boolean

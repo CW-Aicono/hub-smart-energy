@@ -596,6 +596,27 @@
       "when": 1793810557819,
       "tag": "0084_package_catalog_legacy_modules",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1793989355304,
+      "tag": "0085_billing_starts_at_handover",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1793989587885,
+      "tag": "0086_tenant_handover_admin_contact",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1794065933759,
+      "tag": "0087_once_payment_term_total",
+      "breakpoints": true
     }
   ]
 }

@@ -1,3 +1,4 @@
+import { sendHandoverInvite } from "@/lib/handoverInvite";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,30 +110,15 @@ export default function PartnerTenants() {
     setCreating(true);
     try {
       const { data, error } = await supabase.functions.invoke("partner-create-tenant", {
-        body: { name, slug, contact_email: contactEmail || null },
+        body: { name, slug, contact_email: contactEmail || null, handover_admin_email: adminEmail || null, handover_admin_name: adminName || null },
       });
       const res: any = typeof data === "string" ? JSON.parse(data) : data;
       if (error || !res?.success) throw new Error(res?.error || error?.message || "Anlage fehlgeschlagen");
 
-      if (adminEmail) {
-        const { data: invD, error: invE } = await supabase.functions.invoke("invite-tenant-admin", {
-          body: {
-            tenantId: res.tenant.id,
-            adminEmail,
-            adminName: adminName || undefined,
-            redirectTo: "https://ems-pro.aicono.org/set-password",
-          },
-        });
-        const invRes: any = typeof invD === "string" ? JSON.parse(invD) : invD;
-        if (invE || !invRes?.success) {
-          throw new Error(invRes?.error || invE?.message || "Einladung fehlgeschlagen");
-        }
-      }
-
       toast({
         title: "Tenant angelegt",
         description: adminEmail
-          ? `Eine Einladungsmail wurde an ${adminEmail} gesendet.`
+          ? `${adminEmail} erhält die Zugangsmail, sobald Sie auf „Übergeben“ klicken.`
           : "Tenant angelegt. Admin-Einladung kann später erfolgen.",
       });
       setCreateOpen(false);
@@ -146,10 +132,11 @@ export default function PartnerTenants() {
   };
 
   const handleCompleteSetup = async (tenantId: string) => {
-    if (!window.confirm("Einrichtung abschließen und an den Kunden übergeben? Danach ist Fernzugriff nur noch mit Freigabe des Kunden möglich.")) return;
+    if (!window.confirm("Einrichtung abschließen und an den Kunden übergeben? Der Kunden-Admin erhält jetzt seine Zugangsmail. Danach ist Fernzugriff nur noch mit Freigabe des Kunden möglich.")) return;
     const { error } = await supabase.rpc("complete_tenant_setup" as any, { _tenant_id: tenantId } as any);
     if (error) { toast({ title: "Übergabe fehlgeschlagen", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Tenant übergeben" });
+    const msg = await sendHandoverInvite(tenantId);
+    toast(msg.ok ? { title: "Tenant übergeben", description: msg.text } : { title: "Tenant übergeben – Zugangsmail fehlgeschlagen", description: msg.text, variant: "destructive" });
     await load();
   };
 
@@ -235,7 +222,7 @@ export default function PartnerTenants() {
                 </div>
                 <div className="border-t my-2" />
                 <p className="text-xs text-muted-foreground">
-                  Optional: Tenant-Admin direkt einladen. Lassen Sie die Felder leer, wenn die Einladung später erfolgen soll.
+                  Optional: Tenant-Admin hinterlegen. Er erhält seine Zugangsmail erst, wenn Sie auf „Übergeben“ klicken.
                 </p>
                 <div className="space-y-2">
                   <Label>E-Mail Tenant-Admin</Label>

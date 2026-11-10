@@ -3,7 +3,7 @@ import { useTenantModules } from "./useTenantModules";
 import { useDemoMode } from "@/contexts/DemoMode";
 import { useTenant } from "./useTenant";
 import { useMyPermissions } from "./useMyPermissions";
-import { resolveRouteModule } from "@/lib/routeModules";
+import { resolveRouteModule, hasOnlyBaseModules, isAllowedWithoutPackages } from "@/lib/routeModules";
 
 
 export function useModuleGuard() {
@@ -40,8 +40,13 @@ export function useModuleGuard() {
     return checkModule(res.code);
   };
 
-  const isRouteAllowed = isPathAllowed;
-  const isNavItemVisible = isPathAllowed;
+  // Without any booked package beyond the base, only dashboard and settings are reachable.
+  const baseOnly = !isDemo && !isLoading && !!tenant && strictMode && hasOnlyBaseModules(modules);
+
+  const isRouteAllowed = (path: string) =>
+    isPathAllowed(path) && (!baseOnly || isAllowedWithoutPackages(path, false));
+  const isNavItemVisible = (path: string) =>
+    isPathAllowed(path) && (!baseOnly || isAllowedWithoutPackages(path, true));
 
   /** Whether the full locations module (multiple locations) is enabled */
   const locationsFullEnabled = useMemo(() => {

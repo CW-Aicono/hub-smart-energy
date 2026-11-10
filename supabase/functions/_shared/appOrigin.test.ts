@@ -8,7 +8,7 @@ Deno.test("preview address is replaced by allowed origin", () => {
   );
 });
 Deno.test("foreign address falls back to live domain", () => {
-  assertEquals(safeAuthRedirect("https://evil.example/set-password", null, null), "https://ems-pro.aicono.org/set-password");
+  assertEquals(safeAuthRedirect("https://evil.example/set-password", null, "https://ems.aicono.org"), "https://ems.aicono.org/set-password");
 });
 Deno.test("allowed origin and sharing path are kept", () => {
   assertEquals(

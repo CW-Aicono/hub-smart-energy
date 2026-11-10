@@ -1,5 +1,21 @@
 # Versionshinweise
 
+## v1.43.1 – 10.11.2026
+- Einladungs- und Passwort-Links führen auf dem Live-System wieder zur Live-Anmeldung.
+
+## v1.43.0 – 07.11.2026
+- Zahlweise „Einmalig“ berechnet Laufzeit × Monatspreis in einer Rechnung.
+- Quartalsweise wird immer zu Quartalsbeginn im Voraus abgerechnet.
+
+## v1.42.0 – 07.11.2026
+- Tenants ohne gebuchte Pakete sehen nur noch Dashboard und Einstellungen.
+
+## v1.41.0 – 06.11.2026
+- Der Tenant-Admin erhält seine Zugangsmail erst, wenn auf „Übergeben“ geklickt wird.
+
+## v1.40.0 – 06.11.2026
+- Pakete für Tenants in Einrichtung schalten sofort frei; Abrechnung und Einrichtungsgebühr beginnen erst am Tag der Übergabe.
+
 ## v1.39.2 – 04.11.2026
 - Im Menü erscheinen nur noch gebuchte Bereiche; sichtbare Menüpunkte lassen sich immer öffnen.
 - Keine leeren Seiten mehr, wenn die Paketfreischaltung kurz nicht geladen werden kann.
