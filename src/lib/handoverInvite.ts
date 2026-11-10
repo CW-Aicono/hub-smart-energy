@@ -6,7 +6,7 @@ export async function sendHandoverInvite(tenantId: string): Promise<{ ok: boolea
   const email = t?.handover_admin_email as string | null;
   if (!email) return { ok: true, text: "Kein Kunden-Admin hinterlegt – Einladung bitte über Benutzer versenden." };
   const { data, error } = await supabase.functions.invoke("invite-tenant-admin", {
-    body: { tenantId, adminEmail: email, adminName: t?.handover_admin_name || undefined, redirectTo: "https://ems-pro.aicono.org/set-password" },
+    body: { tenantId, adminEmail: email, adminName: t?.handover_admin_name || undefined, redirectTo: `${window.location.origin}/set-password` },
   });
   let res: any = typeof data === "string" ? JSON.parse(data) : data;
   if (error && !res?.error) {

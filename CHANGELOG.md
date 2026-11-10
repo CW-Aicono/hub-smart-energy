@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.43.1 – 10.11.2026
+- Einladungslinks: `appOrigin.ts` erlaubt ems.aicono.org, partner.aicono.org, aicono.org; Fallback abhängig von SUPABASE_URL (Lovable Cloud → staging, eigener Server → ems.aicono.org) statt fest ems-pro (Staging). `handoverInvite.ts`/`UserManagement.tsx` nutzen `window.location.origin`; `activate-invited-user` Fallback ebenso. Test `appOriginLive.test.ts`.
+
 ## v1.43.0 – 07.11.2026
 - Migration 0087: `bill_catalog_license_sale` rechnet Einmalzahlung (außer `setup`) als Laufzeit × Monatspreis (Halbmonatsraster) mit Zeitraum bis Laufzeitende; ohne Laufzeit keine Rechnung. `set_license_sale_term` erzwingt Laufzeit für Einmalzahlung und löst die Rechnung aus. `license-sale` verlangt Laufzeit und setzt sie (ohne Verlängerung). Quartalsweise geprüft: Rechnung zu Quartalsbeginn im Voraus (unverändert). Test `onceTermBilling.test.ts`.
 

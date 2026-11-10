@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.43.1 – 10.11.2026
+- Einladungs- und Passwort-Links führen auf dem Live-System wieder zur Live-Anmeldung.
+
 ## v1.43.0 – 07.11.2026
 - Zahlweise „Einmalig“ berechnet Laufzeit × Monatspreis in einer Rechnung.
 - Quartalsweise wird immer zu Quartalsbeginn im Voraus abgerechnet.

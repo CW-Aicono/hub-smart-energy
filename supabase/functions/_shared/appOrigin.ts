@@ -1,5 +1,20 @@
 /** Erlaubte Adressen für Links in Auth-Mails – niemals Vorschau-Hosts. */
-export const ALLOWED_APP_ORIGINS = ["https://staging.aicono.org", "https://ems-pro.aicono.org"];
+export const ALLOWED_APP_ORIGINS = [
+  "https://staging.aicono.org",
+  "https://ems-pro.aicono.org",
+  "https://ems.aicono.org",
+  "https://partner.aicono.org",
+  "https://aicono.org",
+];
+
+/** Standardadresse passend zur Datenbank: Lovable Cloud (supabase.co) = Staging, eigener Server = Live. */
+export function defaultAppOrigin(supabaseUrl: string | null | undefined): string {
+  return supabaseUrl && supabaseUrl.includes(".supabase.co") ? "https://staging.aicono.org" : "https://ems.aicono.org";
+}
+
+function envSupabaseUrl(): string | undefined {
+  try { return (globalThis as any).Deno?.env.get("SUPABASE_URL"); } catch { return undefined; }
+}
 export const ALLOWED_AUTH_PATHS = ["/set-password", "/mein-sharing/set-password"];
 /** App-Startseiten, auf die Bestätigungs-/Magic-Links zeigen dürfen. */
 export const ALLOWED_APP_PATHS = ["/", "/ev", "/te", "/mein-sharing"];
@@ -13,7 +28,7 @@ function pickBase(originHeader: string | null | undefined, envOrigin: string | n
     ? envOrigin!.replace(/\/$/, "")
     : isAllowedOrigin(originHeader)
       ? originHeader!
-      : "https://ems-pro.aicono.org";
+      : defaultAppOrigin(envSupabaseUrl());
 }
 
 /** Liefert eine sichere Redirect-URL für Passwort-Mails. */

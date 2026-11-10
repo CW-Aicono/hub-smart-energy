@@ -327,7 +327,8 @@ const handler = async (req: Request): Promise<Response> => {
 
 /** Only production/staging hosts are allowed in mail links – never preview hosts. */
 function resolveOrigin(candidate: string | null | undefined): string {
-  const fallback = (Deno.env.get("APP_URL") || "https://hub-smart-energy.lovable.app").replace(/\/$/, "");
+  const sbUrl = Deno.env.get("SUPABASE_URL") || "";
+  const fallback = (Deno.env.get("APP_URL") || (sbUrl.includes(".supabase.co") ? "https://staging.aicono.org" : "https://ems.aicono.org")).replace(/\/$/, "");
   if (!candidate) return fallback;
   try {
     const u = new URL(candidate);
