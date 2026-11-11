@@ -1,5 +1,9 @@
 # Roadmap
 
+## Neue Rechnung: Buchungsoptionen (11.11., Dirk)
+- [x] v1.44.0: Einzelentwurf mit Prozent-/Euro-Rabatten, Rabattzeitraum, Laufzeit und Abrechnungsintervall; keine Verträge/Freischaltungen. 69 Tests erfolgreich; angemeldet 12 × 49 € = 588 € gespeichert und in der Liste geprüft; Testentwurf entfernt, nichts versendet. Handbuch vier Sprachen und Versionshinweise gepflegt.
+- [ ] Wartet auf externen Live-Deploy: Migration 0088 mit automatischer Reparatur bei fehlender Funktion und Pflichtprüfung vor Frontend-Aktivierung enthalten; Live-Datenbank hier nicht zugänglich.
+
 ## PV-Überschuss → Ladestation → Speicher (03.11., Hendrik)
 - [x] v1.39.0: Live-Energiefluss, animierte Regelentscheidung, Analyse, Prüfliste (Ladegruppe + Dashboard-Widget); ohne Speicher nur mit Zähler; ELMI-Speicher beim Laden immer entladen; Takt 3 Minuten.
 - [ ] Wartet auf Nutzer: ESB-Bezugszähler „Shelly Pro 3 Hauptzuleitung“ liefert keine aktuellen Werte – Zähler prüfen oder anderen Zähler wählen. Hetzner-Live-Deploy (Migration 0081) extern.

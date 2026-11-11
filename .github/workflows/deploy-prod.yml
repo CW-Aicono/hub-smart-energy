@@ -103,6 +103,7 @@ jobs:
             supabase/deploy/live-release-check.sql
             supabase/deploy/package-entitlements-ready.sql
             supabase/deploy/package-corrections-ready.sql
+            supabase/deploy/manual-invoice-ready.sql
             docs/GO-LIVE.md
           )
           for path in "${RELEASE_PATHS[@]}"; do

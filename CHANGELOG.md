@@ -1,5 +1,9 @@
 # Änderungsprotokoll (intern)
 
+## v1.44.0 – 11.11.2026
+- Neue Rechnung: Laufzeit, Abrechnungsintervall, Zahlungsart, Prozent-/Euro-Rabatt allgemein und je Position sowie befristeter Rabatt mit regulärem Preis danach oder Ende des Rechnungszeitraums. Monatspreise und einmalige Posten getrennt; Vorschau verwendet Halbmonatsraster. Nur ein Entwurf, keine Verträge/Freischaltungen/Folgerechnungen.
+- Migration 0088: neue autorisierte RPC `create_quoted_manual_invoice`, unabhängige serverseitige Berechnung, Optionen in line_items; 0 € als subscription_notice. Bestehende Rechnungen und alte RPC unverändert. Live-Runner repariert fehlende RPC auch bei bestehendem Tracking; Gate prüft echte Existenz und Grants vor Frontend-Aktivierung.
+
 ## v1.43.1 – 10.11.2026
 - Einladungslinks: `appOrigin.ts` erlaubt ems.aicono.org, partner.aicono.org, aicono.org; Fallback abhängig von SUPABASE_URL (Lovable Cloud → staging, eigener Server → ems.aicono.org) statt fest ems-pro (Staging). `handoverInvite.ts`/`UserManagement.tsx` nutzen `window.location.origin`; `activate-invited-user` Fallback ebenso. Test `appOriginLive.test.ts`.
 

@@ -16708,6 +16708,15 @@ export type Database = {
         }
         Returns: string
       }
+      create_quoted_manual_invoice: {
+        Args: {
+          p_lines: Json
+          p_options: Json
+          p_partner_id: string
+          p_tenant_id: string
+        }
+        Returns: string
+      }
       cron_schedule_collisions: {
         Args: never
         Returns: {

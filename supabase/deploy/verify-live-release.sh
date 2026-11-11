@@ -18,6 +18,8 @@ for file in \
   drizzle/migrations/0078_package_correction_fail_closed_auth.sql \
   drizzle/migrations/0079_tenant_setup_deploy_contract.sql \
   drizzle/migrations/0083_effective_modules_auth_fix.sql \
+  drizzle/migrations/0088_manual_invoice_booking_options.sql \
+  supabase/deploy/manual-invoice-ready.sql \
   supabase/deploy/package-entitlements-ready.sql \
   supabase/deploy/package-corrections-ready.sql \
   supabase/functions/_shared/supportSessionKind.ts; do
@@ -44,6 +46,11 @@ fi
 pkg="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/package-entitlements-ready.sql")"
 if [ "$pkg" != 't' ]; then
   printf 'FEHLER: Pakete/Modulrechte unvollstaendig (Tabellen, Funktionen oder effective_tenant_modules-Fix 0083 fehlen).\n' >&2
+  exit 1
+fi
+invoice_ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/manual-invoice-ready.sql")"
+if [ "$invoice_ready" != 't' ]; then
+  printf 'FEHLER: Neue Rechnung mit Buchungsoptionen nicht installiert.\n' >&2
   exit 1
 fi
 docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$REPO_ROOT/supabase/deploy/live-release-check.sql"

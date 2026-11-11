@@ -13,7 +13,10 @@ import { type AiconoBillingSettings, type InvoiceRecipient } from "@/lib/aiconoI
 import { buildEInvoicePdf, downloadBlob } from "@/lib/eInvoicePdf";
 import { packageSaleCatalog } from "@/lib/packageSaleCatalog";
 import { InvoiceLineEditor } from "./InvoiceLineEditor";
-import { parseCustomInvoiceLines } from "@/lib/customInvoice";
+import { manualInvoiceQuote, type QuoteLine, type ManualInvoiceOptions } from "@/lib/manualInvoiceQuote";
+import { licensePeriodEnd, type BillingCadence } from "@/lib/licenseBilling";
+import { Switch } from "@/components/ui/switch";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const db = supabase as any;
 
@@ -190,33 +193,39 @@ export function AiconoInvoiceRowActions({ inv }: { inv: any }) {
   );
 }
 
-type Line = { label: string; quantity: string; unit_price: string };
-const num = (s: string) => Number(String(s).replace(/\./g, "").replace(",", ".")) || 0;
+type Line = QuoteLine;
 
 export function ManualInvoiceDialog() {
+  const { t } = useTranslation();
+  const T = (key: string) => t(`license.${key}` as any);
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<"tenant" | "partner">("tenant");
   const [tenantId, setTenantId] = useState("");
   const [partnerId, setPartnerId] = useState("");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [lines, setLines] = useState<Line[]>([{ label: "", quantity: "1", unit_price: "" }]);
   const [saving, setSaving] = useState(false);
+  const initialOptions: ManualInvoiceOptions = { cadence: "monthly", termMonths: "", discountMode: "percent", discountValue: "0", limited: false, discountFrom: today, discountTo: licensePeriodEnd(today, "monthly"), after: "continue", payment: "invoice", from: today, to: today };
+  const [options, setOptions] = useState(initialOptions);
+  const updateOptions = (patch: Partial<ManualInvoiceOptions>) => setOptions(prev => ({ ...prev, ...patch }));
+  const quote = manualInvoiceQuote(lines, { ...options, from, to });
+  const quoteError = "error" in quote ? T(({ lines: "invalid", dates: "invalid", term: "onceNeedsTerm", discount: "invalid", window: "discountWindowInvalid" } as const)[quote.error]) : null;
 
   const { data: tenants = [] } = useQuery({
     queryKey: ["manual-invoice-tenants"], enabled: open,
-    queryFn: async () => (await db.from("tenants").select("id, name, partner_id").is("deleted_at", null).order("name")).data ?? [],
+    queryFn: async () => { const { data, error } = await db.from("tenants").select("id, name, partner_id").is("deleted_at", null).order("name"); if (error) throw error; return data ?? []; },
   });
   const { data: partners = [] } = useQuery({
     queryKey: ["manual-invoice-partners"], enabled: open,
-    queryFn: async () => (await db.from("partners").select("id, name").order("name")).data ?? [],
+    queryFn: async () => { const { data, error } = await db.from("partners").select("id, name").order("name"); if (error) throw error; return data ?? []; },
   });
 
   const { data: pkgs = [] } = useQuery({
     queryKey: ["manual-invoice-packages"], enabled: open,
-    queryFn: async () => (await db.from("pricing_packages").select("code, name, uvp, ek, active, sort").eq("active", true).order("sort")).data ?? [],
+    queryFn: async () => { const { data, error } = await db.from("pricing_packages").select("code, name, uvp, ek, active, sort").eq("active", true).order("sort"); if (error) throw error; return data ?? []; },
   });
   const { data: unitPrices = [] } = useQuery({
     queryKey: ["manual-invoice-unit-prices"], enabled: open,
@@ -224,30 +233,32 @@ export function ManualInvoiceDialog() {
   });
   // Prefill only: price is the partner purchase price (EK) for partner invoices, otherwise the customer price; always editable.
   const isPartner = target === "partner";
-  const catalog = packageSaleCatalog(pkgs, unitPrices, isPartner, true).map(p => ({ key: `${p.kind}:${p.code}`, group: p.kind === "package" ? "Paket" : "Zusatzleistung", label: p.name, price: isPartner ? p.ek : p.uvp }));
+  const catalog = packageSaleCatalog(pkgs, unitPrices, isPartner, true).map(p => ({ key: `${p.kind}:${p.code}`, group: p.kind === "package" ? "Paket" : "Zusatzleistung", label: p.name, price: isPartner ? p.ek : p.uvp, monthly: !p.onceOnly }));
 
   const partnerTenants = (tenants as any[]).filter((t) => t.partner_id === partnerId);
-  const net = lines.reduce((s, l) => s + Math.round(num(l.quantity) * num(l.unit_price) * 100) / 100, 0);
+  const net = quote.success ? quote.net : 0;
 
   const save = async () => {
     if (!tenantId) return toast.error(target === "partner" ? "Bitte Partner und zugehörigen Tenant wählen" : "Bitte Tenant wählen");
-    const parsed = parseCustomInvoiceLines(lines);
-    if (!parsed.success) return toast.error("Bitte alle Positionen mit Bezeichnung, Menge und Nettopreis ausfüllen");
-    const p_lines = parsed.data;
+    if (!quote.success) return toast.error(quoteError);
     setSaving(true);
-    const { error } = await db.rpc("create_manual_aicono_invoice", {
-      p_tenant_id: tenantId, p_partner_id: target === "partner" ? partnerId : null, p_period_start: from, p_period_end: to || from, p_lines,
-    });
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("Rechnungsentwurf angelegt");
-    qc.invalidateQueries({ queryKey: ["super-admin-invoices"] });
-    setOpen(false); setLines([{ label: "", quantity: "1", unit_price: "" }]); setTenantId(""); setPartnerId("");
+    try {
+      const { error } = await db.rpc("create_quoted_manual_invoice", {
+        p_tenant_id: tenantId, p_partner_id: target === "partner" ? partnerId : null,
+        p_lines: quote.lines.map(l => ({ label: l.label, quantity: l.quantity, unit_price: l.unit_price, monthly: l.monthly, discount_mode: l.discount_mode, discount_value: l.discount_value })),
+        p_options: { cadence: options.cadence, term_months: options.termMonths || null, discount_mode: options.discountMode, discount_value: options.discountValue.replace(",", "."), limited: options.limited, discount_from: options.limited ? options.discountFrom : null, discount_to: options.limited ? options.discountTo : null, after: options.after, payment: options.payment, from, to },
+      });
+      if (error) throw error;
+      toast.success(T("created"));
+      qc.invalidateQueries({ queryKey: ["super-admin-invoices"] });
+      setOpen(false); setLines([{ label: "", quantity: "1", unit_price: "" }]); setTenantId(""); setPartnerId("");
+    } catch (e) { toast.error(e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e)); }
+    finally { setSaving(false); }
   };
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />Neue Rechnung</Button>
+      <Button variant="outline" onClick={() => { setOptions(initialOptions); setFrom(today); setTo(today); setLines([{ label: "", quantity: "1", unit_price: "" }]); setTenantId(""); setPartnerId(""); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Neue Rechnung</Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -255,7 +266,7 @@ export function ManualInvoiceDialog() {
             <DialogDescription>Wird als Entwurf angelegt. Preise netto, die Umsatzsteuer wird im PDF ausgewiesen.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Rechnung an</Label>
                 <Select value={target} onValueChange={(v: any) => { setTarget(v); setTenantId(""); }}>
@@ -272,31 +283,53 @@ export function ManualInvoiceDialog() {
                   </Select>
                 </div>
               )}
-              <div className="space-y-1 col-span-2">
+              <div className="space-y-1 sm:col-span-2">
                 <Label>{target === "partner" ? "Betrifft Tenant des Partners" : "Tenant"}</Label>
                 <Select value={tenantId} onValueChange={setTenantId}>
                   <SelectTrigger><SelectValue placeholder="Tenant wählen" /></SelectTrigger>
                   <SelectContent>{(target === "partner" ? partnerTenants : (tenants as any[])).map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1"><Label>Leistung von</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-              <div className="space-y-1"><Label>Leistung bis</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+              <div className="space-y-1"><Label>Leistung von</Label><Input aria-label={T("startDate")} type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+              <div className="space-y-1"><Label>Leistung bis</Label><Input aria-label="Leistung bis" type="date" value={quote.success ? quote.periodEnd : to} disabled={lines.some(l => l.monthly) || options.cadence !== "once" || !!options.termMonths} onChange={(e) => setTo(e.target.value)} /></div>
             </div>
             <div className="space-y-2">
               <Label>Paket / Zusatzleistung (optional)</Label>
-                  <Select value="" onValueChange={(v) => { const o = catalog.find((c) => c.key === v); if (o) setLines((ls) => { const line = { label: o.label, quantity: "1", unit_price: o.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }) }; return ls.length === 1 && !ls[0].label && !ls[0].unit_price ? [line] : [...ls, line]; }); }}>
+                  <Select value="" onValueChange={(v) => { const o = catalog.find((c) => c.key === v); if (o) setLines((ls) => { const line = { label: o.label, quantity: "1", monthly: o.monthly, unit_price: o.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }) }; return ls.length === 1 && !ls[0].label && !ls[0].unit_price ? [line] : [...ls, line]; }); }}>
                     <SelectTrigger className="min-w-0"><SelectValue placeholder="Paket / Zusatzleistung" /></SelectTrigger>
                     <SelectContent>
                       {catalog.map((c) => <SelectItem key={c.key} value={c.key}>{c.group}: {c.label} ({c.price.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €)</SelectItem>)}
                     </SelectContent>
                   </Select>
-              <InvoiceLineEditor lines={lines} onChange={setLines} />
+              <InvoiceLineEditor lines={lines} onChange={next => setLines(next.map((l, i) => ({ ...l, monthly: (l as QuoteLine).monthly ?? lines[i]?.monthly ?? false })))} />
+              {lines.map((line, index) => <div key={index} className="border-t pt-3 space-y-2">
+                <div className="flex items-center gap-2"><Switch aria-label={`${t("invoice.monthlyPrice")} ${index + 1}`} checked={!!line.monthly} onCheckedChange={monthly => setLines(prev => prev.map((l, i) => i === index ? { ...l, monthly } : l))} /><Label>{line.label || `${T("customLines")} ${index + 1}`} · {t("invoice.monthlyPrice")}</Label></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Select value={line.discountMode ?? "inherit"} onValueChange={value => setLines(prev => prev.map((l, i) => i === index ? { ...l, discountMode: value === "inherit" ? undefined : value as "percent" | "absolute", discountValue: value === "inherit" ? undefined : "0" } : l))}><SelectTrigger aria-label={`${T("discountMode")} ${index + 1}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="inherit">{t("invoice.generalDiscount")}</SelectItem><SelectItem value="percent">%</SelectItem><SelectItem value="absolute">€</SelectItem></SelectContent></Select>
+                  {line.discountMode && <Input aria-label={`${T("discountShort")} ${index + 1}`} inputMode="decimal" value={line.discountValue ?? "0"} onChange={e => setLines(prev => prev.map((l, i) => i === index ? { ...l, discountValue: e.target.value } : l))} />}
+                </div>
+              </div>)}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t pt-3">
+                <div className="space-y-1"><Label>{T("cadence")}</Label><Select value={options.cadence} onValueChange={v => updateOptions({ cadence: v as BillingCadence })}><SelectTrigger aria-label={T("cadence")}><SelectValue /></SelectTrigger><SelectContent>{(["once", "monthly", "quarterly", "halfyearly", "yearly"] as const).map(c => <SelectItem value={c} key={c}>{T(c)}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1"><Label>{T("termMonths")}</Label><Input aria-label={T("termMonths")} inputMode="numeric" value={options.termMonths} placeholder={T("unlimited")} onChange={e => updateOptions({ termMonths: e.target.value })} /></div>
+                <div className="space-y-1"><Label>{T("payment")}</Label><Select value={options.payment} onValueChange={v => updateOptions({ payment: v as "invoice" | "sepa" })}><SelectTrigger aria-label={T("payment")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="invoice">{T("invoice")}</SelectItem><SelectItem value="sepa">SEPA</SelectItem></SelectContent></Select></div>
+                <div className="space-y-1"><Label>{T("discountMode")}</Label><Select value={options.discountMode} onValueChange={v => updateOptions({ discountMode: v as "percent" | "absolute", discountValue: "0" })}><SelectTrigger aria-label={t("invoice.generalDiscount")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percent">%</SelectItem><SelectItem value="absolute">€</SelectItem></SelectContent></Select></div>
+                <div className="space-y-1"><Label>{T("discountShort")}</Label><Input aria-label={T("discountShort")} inputMode="decimal" value={options.discountValue} onChange={e => updateOptions({ discountValue: e.target.value })} /></div>
+                <div className="flex items-center gap-2"><Switch aria-label={T("discountLimited")} checked={options.limited} onCheckedChange={limited => updateOptions({ limited })} /><Label>{T("discountLimited")}</Label></div>
+                {options.limited && <>
+                  <div className="space-y-1"><Label>{T("discountFrom")}</Label><Input aria-label={T("discountFrom")} type="date" value={options.discountFrom} onChange={e => updateOptions({ discountFrom: e.target.value })} /></div>
+                  <div className="space-y-1"><Label>{T("discountTo")}</Label><Input aria-label={T("discountTo")} type="date" value={options.discountTo} onChange={e => updateOptions({ discountTo: e.target.value })} /></div>
+                  <div className="space-y-1 sm:col-span-2"><Label>{T("afterDiscount")}</Label><Select value={options.after} onValueChange={v => updateOptions({ after: v as "continue" | "end" })}><SelectTrigger aria-label={T("afterDiscount")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="continue">{T("discountAfter")}</SelectItem><SelectItem value="end">{t("invoice.endPeriod")}</SelectItem></SelectContent></Select></div>
+                </>}
+              </div>
+              {quoteError && lines.some(l => l.label) && <p role="alert" className="text-sm text-destructive">{quoteError}</p>}
+              {quote.success && <div className="border-t pt-3 space-y-1">{quote.lines.map((l, i) => <div key={i} className="flex justify-between gap-3 text-sm"><span className="min-w-0 break-words">{l.invoice_label}</span><span className="shrink-0">{l.amount.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span></div>)}</div>}
               <p className="text-sm text-right">Summe netto: <strong>{net.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</strong></p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
-            <Button disabled={saving} onClick={save}>{saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Entwurf anlegen</Button>
+            <Button disabled={saving || !tenantId || !quote.success} onClick={save}>{saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Entwurf anlegen</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

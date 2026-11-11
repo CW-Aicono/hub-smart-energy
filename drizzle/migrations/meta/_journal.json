@@ -617,6 +617,13 @@
       "when": 1794065933759,
       "tag": "0087_once_payment_term_total",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1794410575435,
+      "tag": "0088_manual_invoice_booking_options",
+      "breakpoints": true
     }
   ]
 }
