@@ -1,5 +1,11 @@
 # Roadmap
 
+## Prüfung vor Live-Deploy (11.11., Dirk)
+- [x] Prüfung durchgeführt: Preview-Build OK; Kernprüfungen 406 bestanden / 1 fehlgeschlagen; Migrationsrunner und Rückfallprüfung im begrenzten Testlauf bestanden. Datenbankfunktion für neue Rechnung auf Staging korrekt geschützt vorhanden.
+- [ ] Deploy-Freigabe offen: Einmalbuchungen in Einrichtung werden bei Übergabe wegen gesetztem ended_on übersprungen; Partner-Stammdaten überschreiben leere Bankfelder; Eichrecht-Abschluss fragt eine fehlende Spalte ab. Korrekturen separat erforderlich.
+- [ ] Sicherheitsbefund offen: Reparatur-Backup-Tabelle ohne RLS mit anonymen Lese-/Schreibrechten; bridge_workers für alle angemeldeten Benutzer lesbar. Prüfung/Korrektur vor Freigabe erforderlich.
+- [ ] Vollsuite nicht grün: Gesamtversuch Speicherabbruch, Seiten-/Hooktests teilweise mit fehlenden Test-Providern; Setup-Pfadtest berücksichtigt die delegierte Erstellung nicht. Live-Datenbank, Live-Einladungsmail und Gateway weiterhin hier nicht Ende-zu-Ende verifiziert.
+
 ## Supportkontakt (11.11., Dirk)
 - [x] v1.44.1: Supportadresse info@aicono.org, Telefon-Support entfernt; Handbuch vier Sprachen aktualisiert. Keine Datenbankänderung.
 

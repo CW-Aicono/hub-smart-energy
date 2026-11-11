@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## Deploy-Prüfung – 11.11.2026 (v1.44.1, keine Funktionsänderung)
+- Keine pauschale Freigabe: Kernlauf mit einem Worker 406/407 Tests erfolgreich, einschließlich Migrationsrunner, SQL-Rechnungsberechnung, Korrekturen, Branding und Rollback. Setup-Pfadtest erwartet direkten Insert statt Delegation an useTenants. Gesamtlauf scheitert zusätzlich an Speicher und bestehenden UI-Testproblemen.
+- Bestätigte Risiken: 0085 überspringt Einmalverträge mit ended_on bei Übergabe; 0087 kann mit Laufzeitpflege zukünftige Kündigung entfernen; PartnerSettings ersetzt nicht eingegebene Rechnungsabsenderdaten durch leere Werte; ocmf-finalize fragt nicht existente serial_number-Spalte ab; powerSeries überschreitet für Tagesauflösung den SQL-Grenzwert 400 Tage.
+- Sicherheitsprüfung: 7 Fehler-/4 Warnmeldungen, nicht alle sind tatsächliche Datenlecks (globale Kataloge/Downloads gesondert bewerten). Bestätigt: meter_daily_totals_mv_repair_backup_20260617 ohne RLS mit anon SELECT/INSERT/UPDATE/DELETE; bridge_workers SELECT für alle authenticated. Kein Zugriff auf separate Live-Datenbank, keine Live-Mail verschickt, kein Deploy gestartet.
+
 ## v1.44.1 – 11.11.2026
 - Hilfe & Support: E-Mail-Adresse und mailto auf info@aicono.org geändert; Platzhalter-Telefonnummer samt Telefon-Support entfernt. Handbuch vier Sprachen und Versionshistorie aktualisiert. Nur Anzeigeänderung, keine Datenbank-/Mailversand-Konfiguration.
 
