@@ -104,6 +104,7 @@ jobs:
             supabase/deploy/package-entitlements-ready.sql
             supabase/deploy/package-corrections-ready.sql
             supabase/deploy/manual-invoice-ready.sql
+            supabase/deploy/deploy-audit-ready.sql
             docs/GO-LIVE.md
           )
           for path in "${RELEASE_PATHS[@]}"; do

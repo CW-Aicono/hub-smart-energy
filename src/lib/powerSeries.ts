@@ -78,7 +78,7 @@ export async function fetchPowerSeriesStep(
   stepMinutes: 5 | 15 | 60 | 1440,
 ): Promise<PowerSeriesPoint[]> {
   if (!meterIds.length) return [];
-  const chunkMs = 950 * stepMinutes * 60_000;
+  const chunkMs = Math.min(950 * stepMinutes * 60_000, 400 * 86_400_000);
   const jobs: Array<{ id: string; s: Date; e: Date }> = [];
   for (const id of meterIds) {
     for (let t = start.getTime(); t < end.getTime(); t += chunkMs) {

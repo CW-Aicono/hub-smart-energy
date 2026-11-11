@@ -1,4 +1,4 @@
-import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { requireInternalOrUser, isInternalCaller } from "../_shared/internalAuth.ts";
 // Edge Function: ocmf-finalize
 // Wird vom OCPP-persistent-server nach StopTransaction aufgerufen.
 // Bauteil-Verantwortung:
@@ -45,6 +45,14 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
+    // User calls use RLS before the service client is allowed to write a session.
+    if (!isInternalCaller(req)) {
+      const userClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+        global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+      });
+      const { data: allowed, error } = await userClient.from("charging_sessions").select("id").eq("id", sessionId).maybeSingle();
+      if (error || !allowed) return json({ error: "Forbidden" }, 403);
+    }
     // Session laden
     const { data: session, error: sErr } = await supabase
       .from("charging_sessions")
@@ -58,20 +66,23 @@ Deno.serve(async (req: Request) => {
     // Charge-Point Eichrecht-Config
     let cp: any = null;
     if (session.charge_point_id) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("charge_points")
-        .select("id, vendor, model, serial_number, eichrecht_enabled, meter_public_key, meter_format")
+        .select("id, vendor, model, eichrecht_enabled, meter_public_key, meter_format")
         .eq("id", session.charge_point_id)
+        .eq("tenant_id", session.tenant_id)
         .maybeSingle();
+      if (error || !data) return json({ error: "charge point configuration unavailable" }, 500);
       cp = data;
     }
 
     // Records laden
-    const { data: records } = await supabase
+    const { data: records, error: recordsError } = await supabase
       .from("charging_session_meter_records")
       .select("*")
       .eq("session_id", sessionId)
       .order("sampled_at", { ascending: true });
+    if (recordsError) return json({ error: "meter records unavailable" }, 500);
 
     const recs = (records ?? []) as Record_[];
 
@@ -105,7 +116,7 @@ Deno.serve(async (req: Request) => {
         startWh: Number(session.meter_start ?? 0),
         stopWh: Number(session.meter_stop ?? (Number(session.meter_start ?? 0) + Number(session.energy_kwh ?? 0) * 1000)),
         identifier: session.id_tag ?? undefined,
-        meterSerial: cp?.serial_number ?? "UNKNOWN",
+        meterSerial: "UNKNOWN",
         vendor: cp?.vendor ?? "AICONO",
         model: cp?.model ?? "SoftMeter",
       });

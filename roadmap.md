@@ -1,5 +1,12 @@
 # Roadmap
 
+## Bestätigte Deploy-Prüfbefunde beheben (11.11., Dirk)
+- [ ] Übergabe von Einmalbuchungen und Erhalt bestehender Kündigungen korrigieren, SQL-Regressionen.
+- [ ] Partner-Bankdaten erhalten, Eichrecht-Abschluss und lange Analysezeiträume korrigieren.
+- [ ] Reparatur-Backup und Bridge-Serverdaten absichern; tatsächlichen Zustand im Live-Deploy prüfen.
+- [ ] Testfehler eingrenzen/beheben, betroffene Abläufe prüfen, Handbuch vier Sprachen und Version pflegen.
+- [ ] Extern: separate Live-Datenbank und echter Live-Einladungsversand nach Deploy prüfen.
+
 ## Prüfung vor Live-Deploy (11.11., Dirk)
 - [x] Prüfung durchgeführt: Preview-Build OK; Kernprüfungen 406 bestanden / 1 fehlgeschlagen; Migrationsrunner und Rückfallprüfung im begrenzten Testlauf bestanden. Datenbankfunktion für neue Rechnung auf Staging korrekt geschützt vorhanden.
 - [ ] Deploy-Freigabe offen: Einmalbuchungen in Einrichtung werden bei Übergabe wegen gesetztem ended_on übersprungen; Partner-Stammdaten überschreiben leere Bankfelder; Eichrecht-Abschluss fragt eine fehlende Spalte ab. Korrekturen separat erforderlich.

@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Settings } from "lucide-react";
 import PartnerBranding from "./PartnerBranding";
+import { mergePartnerSender } from "@/lib/partnerSender";
 
 type Address = { street?: string; zip?: string; city?: string; country?: string };
 interface MasterData {
@@ -40,7 +41,8 @@ function MasterDataForm() {
     queryKey: ["partner-master-data", partnerId],
     enabled: !!partnerId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("partners").select(COLS).eq("id", partnerId!).single();
+      if (!partnerId) throw new Error("Partner fehlt");
+      const { data, error } = await supabase.from("partners").select(COLS).eq("id", partnerId).single();
       if (error) throw error;
       return data as unknown as MasterData;
     },
@@ -53,6 +55,7 @@ function MasterDataForm() {
 
   const save = useMutation({
     mutationFn: async () => {
+      if (!partnerId || !data || !isPartnerAdmin) throw new Error("Partner-Stammdaten nicht verfügbar");
       if (form.contact_email && !/^\S+@\S+\.\S+$/.test(form.contact_email)) throw new Error("Bitte eine gültige E-Mail-Adresse angeben");
       const clean = (v?: string | null) => (v && v.trim() ? v.trim() : null);
       const payload = {
@@ -69,25 +72,25 @@ function MasterDataForm() {
         iban: clean(form.iban)?.replace(/\s+/g, "").toUpperCase() ?? null,
         bic: clean(form.bic)?.toUpperCase() ?? null,
       };
-      const { error } = await supabase.from("partners").update(payload as any).eq("id", partnerId!);
+      const { data: cur, error: readError } = await supabase.from("partner_billing_settings").select("settings").eq("partner_id", partnerId).maybeSingle();
+      if (readError) throw readError;
+      const { error } = await supabase.from("partners").update(payload as any).eq("id", partnerId);
       if (error) throw error;
       // Rechnungsabsender der Partner-Rechnungen an Tenants mitführen (bestehende Einstellungen wie Präfix/Zahlungsziel bleiben).
-      const { data: cur } = await supabase.from("partner_billing_settings").select("settings").eq("partner_id", partnerId!).maybeSingle();
       const reg = payload.trade_register ?? "";
       const cut = reg.lastIndexOf(",");
       const a = (payload.billing_address ?? {}) as Address;
-      const sender = {
-        ...((cur?.settings as Record<string, unknown>) ?? {}),
-        company_name: payload.legal_name ?? data!.name,
+      const sender = mergePartnerSender((cur?.settings as Record<string, unknown>) ?? {}, {
+        company_name: payload.legal_name ?? data.name,
         street: a.street ?? "", postal_code: a.zip ?? "", city: a.city ?? "", country: a.country ?? "",
         email: payload.contact_email ?? "", phone: payload.contact_phone ?? "", website: payload.website ?? "",
         tax_number: payload.tax_number ?? "", vat_id: payload.vat_id ?? "", managing_director: payload.managing_director ?? "",
         register_court: reg ? (cut > 0 ? reg.slice(0, cut).trim() : "Handelsregister") : "",
         register_number: reg ? (cut > 0 ? reg.slice(cut + 1).trim() : reg) : "",
         bank_name: payload.bank_name ?? "", iban: payload.iban ?? "", bic: payload.bic ?? "",
-      };
+      });
       const { error: sErr } = await supabase.from("partner_billing_settings")
-        .upsert({ partner_id: partnerId!, settings: sender, updated_at: new Date().toISOString() } as any);
+        .upsert({ partner_id: partnerId, settings: sender, updated_at: new Date().toISOString() } as any);
       if (sErr) throw new Error("Stammdaten gespeichert, Rechnungsabsender nicht: " + sErr.message);
     },
     onSuccess: () => {

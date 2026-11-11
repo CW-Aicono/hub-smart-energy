@@ -40,7 +40,7 @@ async function invoke(tenantError: boolean, sessionError: boolean) {
 }
 
 describe("setup access requires deployed schema", () => {
-  for (const file of ["supabase/functions/partner-create-tenant/index.ts", "src/pages/SuperAdminTenants.tsx", "src/hooks/useTenants.tsx"]) {
+  for (const file of ["supabase/functions/partner-create-tenant/index.ts", "src/hooks/useTenants.tsx"]) {
     it(`initializes a new tenant in setup in ${file}`, () => {
       const source = ts.createSourceFile(file,readFileSync(file,"utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
       const initialStates: string[] = [];

@@ -520,6 +520,17 @@ if [ -f "$REPO_ROOT/supabase/deploy/manual-invoice-ready.sql" ]; then
     fi
   fi
 fi
+if [ -f "$REPO_ROOT/supabase/deploy/deploy-audit-ready.sql" ]; then
+  audit_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/deploy-audit-ready.sql")"
+  if [ "$audit_ready" != 't' ]; then
+    log "Reparatur: Abrechnungs-/Sicherheitskorrekturen unvollstaendig"
+    if ! run_migration_with_autoheal "$DRIZZLE_MIG_DIR/0089_deploy_audit_billing_security.sql"; then
+      log "FEHLER: Abrechnungs-/Sicherheitskorrekturen nicht installierbar"
+      exit 1
+    fi
+    mark_applied "$DRIZZLE_MIG_DIR/0089_deploy_audit_billing_security.sql"
+  fi
+fi
 if [ -f "$REPO_ROOT/supabase/deploy/verify-live-release.sh" ]; then
   # Existing protected main workflow already imports this runner from staging.
   # Keep the mandatory gate here so older deploy.sh versions cannot bypass it.

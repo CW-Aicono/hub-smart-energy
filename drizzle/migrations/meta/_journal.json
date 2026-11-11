@@ -624,6 +624,13 @@
       "when": 1794410575435,
       "tag": "0088_manual_invoice_booking_options",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1794416089992,
+      "tag": "0089_deploy_audit_billing_security",
+      "breakpoints": true
     }
   ]
 }

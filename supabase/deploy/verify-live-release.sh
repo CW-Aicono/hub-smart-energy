@@ -19,6 +19,8 @@ for file in \
   drizzle/migrations/0079_tenant_setup_deploy_contract.sql \
   drizzle/migrations/0083_effective_modules_auth_fix.sql \
   drizzle/migrations/0088_manual_invoice_booking_options.sql \
+  drizzle/migrations/0089_deploy_audit_billing_security.sql \
+  supabase/deploy/deploy-audit-ready.sql \
   supabase/deploy/manual-invoice-ready.sql \
   supabase/deploy/package-entitlements-ready.sql \
   supabase/deploy/package-corrections-ready.sql \
@@ -51,6 +53,11 @@ fi
 invoice_ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/manual-invoice-ready.sql")"
 if [ "$invoice_ready" != 't' ]; then
   printf 'FEHLER: Neue Rechnung mit Buchungsoptionen nicht installiert.\n' >&2
+  exit 1
+fi
+audit_ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/deploy-audit-ready.sql")"
+if [ "$audit_ready" != 't' ]; then
+  printf 'FEHLER: Abrechnungs-/Sicherheitskorrekturen fehlen.\n' >&2
   exit 1
 fi
 docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$REPO_ROOT/supabase/deploy/live-release-check.sql"

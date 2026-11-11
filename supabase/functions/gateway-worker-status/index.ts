@@ -42,6 +42,10 @@ Deno.serve(async (req) => {
     if (claimsErr || !claimsData?.claims?.sub) {
       return json(corsHeaders, { error: "Invalid token" }, 401);
     }
+    const { data: allowed, error: accessError } = await supabase.rpc("can_portal_read", {
+      _uid: claimsData.claims.sub, _area: "technical",
+    });
+    if (accessError || allowed !== true) return json(corsHeaders, { error: "Forbidden" }, 403);
 
     // 1) System settings — worker_active flag + stale threshold + legacy fallback
     const { data: settings } = await supabase
