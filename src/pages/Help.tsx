@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket, Cpu, Zap, TrendingUp, ClipboardList, Home, FileText, Database, Users } from "lucide-react";
+import { BookOpen, HelpCircle, Mail, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket, Cpu, Zap, TrendingUp, ClipboardList, Home, FileText, Database, Users } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/hooks/useTenant";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
@@ -102,6 +102,7 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.44.1", date: "2026-11-11", changes: [{ type: "fix", textKey: "manual.supportContact1441" }] },
     { version: "1.44.0", date: "2026-11-11", changes: [{ type: "feature", textKey: "manual.invoiceOptions1440" }] },
     { version: "1.43.1", date: "2026-11-10", changes: [{ type: "fix", textKey: "manual.inviteLinkLive1431" }] },
     { version: "1.43.0", date: "2026-11-07", changes: [{ type: "feature", textKey: "manual.onceTerm1430" }] },
@@ -660,7 +661,7 @@ const Help = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="px-6 pb-6">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4">
                 <div className="flex items-start gap-4 p-4 rounded-lg border bg-muted/30">
                   <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <Mail className="h-5 w-5 text-primary" />
@@ -668,29 +669,13 @@ const Help = () => {
                   <div>
                     <p className="font-medium">{t("help.emailSupport")}</p>
                     <a 
-                      href="mailto:support@smartenergyhub.de" 
+                      href="mailto:info@aicono.org"
                       className="text-sm text-accent hover:underline flex items-center gap-1"
                     >
-                      support@smartenergyhub.de
+                      info@aicono.org
                       <ExternalLink className="h-3 w-3" />
                     </a>
                     <p className="text-xs text-muted-foreground mt-1">{t("help.emailResponseTime")}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4 p-4 rounded-lg border bg-muted/30">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <Phone className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{t("help.phoneSupport")}</p>
-                    <a 
-                      href="tel:+4930123456789" 
-                      className="text-sm text-accent hover:underline flex items-center gap-1"
-                    >
-                      +49 30 123 456 789
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                    <p className="text-xs text-muted-foreground mt-1">{t("help.phoneHours")}</p>
                   </div>
                 </div>
               </div>

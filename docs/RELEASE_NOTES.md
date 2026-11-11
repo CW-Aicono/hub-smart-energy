@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.44.1 – 11.11.2026
+- Supportkontakt: info@aicono.org; Telefon-Support wird nicht mehr angezeigt.
+
 ## v1.44.0 – 11.11.2026
 - „Neue Rechnung“ bietet Rabatte in Prozent oder Euro, Rabattzeitraum, Laufzeit, Zahlungsweise und Abrechnungsintervall mit berechneter Vorschau.
 - Es entsteht nur eine Rechnung, kein Vertrag und keine Paketfreischaltung. Einmalzahlung fasst Monatspreise über die Laufzeit zusammen; 100 % Rabatt erzeugt einen 0-€-Hinweis statt einer buchbaren Rechnung.

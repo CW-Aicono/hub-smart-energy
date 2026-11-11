@@ -1,5 +1,8 @@
 # Roadmap
 
+## Supportkontakt (11.11., Dirk)
+- [x] v1.44.1: Supportadresse info@aicono.org, Telefon-Support entfernt; Handbuch vier Sprachen aktualisiert. Keine Datenbankänderung.
+
 ## Neue Rechnung: Buchungsoptionen (11.11., Dirk)
 - [x] v1.44.0: Einzelentwurf mit Prozent-/Euro-Rabatten, Rabattzeitraum, Laufzeit und Abrechnungsintervall; keine Verträge/Freischaltungen. 69 Tests erfolgreich; angemeldet 12 × 49 € = 588 € gespeichert und in der Liste geprüft; Testentwurf entfernt, nichts versendet. Handbuch vier Sprachen und Versionshinweise gepflegt.
 - [ ] Wartet auf externen Live-Deploy: Migration 0088 mit automatischer Reparatur bei fehlender Funktion und Pflichtprüfung vor Frontend-Aktivierung enthalten; Live-Datenbank hier nicht zugänglich.

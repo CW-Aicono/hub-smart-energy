@@ -1,6 +1,7 @@
 export type Language = "de" | "en" | "es" | "nl";
 
 export const translations = {
+  "manual.supportContact1441": { de: "Unter Hilfe & Support erreichen Sie AICONO per E-Mail an info@aicono.org. Ein Telefonkontakt wird nicht angezeigt.", en: "Under Help & Support, contact AICONO by email at info@aicono.org. No telephone contact is displayed.", es: "En Ayuda y soporte, contacte con AICONO por correo en info@aicono.org. No se muestra contacto telefónico.", nl: "Neem onder Hulp & support contact op met AICONO via info@aicono.org. Er wordt geen telefooncontact getoond." },
   "invoice.monthlyPrice": { de: "Monatspreis", en: "Monthly price", es: "Precio mensual", nl: "Maandprijs" },
   "invoice.generalDiscount": { de: "Allgemeiner Rabatt", en: "General discount", es: "Descuento general", nl: "Algemene korting" },
   "invoice.endPeriod": { de: "Rechnungszeitraum bei Rabattende beenden", en: "End invoice period when discount expires", es: "Terminar periodo al finalizar descuento", nl: "Factuurperiode bij einde korting stoppen" },

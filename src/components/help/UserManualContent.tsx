@@ -1010,6 +1010,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
           </section>
           <section>
             <h4 className="font-semibold mb-2">{T("manual.acc.versionTitle")}</h4>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.supportContact1441")}</p>
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
               <li>{T("manual.acc.versionItem1")}</li>
               <li>{T("manual.acc.versionItem2")}</li>

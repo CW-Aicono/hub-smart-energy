@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.44.1 – 11.11.2026
+- Hilfe & Support: E-Mail-Adresse und mailto auf info@aicono.org geändert; Platzhalter-Telefonnummer samt Telefon-Support entfernt. Handbuch vier Sprachen und Versionshistorie aktualisiert. Nur Anzeigeänderung, keine Datenbank-/Mailversand-Konfiguration.
+
 ## v1.44.0 – 11.11.2026
 - Neue Rechnung: Laufzeit, Abrechnungsintervall, Zahlungsart, Prozent-/Euro-Rabatt allgemein und je Position sowie befristeter Rabatt mit regulärem Preis danach oder Ende des Rechnungszeitraums. Monatspreise und einmalige Posten getrennt; Vorschau verwendet Halbmonatsraster. Nur ein Entwurf, keine Verträge/Freischaltungen/Folgerechnungen.
 - Migration 0088: neue autorisierte RPC `create_quoted_manual_invoice`, unabhängige serverseitige Berechnung, Optionen in line_items; 0 € als subscription_notice. Bestehende Rechnungen und alte RPC unverändert. Live-Runner repariert fehlende RPC auch bei bestehendem Tracking; Gate prüft echte Existenz und Grants vor Frontend-Aktivierung.
