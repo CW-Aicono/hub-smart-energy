@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from "react";
+function createWrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return ({ children }: { children: React.ReactNode }) => React.createElement(QueryClientProvider, { client }, children);
+}
 
 // ── Hoisted mocks with STABLE references ────────────────────────────────────
 const { mockSupabase, stableUser } = vi.hoisted(() => {
@@ -47,10 +53,10 @@ describe("useMeters", () => {
 
     let hookResult: any;
     await act(async () => {
-      const { result } = renderHook(() => useMeters());
+      const { result } = renderHook(() => useMeters(), { wrapper: createWrapper() });
       hookResult = result;
     });
-    expect(hookResult.current.loading).toBe(false);
+    await waitFor(() => expect(hookResult.current.loading).toBe(false));
     expect(hookResult.current.meters).toEqual([fakeMeter]);
   });
 
@@ -60,17 +66,17 @@ describe("useMeters", () => {
 
     let hookResult: any;
     await act(async () => {
-      const { result } = renderHook(() => useMeters());
+      const { result } = renderHook(() => useMeters(), { wrapper: createWrapper() });
       hookResult = result;
     });
-    expect(hookResult.current.loading).toBe(false);
+    await waitFor(() => expect(hookResult.current.loading).toBe(false));
     expect(hookResult.current.meters).toEqual([]);
     spy.mockRestore();
   });
 
   it("returns loading=true initially", () => {
     mockSupabase.from.mockReturnValue(chainMock([]));
-    const { result } = renderHook(() => useMeters());
+    const { result } = renderHook(() => useMeters(), { wrapper: createWrapper() });
     expect(result.current.loading).toBe(true);
   });
 });

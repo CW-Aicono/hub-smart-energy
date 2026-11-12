@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { saTranslations } from "@/i18n/superAdminTranslations";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const state = vi.hoisted(() => ({ membershipError: false, membershipSelect: vi.fn() }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "current" }, loading: false }) }));
@@ -25,7 +26,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 import SuperAdminUsers from "../SuperAdminUsers";
 function showPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><MemoryRouter><SuperAdminUsers /></MemoryRouter></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><TooltipProvider><MemoryRouter><SuperAdminUsers /></MemoryRouter></TooltipProvider></QueryClientProvider>);
 }
 describe("Portal user list", () => {
   beforeEach(() => { state.membershipError = false; state.membershipSelect.mockClear(); });

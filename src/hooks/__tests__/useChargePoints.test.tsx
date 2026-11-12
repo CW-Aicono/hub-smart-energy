@@ -13,6 +13,7 @@ const { mockSupabase } = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 vi.mock("@/i18n/getT", () => ({ getT: () => (k: string) => k }));
+vi.mock("@/hooks/useTenant", () => ({ useTenant: () => ({ tenant: { id: "tenant-test" } }) }));
 
 import { useChargePoints } from "../useChargePoints";
 
@@ -45,12 +46,14 @@ beforeEach(() => vi.clearAllMocks());
 describe("useChargePoints", () => {
   it("fetches charge points", async () => {
     const cps = [{ id: "cp-1", name: "Wallbox 1", status: "available" }];
-    mockSupabase.from.mockReturnValue(chainMock(cps));
+    const chain = chainMock(cps);
+    mockSupabase.from.mockReturnValue(chain);
 
     const { result } = renderHook(() => useChargePoints(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.chargePoints).toEqual(cps);
+    expect(result.current.chargePoints).toMatchObject(cps);
+    expect(chain.eq).toHaveBeenCalledWith("tenant_id", "tenant-test");
   });
 
   it("sets up realtime subscription", () => {

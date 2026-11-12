@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { IntegrationCard } from "../integrations/IntegrationCard";
+vi.mock("@/hooks/useUserRole", () => ({ useUserRole: () => ({ isAdmin: true }) }));
+vi.mock("@/hooks/useGatewayDevices", () => ({ useGatewayDevices: () => ({ devices: [], sendCommand: vi.fn(), refetch: vi.fn() }) }));
+vi.mock("../integrations/LoxoneWsStatus", () => ({ LoxoneWsStatus: () => null }));
+vi.mock("../integrations/LoxoneFirmwareSection", () => ({ LoxoneFirmwareSection: () => null }));
+vi.mock("../integrations/LoxoneManualDownloadButton", () => ({ LoxoneManualDownloadButton: () => null }));
+vi.mock("../integrations/ReplaceGatewayDialog", () => ({ ReplaceGatewayDialog: () => null }));
 
 vi.mock("@/hooks/useTranslation", () => ({
   useTranslation: () => ({

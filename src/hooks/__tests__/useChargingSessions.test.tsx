@@ -11,6 +11,7 @@ const { mockSupabase } = vi.hoisted(() => ({
   },
 }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
+vi.mock("@/hooks/useTenant", () => ({ useTenant: () => ({ tenant: { id: "tenant-test" } }) }));
 
 import { useChargingSessions } from "../useChargingSessions";
 
@@ -38,12 +39,14 @@ beforeEach(() => vi.clearAllMocks());
 describe("useChargingSessions", () => {
   it("fetches all sessions when no chargePointId", async () => {
     const sessions = [{ id: "s-1", energy_kwh: 12.5, status: "completed" }];
-    mockSupabase.from.mockReturnValue(chainMock(sessions));
+    const chain = chainMock(sessions);
+    mockSupabase.from.mockReturnValue(chain);
 
     const { result } = renderHook(() => useChargingSessions(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.sessions).toEqual(sessions);
+    expect(chain.eq).toHaveBeenCalledWith("tenant_id", "tenant-test");
   });
 
   it("filters by chargePointId when provided", async () => {

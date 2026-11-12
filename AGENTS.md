@@ -1,5 +1,7 @@
 # Agent Rules
 
+- Deploy audit fixes use idempotent migration replay plus actual-state readiness checks; invoice bank synchronization preserves separately maintained details on empty master inputs, and user-triggered evidence finalization checks session RLS before service writes — prevents rollout drift and cross-tenant overwrites.
+
 - Every change gets an entry in `CHANGELOG.md` (internal); customer-visible changes also in `docs/RELEASE_NOTES.md` — keeps team and customers informed.
 - Partner module grants to tenants go only through the `partner-set-tenant-module` edge function (portal admins use `portal-set-tenant-module`, which also extends the partner portfolio), which enforces partner ownership and the `partner_modules` portfolio — UI checks alone are not security.
 - Every database schema or shared configuration-data change must be created through the migration tool and committed as idempotent SQL; the Hetzner deploy applies both `supabase/migrations/` and `drizzle/migrations/` automatically because production has a separate database; reference data (guides, templates, models, backfills) is never written directly to a database, otherwise staging and live drift apart.

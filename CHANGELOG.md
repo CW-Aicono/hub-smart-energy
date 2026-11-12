@@ -1,5 +1,11 @@
 # Änderungsprotokoll (intern)
 
+## v1.44.2 – 12.11.2026
+- Übergabe berücksichtigt unbezahlte feste Einmal-Laufzeiten und setzt deren Enddatum relativ zur Übergabe neu; zurückgenommene Fehlbuchungen bleiben ausgeschlossen. Laufzeitpflege hebt bestehende Kündigungen nicht auf; Autorisierung fail-closed.
+- Partner-Stammdaten erhalten separat gepflegte Rechnungs-Bankdaten bei leeren Eingaben; Lesefehler verhindern das Überschreiben. Eichrecht-Abschluss nutzt vorhandene Spalten, bricht bei fehlenden Messdaten ab und prüft Benutzerzugriff per RLS. Unsigned bleibt unsigned.
+- Tagesanalysen teilen Abfragen zusätzlich bei 400 Tagen; Halbmonatsraster und Preise unverändert. Alte Hook-/Komponententests erhalten fehlende isolierte Abhängigkeiten.
+- Migration 0089 sperrt Reparatur-Backup für App-Zugriffe und entfernt breite Bridge-Lesepolicy; gateway-worker-status verlangt technischen Portalzugriff. Live-Gate prüft tatsächliche Installation und repariert Drift vor Aktivierung. Separate Live-Datenbank/Live-Einladungsversand weiterhin extern zu prüfen.
+
 ## Deploy-Prüfung – 11.11.2026 (v1.44.1, keine Funktionsänderung)
 - Keine pauschale Freigabe: Kernlauf mit einem Worker 406/407 Tests erfolgreich, einschließlich Migrationsrunner, SQL-Rechnungsberechnung, Korrekturen, Branding und Rollback. Setup-Pfadtest erwartet direkten Insert statt Delegation an useTenants. Gesamtlauf scheitert zusätzlich an Speicher und bestehenden UI-Testproblemen.
 - Bestätigte Risiken: 0085 überspringt Einmalverträge mit ended_on bei Übergabe; 0087 kann mit Laufzeitpflege zukünftige Kündigung entfernen; PartnerSettings ersetzt nicht eingegebene Rechnungsabsenderdaten durch leere Werte; ocmf-finalize fragt nicht existente serial_number-Spalte ab; powerSeries überschreitet für Tagesauflösung den SQL-Grenzwert 400 Tage.

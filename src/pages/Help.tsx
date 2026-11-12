@@ -102,6 +102,7 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.44.2", date: "2026-11-12", changes: [{ type: "fix", textKey: "manual.deployAudit1442" }] },
     { version: "1.44.1", date: "2026-11-11", changes: [{ type: "fix", textKey: "manual.supportContact1441" }] },
     { version: "1.44.0", date: "2026-11-11", changes: [{ type: "feature", textKey: "manual.invoiceOptions1440" }] },
     { version: "1.43.1", date: "2026-11-10", changes: [{ type: "fix", textKey: "manual.inviteLinkLive1431" }] },

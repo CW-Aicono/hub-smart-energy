@@ -42,7 +42,12 @@ describe("deploy audit billing and security", () => {
     expect((await db.query("SELECT * FROM tenant_invoices")).rows).toHaveLength(0);
     await db.exec(`SELECT _finish_tenant_setup('${tenant}',null,'test')`);
     const r = await db.query<{amount:string; status:string}>("SELECT amount,status FROM tenant_invoices");
-    expect(r.rows).toEqual([{amount:"588",status:"draft"}]);
+    const day = Number((await db.query<{dom:number}>("SELECT extract(day from now() AT TIME ZONE 'Europe/Berlin')::int AS dom")).rows[0].dom);
+    // Existing rule: each touched half-month costs 24.50 €, including partial endpoints.
+    const expected = day === 1 || day === 16 ? 588 : 612.5;
+    expect(Number(r.rows[0].amount)).toBe(expected);
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0].status).toBe("draft");
     expect((await db.query(`SELECT starts_on=(now() AT TIME ZONE 'Europe/Berlin')::date AND ended_on=license_term_end(starts_on,12) ok FROM license_sales`)).rows).toEqual([{ok:true}]);
     await db.exec(`SELECT _finish_tenant_setup('${tenant}',null,'retry')`);
     expect((await db.query("SELECT * FROM tenant_invoices")).rows).toHaveLength(1);

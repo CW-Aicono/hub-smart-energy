@@ -20,6 +20,7 @@ const { fakeMeters } = vi.hoisted(() => ({
 }));
 vi.mock("../useMeters", () => ({ useMeters: () => ({ meters: fakeMeters, loading: false }) }));
 vi.mock("../useLoxoneSensors", () => ({ useLoxoneSensorsMulti: () => [] }));
+vi.mock("../useTenant", () => ({ useTenant: () => ({ tenant: { id: "t-1", show_manual_meters: true } }) }));
 
 import { useEnergyData } from "../useEnergyData";
 
@@ -39,6 +40,7 @@ function chainMock(data: any[], error: any = null) {
   const obj: any = {
     select: vi.fn(() => obj),
     eq: vi.fn(() => obj),
+    in: vi.fn(() => obj),
     order: vi.fn(() => obj),
     then(onFulfilled: any, onRejected?: any) {
       return Promise.resolve(resolveValue).then(onFulfilled, onRejected);

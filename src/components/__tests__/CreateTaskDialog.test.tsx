@@ -4,6 +4,8 @@ import { MemoryRouter } from "react-router-dom";
 import { CreateTaskDialog } from "../tasks/CreateTaskDialog";
 
 const mockMutateAsync = vi.fn().mockResolvedValue({});
+vi.mock("@/hooks/useTaskTemplates", () => ({ useTaskTemplates: () => ({ templates: [] }) }));
+vi.mock("@/hooks/useTaskAttachments", () => ({ useTaskAttachments: () => ({ attachments: [], isLoading: false, uploadAttachment: { mutateAsync: vi.fn() }, deleteAttachment: { mutateAsync: vi.fn() }, getSignedUrl: vi.fn() }) }));
 vi.mock("@/hooks/useTasks", () => ({
   useTasks: () => ({
     createTask: { mutateAsync: mockMutateAsync, isPending: false },

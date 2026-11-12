@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.44.2 – 12.11.2026
+- Einmalbuchungen in Einrichtung werden bei Übergabe abgerechnet; bestehende Kündigungen bleiben bei Laufzeitpflege erhalten.
+- Rechnungs-Bankdaten bleiben bei leeren Partner-Stammdaten erhalten. Fehler beim Eichrecht-Abschluss und bei langen Tagesanalysen korrigiert.
+- Zugriffsschutz für technische Daten und Sicherungen sowie Prüfung beim Live-Deploy verstärkt.
+
 ## v1.44.1 – 11.11.2026
 - Supportkontakt: info@aicono.org; Telefon-Support wird nicht mehr angezeigt.
 

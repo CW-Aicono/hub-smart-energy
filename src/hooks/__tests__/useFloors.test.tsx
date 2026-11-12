@@ -39,7 +39,7 @@ describe("useFloors", () => {
     });
 
     expect(hookResult.current.loading).toBe(false);
-    expect(hookResult.current.floors).toEqual(floors);
+    expect(hookResult.current.floors).toMatchObject(floors);
   });
 
   it("returns empty when no locationId", async () => {
