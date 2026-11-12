@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.45.1 – 12.11.2026
+- Live-Deploy erkennt und ergänzt fehlende Ladepunkt-Felder und ELMI-/Gemini-Vorlagen trotz früherer Erledigt-Markierung.
+- Aktuelle Vestel-Register werden geprüft; bei verbleibenden Fehlern wird die neue Version nicht aktiviert. Bestehende Stationen und Tenant-Daten bleiben erhalten.
+
 ## v1.45.0 – 12.11.2026
 - Feste Paketlaufzeiten zählen bei Voraussetzungen und schützen vor erneuten Doppelbuchungen.
 - Einmalbuchungen erlauben einen vereinbarten Gesamtpreis direkt, beispielsweise 6.000,00 € für 60 Monate; EK bleibt unverändert.

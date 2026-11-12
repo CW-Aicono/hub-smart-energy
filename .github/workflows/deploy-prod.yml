@@ -106,6 +106,7 @@ jobs:
             supabase/deploy/manual-invoice-ready.sql
             supabase/deploy/deploy-audit-ready.sql
             supabase/deploy/package-fixed-terms-ready.sql
+            supabase/deploy/charger-templates-ready.sql
             docs/GO-LIVE.md
           )
           for path in "${RELEASE_PATHS[@]}"; do
@@ -115,7 +116,7 @@ jobs:
           bash -n scripts/deploy.sh scripts/apply-migrations.sh supabase/deploy/verify-live-release.sh
 
           npm ci --no-audit --no-fund
-          npx vitest run src/lib/__tests__/tenantSetupDeploy.test.ts src/lib/__tests__/tenantSetupKind.test.ts src/lib/__tests__/liveMigrationRunner.test.ts src/lib/__tests__/liveDeployRecovery.test.ts src/lib/__tests__/setupEndpointGuard.test.ts src/lib/__tests__/partnerTenantList.test.ts src/lib/__tests__/chargerTemplates.test.ts src/lib/__tests__/packageCorrectionSql.test.ts
+          npx vitest run src/lib/__tests__/tenantSetupDeploy.test.ts src/lib/__tests__/tenantSetupKind.test.ts src/lib/__tests__/liveMigrationRunner.test.ts src/lib/__tests__/liveDeployRecovery.test.ts src/lib/__tests__/setupEndpointGuard.test.ts src/lib/__tests__/partnerTenantList.test.ts src/lib/__tests__/chargerTemplates.test.ts src/lib/__tests__/chargerTemplatesDeploy.test.ts src/lib/__tests__/packageCorrectionSql.test.ts
 
           git add -A
           TARGET_TREE="$(git write-tree)"

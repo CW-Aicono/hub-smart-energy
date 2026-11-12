@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.45.1 – 12.11.2026
+- Ladevorlagen-Readiness prüft acht Spalten, aktiven Vorlagenschutz, aktive ELMI/Gemini-Modelle sowie Vestel FC 0x04 und Schreibregister. Teilinstallationen liefern false statt Spaltenfehler.
+- Migrationsrunner repariert 0072/0073/0082 vor abhängigen Migrationen trotz Tracking; 0082 läuft zuletzt, danach erneute Prüfung. Keine automatische Änderung/Löschung von Stationen oder Tenant-Daten. Unreparierbare Katalogzustände stoppen den Deploy.
+- Pflichtdateien und Readiness im Live-Gate/Release-Pfad enthalten; Regressionen für echte SQL-Drift und Runner; Handbuch vier Sprachen. Separate Live-Datenbank und Hagemann-Anlage erst nach externem Deploy prüfbar; kein Deploy gestartet.
+
 ## v1.45.0 – 12.11.2026
 - Paketvoraussetzungen und Doppelbuchungsschutz berücksichtigen laufende feste/Einrichtungs-Laufzeiten; Tenant-Zeilensperre serialisiert parallele Buchungen. Kein automatischer Eingriff in bestehende Hagemann-Verträge (nur Live, hier nicht vorhanden).
 - Direkter verhandelter Gesamtpreis für gemeinsame Einmalbuchungen, centgenaue Positionsaufteilung und atomare Speicherung von Betrag/Laufzeit; EK bleibt unverändert. Fehlbuchungsrücknahme blockiert nicht mehr an bereits stornierten Belegen und verändert keine ausgestellten Dokumente.

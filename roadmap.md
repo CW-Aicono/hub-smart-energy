@@ -1,5 +1,10 @@
 # Roadmap
 
+## Ladevorlagen beim Live-Deploy absichern (12.11., Hendrik)
+- [x] v1.45.1: Tatsächliche Spalten, Vorlagenschutz, ELMI/Gemini-Varianten und aktuelle Vestel-Register prüfen; Drift trotz Tracking vor abhängigen Migrationen reparieren, 0082 zuletzt. Unreparierbare Katalogzustände stoppen den Deploy.
+- [x] 35 Tests erfolgreich: echte SQL-Teilinstallation, manuelle/ELMI-Anlage, FC-0x04-Reparatur, Stationserhalt, wiederholter Deploy, sicherer Abbruch, Einrichtung und Übersetzungen. Preview-Build OK; Version und Handbuch vier Sprachen gepflegt. Kein Live-Deploy gestartet.
+- [ ] Extern: nächster Hetzner-Deploy und Anlage bei Hagemann; separate Live-Datenbank hier nicht zugänglich.
+
 ## Hagemann: Paketabhängigkeiten und verhandelter Einmalpreis (12.11., Dirk)
 - [x] v1.45.0: Aktive feste/Einrichtungs-Laufzeiten bei Voraussetzungen und Doppelbuchungsschutz berücksichtigt; Rücknahme nach Rechnungsstorno geprüft, historische Belege unverändert.
 - [x] Direkter Gesamtpreis für Einmalbuchungen mit Laufzeit; 6.000,00 € für 60 Monate centgenau gespeichert und per SQL abgerechnet, Wiederholung erzeugt keinen zweiten Entwurf; EK unverändert.

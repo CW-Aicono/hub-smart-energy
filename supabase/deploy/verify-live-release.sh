@@ -11,6 +11,8 @@ for file in \
   drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql \
   drizzle/migrations/0072_charger_templates_variants.sql \
   drizzle/migrations/0073_vestel_modbus_registers.sql \
+  drizzle/migrations/0082_vestel_modbus_spec_v115.sql \
+  supabase/deploy/charger-templates-ready.sql \
   drizzle/migrations/0074_package_sale_corrections_yearly.sql \
   drizzle/migrations/0075_package_effective_entitlements.sql \
   drizzle/migrations/0076_package_correction_security_guard.sql \
@@ -42,6 +44,11 @@ grep -q 'finalize_license_sale_options' "$REPO_ROOT/supabase/functions/license-s
 grep -q 'effective_tenant_modules' "$REPO_ROOT/supabase/functions/automation-scheduler/index.ts"
 grep -q 'entitlement_enabled' "$REPO_ROOT/supabase/functions/gateway-ingest/index.ts"
 
+charger_ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/charger-templates-ready.sql" | tail -n 1)"
+if [ "$charger_ready" != 't' ]; then
+  printf 'FEHLER: Ladevorlagen, Ladepunkt-Spalten oder aktuelle Vestel-Register fehlen.\n' >&2
+  exit 1
+fi
 ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/tenant-setup-ready.sql")"
 if [ "$ready" != 't' ]; then
   printf 'FEHLER: Einrichtungsphase nicht vollstaendig installiert.\n' >&2

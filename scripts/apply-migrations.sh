@@ -28,7 +28,7 @@ filter_psql_noise() {
   grep -vE '^(ALTER|CREATE|DROP|GRANT|REVOKE|COMMENT|COPY|SET|CALL|TRUNCATE|INSERT|UPDATE|DELETE|VALUES|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|REINDEX|VACUUM|ANALYZE|CLUSTER|LOCK|LISTEN|NOTIFY|SELECT|FETCH|MOVE|CLOSE|DECLARE|PREPARE|EXECUTE|DEALLOCATE|EXPLAIN|REASSIGN|SECURITY|REFRESH|IMPORT|LOAD|CHECKPOINT|DISCARD|SHOW|RESET) ?[A-Z0-9_-]*$|^[[:space:]]*setval[[:space:]]*$|^[[:space:]]*-+[[:space:]]*$|^[[:space:]]*[0-9]+[[:space:]]*$|^\([0-9]+ rows?\)$|^[[:space:]]*$' || true
 }
 
-for required in supabase/deploy/verify-live-release.sh supabase/deploy/tenant-setup-ready.sql supabase/deploy/live-release-check.sql drizzle/migrations/0070_tenant_setup_phase.sql drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql drizzle/migrations/0079_tenant_setup_deploy_contract.sql; do
+for required in supabase/deploy/verify-live-release.sh supabase/deploy/charger-templates-ready.sql drizzle/migrations/0072_charger_templates_variants.sql drizzle/migrations/0073_vestel_modbus_registers.sql drizzle/migrations/0082_vestel_modbus_spec_v115.sql supabase/deploy/tenant-setup-ready.sql supabase/deploy/live-release-check.sql drizzle/migrations/0070_tenant_setup_phase.sql drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql drizzle/migrations/0079_tenant_setup_deploy_contract.sql; do
   if [ ! -s "$REPO_ROOT/$required" ]; then
     log "FEHLER: Pflichtdatei fehlt: $required"
     exit 1
@@ -431,6 +431,29 @@ run_migration_with_autoheal() {
 for file in "${migration_files[@]}"; do
   filename="$(migration_key "$file")"
   escaped="$(printf '%s' "$filename" | sed "s/'/''/g")"
+
+  # Base catalogs/ELMI seeds have run by 0072. Repair here, before a pending
+  # 0073/0082 can fail on falsely tracked 0072. Always finish with FC 0x04.
+  if [ "$filename" = "drizzle/0072_charger_templates_variants.sql" ]; then
+    charger_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/charger-templates-ready.sql" | tail -n 1)"
+    if [ "$charger_ready" != 't' ]; then
+      log "Reparatur: Ladevorlagen/Spalten/Register unvollstaendig trotz Migrationsstand"
+      for charger_file in 0072_charger_templates_variants.sql 0073_vestel_modbus_registers.sql 0082_vestel_modbus_spec_v115.sql; do
+        if ! run_migration_with_autoheal "$DRIZZLE_MIG_DIR/$charger_file"; then
+          log "FEHLER: Ladevorlagen nicht installierbar ($charger_file)"
+          exit 1
+        fi
+      done
+      charger_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/charger-templates-ready.sql" | tail -n 1)"
+      if [ "$charger_ready" != 't' ]; then
+        log "FEHLER: Ladevorlagen bleiben unvollstaendig; keine Frontend-Aktivierung"
+        exit 1
+      fi
+      for charger_file in 0072_charger_templates_variants.sql 0073_vestel_modbus_registers.sql 0082_vestel_modbus_spec_v115.sql; do
+        mark_applied "$DRIZZLE_MIG_DIR/$charger_file"
+      done
+    fi
+  fi
 
   # 0079 needs the setup columns. Repair a falsely tracked 0070 first, rather
   # than failing on 0079 before the post-loop readiness repair can run.

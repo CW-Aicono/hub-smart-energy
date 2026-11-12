@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
-function fixture(failRelease = false) {
+function fixture(failRelease = false, failCharger = false) {
   const dir = mkdtempSync(join(tmpdir(), "live-runner-")); dirs.push(dir);
   for (const folder of ["bin", "scripts", "supabase/deploy", "supabase/migrations", "drizzle/migrations", "supabase/functions/_shared", "supabase/functions/support-session-impersonate", "supabase/functions/generate-monthly-invoices", "supabase/functions/ocpp-central", "supabase/functions/partner-create-tenant", "supabase/functions/license-sale", "supabase/functions/automation-scheduler", "supabase/functions/gateway-ingest"]) mkdirSync(join(dir, folder), { recursive: true });
   for (const file of ["drizzle/migrations/0090_package_fixed_terms_total_price.sql", "supabase/deploy/package-fixed-terms-ready.sql","drizzle/migrations/0089_deploy_audit_billing_security.sql", "supabase/deploy/deploy-audit-ready.sql", "drizzle/migrations/0088_manual_invoice_booking_options.sql", "supabase/deploy/manual-invoice-ready.sql", "scripts/apply-migrations.sh", "supabase/deploy/tenant-setup-ready.sql", "supabase/deploy/live-release-check.sql", "supabase/deploy/verify-live-release.sh", "drizzle/migrations/0070_tenant_setup_phase.sql", "drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql", "drizzle/migrations/0072_charger_templates_variants.sql", "drizzle/migrations/0073_vestel_modbus_registers.sql", "drizzle/migrations/0074_package_sale_corrections_yearly.sql", "drizzle/migrations/0075_package_effective_entitlements.sql", "drizzle/migrations/0076_package_correction_security_guard.sql", "drizzle/migrations/0077_package_correction_collective_invoice_guard.sql", "drizzle/migrations/0078_package_correction_fail_closed_auth.sql", "drizzle/migrations/0079_tenant_setup_deploy_contract.sql", "drizzle/migrations/0083_effective_modules_auth_fix.sql", "supabase/deploy/package-entitlements-ready.sql", "supabase/deploy/package-corrections-ready.sql", "supabase/functions/_shared/supportSessionKind.ts"]) copyFileSync(file, join(dir,file));
@@ -16,6 +16,7 @@ function fixture(failRelease = false) {
   writeFileSync(join(dir,"supabase/functions/gateway-ingest/index.ts"), 'entitlement_enabled');
   writeFileSync(join(dir,"supabase/functions/generate-monthly-invoices/index.ts"), "session_kind");
   writeFileSync(join(dir,"supabase/functions/ocpp-central/index.ts"), "supports_connector_lock");
+  for (const file of ["supabase/deploy/charger-templates-ready.sql", "drizzle/migrations/0082_vestel_modbus_spec_v115.sql"]) copyFileSync(file, join(dir,file));
   const docker = join(dir,"bin/docker");
   writeFileSync(docker, `#!/usr/bin/env bash
 set -eu
@@ -26,7 +27,11 @@ if [[ "$*" == *" -c "* ]]; then
 fi
 input="$(cat)"
 printf '%s\\n' "$input" >> "$REPO_ROOT/queries.log"
-if [[ "$input" == *"AS package_fixed_terms_ready"* ]]; then
+if [[ "$input" == *"AS charger_templates_ready"* ]]; then
+  if [ -f "$REPO_ROOT/charger_ready" ] && [ "${failCharger ? "1" : "0"}" = 0 ]; then echo t; else echo f; fi
+elif [[ "$input" == *"28.07.2025, modellunabhängig"* ]]; then
+  touch "$REPO_ROOT/charger_ready"
+elif [[ "$input" == *"AS package_fixed_terms_ready"* ]]; then
   if [ -f "$REPO_ROOT/fixed_ready" ]; then echo t; else echo f; fi
 elif [[ "$input" == *"package_fixed_terms_v1450: active"* ]]; then
   touch "$REPO_ROOT/fixed_ready"
@@ -56,6 +61,30 @@ fi
   return { dir, run: () => execFileSync("bash", [join(dir,"scripts/apply-migrations.sh")], { env: {...process.env, REPO_ROOT: dir, PATH: `${join(dir,"bin")}:${process.env.PATH}`}, encoding: "utf8", stdio: "pipe" }) };
 }
 describe("live migration runner release gate", () => {
+  it("repairs tracked charger columns/templates and restores latest Vestel FC 0x04 last", () => {
+    const {dir,run} = fixture(); run();
+    expect(existsSync(join(dir,"charger_ready"))).toBe(true);
+    const queries = readFileSync(join(dir,"queries.log"),"utf8");
+    expect(queries.indexOf('ADD COLUMN IF NOT EXISTS charger_model_id')).toBeGreaterThan(0);
+    expect(queries.indexOf('28.07.2025, modellunabhängig')).toBeGreaterThan(queries.indexOf('Vestel EVC04 Modbus TCP Specification v1.8'));
+    expect(existsSync(join(dir,"notified"))).toBe(true);
+  });
+  it("does not replay templates when actual readiness passes, including a second deploy", () => {
+    const {dir,run} = fixture(); run();
+    writeFileSync(join(dir,"queries.log"),""); run();
+    expect(readFileSync(join(dir,"queries.log"),"utf8")).not.toContain('ADD COLUMN IF NOT EXISTS charger_model_id');
+  });
+  it("stops before activation/cache reload when charger repair leaves missing catalog data", () => {
+    const {dir,run} = fixture(false,true);
+    expect(run).toThrow();
+    expect(existsSync(join(dir,"notified"))).toBe(false);
+  });
+  it("refuses a missing latest register repair file", () => {
+    const {dir,run} = fixture();
+    rmSync(join(dir,"drizzle/migrations/0082_vestel_modbus_spec_v115.sql"));
+    expect(run).toThrow();
+    expect(existsSync(join(dir,"notified"))).toBe(false);
+  });
   it("repairs fixed term and negotiated price drift despite tracking", () => {
     const {dir,run} = fixture(); run();
     expect(existsSync(join(dir,"fixed_ready"))).toBe(true);
