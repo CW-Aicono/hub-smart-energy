@@ -20,6 +20,8 @@ for file in \
   drizzle/migrations/0083_effective_modules_auth_fix.sql \
   drizzle/migrations/0088_manual_invoice_booking_options.sql \
   drizzle/migrations/0089_deploy_audit_billing_security.sql \
+  drizzle/migrations/0090_package_fixed_terms_total_price.sql \
+  supabase/deploy/package-fixed-terms-ready.sql \
   supabase/deploy/deploy-audit-ready.sql \
   supabase/deploy/manual-invoice-ready.sql \
   supabase/deploy/package-entitlements-ready.sql \
@@ -58,6 +60,11 @@ fi
 audit_ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/deploy-audit-ready.sql")"
 if [ "$audit_ready" != 't' ]; then
   printf 'FEHLER: Abrechnungs-/Sicherheitskorrekturen fehlen.\n' >&2
+  exit 1
+fi
+fixed_ready="$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -At < "$REPO_ROOT/supabase/deploy/package-fixed-terms-ready.sql")"
+if [ "$fixed_ready" != 't' ]; then
+  printf 'FEHLER: Paketlaufzeiten/Gesamtpreis unvollstaendig.\n' >&2
   exit 1
 fi
 docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$REPO_ROOT/supabase/deploy/live-release-check.sql"

@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.45.0 – 12.11.2026
+- Paketvoraussetzungen und Doppelbuchungsschutz berücksichtigen laufende feste/Einrichtungs-Laufzeiten; Tenant-Zeilensperre serialisiert parallele Buchungen. Kein automatischer Eingriff in bestehende Hagemann-Verträge (nur Live, hier nicht vorhanden).
+- Direkter verhandelter Gesamtpreis für gemeinsame Einmalbuchungen, centgenaue Positionsaufteilung und atomare Speicherung von Betrag/Laufzeit; EK bleibt unverändert. Fehlbuchungsrücknahme blockiert nicht mehr an bereits stornierten Belegen und verändert keine ausgestellten Dokumente.
+- Migration 0090, tatsächliche Live-Readiness und Drift-Reparatur; Handbuch vier Sprachen. Live-Datenbank muss vor Frontend-Aktivierung aktualisiert werden.
+
 ## v1.44.2 – 12.11.2026
 - Übergabe berücksichtigt unbezahlte feste Einmal-Laufzeiten und setzt deren Enddatum relativ zur Übergabe neu; zurückgenommene Fehlbuchungen bleiben ausgeschlossen. Laufzeitpflege hebt bestehende Kündigungen nicht auf; Autorisierung fail-closed.
 - Partner-Stammdaten erhalten separat gepflegte Rechnungs-Bankdaten bei leeren Eingaben; Lesefehler verhindern das Überschreiben. Eichrecht-Abschluss nutzt vorhandene Spalten, bricht bei fehlenden Messdaten ab und prüft Benutzerzugriff per RLS. Unsigned bleibt unsigned.

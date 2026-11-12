@@ -6915,6 +6915,7 @@ export type Database = {
           id: string
           label: string
           list_sale_price: number | null
+          negotiated_once_total: number | null
           next_period: string | null
           partner_id: string | null
           payment_method: string
@@ -6944,6 +6945,7 @@ export type Database = {
           id?: string
           label: string
           list_sale_price?: number | null
+          negotiated_once_total?: number | null
           next_period?: string | null
           partner_id?: string | null
           payment_method?: string
@@ -6973,6 +6975,7 @@ export type Database = {
           id?: string
           label?: string
           list_sale_price?: number | null
+          negotiated_once_total?: number | null
           next_period?: string | null
           partner_id?: string | null
           payment_method?: string
@@ -16822,6 +16825,23 @@ export type Database = {
         }
         Returns: string
       }
+      finalize_license_sale_total: {
+        Args: {
+          p_code: string
+          p_discount: number
+          p_kind: string
+          p_months: number
+          p_payment: string
+          p_price: number
+          p_quantity: number
+          p_reason: string
+          p_request: string
+          p_start: string
+          p_tenant: string
+          p_total: number
+        }
+        Returns: string
+      }
       find_duplicate_meters: {
         Args: never
         Returns: {
@@ -17233,6 +17253,10 @@ export type Database = {
       license_period_end: {
         Args: { p_cadence: string; p_day: string }
         Returns: string
+      }
+      license_sale_covers_booking: {
+        Args: { p_sale: string }
+        Returns: boolean
       }
       license_term_end: {
         Args: { p_months: number; p_start: string }

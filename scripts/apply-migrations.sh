@@ -531,6 +531,14 @@ if [ -f "$REPO_ROOT/supabase/deploy/deploy-audit-ready.sql" ]; then
     mark_applied "$DRIZZLE_MIG_DIR/0089_deploy_audit_billing_security.sql"
   fi
 fi
+if [ -f "$REPO_ROOT/supabase/deploy/package-fixed-terms-ready.sql" ]; then
+  fixed_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/package-fixed-terms-ready.sql")"
+  if [ "$fixed_ready" != 't' ]; then
+    log "Reparatur: feste Paketlaufzeiten/Gesamtpreis unvollstaendig"
+    run_migration_with_autoheal "$DRIZZLE_MIG_DIR/0090_package_fixed_terms_total_price.sql" || exit 1
+    mark_applied "$DRIZZLE_MIG_DIR/0090_package_fixed_terms_total_price.sql"
+  fi
+fi
 if [ -f "$REPO_ROOT/supabase/deploy/verify-live-release.sh" ]; then
   # Existing protected main workflow already imports this runner from staging.
   # Keep the mandatory gate here so older deploy.sh versions cannot bypass it.

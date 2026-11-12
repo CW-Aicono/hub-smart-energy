@@ -1,5 +1,10 @@
 # Versionshinweise
 
+## v1.45.0 – 12.11.2026
+- Feste Paketlaufzeiten zählen bei Voraussetzungen und schützen vor erneuten Doppelbuchungen.
+- Einmalbuchungen erlauben einen vereinbarten Gesamtpreis direkt, beispielsweise 6.000,00 € für 60 Monate; EK bleibt unverändert.
+- Fehlbuchungen können nach Stornierung ausgestellter Rechnungen zurückgenommen werden; historische Belege bleiben erhalten.
+
 ## v1.44.2 – 12.11.2026
 - Einmalbuchungen in Einrichtung werden bei Übergabe abgerechnet; bestehende Kündigungen bleiben bei Laufzeitpflege erhalten.
 - Rechnungs-Bankdaten bleiben bei leeren Partner-Stammdaten erhalten. Fehler beim Eichrecht-Abschluss und bei langen Tagesanalysen korrigiert.

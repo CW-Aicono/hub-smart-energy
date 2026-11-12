@@ -631,6 +631,13 @@
       "when": 1794416089992,
       "tag": "0089_deploy_audit_billing_security",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1794491644452,
+      "tag": "0090_package_fixed_terms_total_price",
+      "breakpoints": true
     }
   ]
 }

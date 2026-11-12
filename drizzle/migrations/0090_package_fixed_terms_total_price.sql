@@ -1,0 +1,34 @@
+ALTER TABLE public.license_sales ADD COLUMN IF NOT EXISTS negotiated_once_total numeric(14,2);
+DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='license_sales_negotiated_once_total_check' AND conrelid='public.license_sales'::regclass) THEN ALTER TABLE public.license_sales ADD CONSTRAINT license_sales_negotiated_once_total_check CHECK (negotiated_once_total IS NULL OR (negotiated_once_total>=0 AND negotiated_once_total<=100000000 AND cadence='once' AND product_code<>'setup')); END IF; END $$;
+CREATE OR REPLACE FUNCTION public.license_sale_covers_booking(p_sale uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$ SELECT EXISTS(SELECT 1 FROM license_sales s JOIN tenants t ON t.id=s.tenant_id WHERE s.id=p_sale AND NOT EXISTS(SELECT 1 FROM license_sale_corrections c WHERE c.sale_id=s.id AND c.after_data->>'action'='cancel_mistake') AND (s.ended_on IS NULL OR s.ended_on>=(now() AT TIME ZONE 'Europe/Berlin')::date OR (t.setup_status='setup' AND s.auto_renew=false AND s.term_months IS NOT NULL AND s.ended_on=license_term_end(s.starts_on,s.term_months)))) $$;
+REVOKE ALL ON FUNCTION public.license_sale_covers_booking(uuid) FROM PUBLIC,anon,authenticated;
+DO $$ DECLARE d text; BEGIN
+SELECT pg_get_functiondef('public.preflight_license_sale(uuid,text,text,integer,text,numeric,date,text,uuid)'::regprocedure) INTO d;
+d:=replace(d,'SELECT * INTO t FROM tenants WHERE id=p_tenant AND deleted_at IS NULL;','SELECT * INTO t FROM tenants WHERE id=p_tenant AND deleted_at IS NULL FOR UPDATE;');
+d:=replace(d,'can_portal_write(auth.uid(),''commercial'') OR can_manage_partner_billing(t.partner_id)','coalesce(can_portal_write(auth.uid(),''commercial''),false) OR coalesce(can_manage_partner_billing(t.partner_id),false)');
+d:=replace(d,'s.ended_on IS NULL','public.license_sale_covers_booking(s.id)');
+d:=replace(d,'ended_on IS NULL','public.license_sale_covers_booking(license_sales.id)'); EXECUTE d;
+SELECT pg_get_functiondef('public.validate_package_sale_input(text,text,integer,uuid)'::regprocedure) INTO d; d:=replace(d,'ended_on IS NULL','public.license_sale_covers_booking(license_sales.id)'); EXECUTE d;
+SELECT pg_get_functiondef('public.bill_catalog_license_sale(uuid,date,boolean)'::regprocedure) INTO d;
+d:=replace(d,'a:=license_discount_period_amount(s.sale_price,s.list_sale_price,s.quantity,p_start,e,c,s.discount_starts_on,s.discount_ends_on);','a:=coalesce(s.negotiated_once_total,license_discount_period_amount(s.sale_price,s.list_sale_price,s.quantity,p_start,e,c,s.discount_starts_on,s.discount_ends_on));'); EXECUTE d;
+SELECT pg_get_functiondef('public.cancel_mistaken_license_sale(uuid,text)'::regprocedure) INTO d;
+d:=replace(d,'AND (status<>''draft'' OR issued_at IS NOT NULL)','AND status<>''voided'' AND document_type<>''cancellation'' AND (status<>''draft'' OR issued_at IS NOT NULL)');
+d:=replace(d,'AND (status<>''draft'' OR issued_at IS NOT NULL OR lexware_invoice_id IS NOT NULL)','AND status<>''voided'' AND document_type<>''cancellation'' AND (status<>''draft'' OR issued_at IS NOT NULL OR lexware_invoice_id IS NOT NULL)');
+d:=replace(d,'FOR inv IN SELECT id,line_items FROM partner_customer_invoices WHERE','FOR inv IN SELECT id,line_items FROM partner_customer_invoices WHERE status=''draft'' AND issued_at IS NULL AND');
+d:=replace(d,'FOR inv IN SELECT id,line_items FROM tenant_invoices WHERE','FOR inv IN SELECT id,line_items FROM tenant_invoices WHERE status=''draft'' AND issued_at IS NULL AND lexware_invoice_id IS NULL AND'); EXECUTE d;
+END $$;
+CREATE OR REPLACE FUNCTION public.finalize_license_sale_total(p_tenant uuid,p_kind text,p_code text,p_quantity integer,p_price numeric,p_start date,p_payment text,p_request uuid,p_total numeric,p_months integer,p_discount numeric,p_reason text) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ DECLARE v_id uuid; s license_sales; BEGIN
+IF p_total IS NULL OR p_total<0 OR p_total>100000000 OR p_total<>round(p_total,2) OR p_months IS NULL OR p_months<1 OR p_months>240 OR length(trim(coalesce(p_reason,'')))<5 OR p_code='setup' THEN RAISE EXCEPTION 'Einmal-Gesamtpreis: Betrag, Laufzeit und Begründung erforderlich'; END IF;
+PERFORM pg_advisory_xact_lock(hashtextextended(p_request::text,0));
+v_id:=preflight_license_sale(p_tenant,p_kind,p_code,p_quantity,'once',p_price,p_start,p_payment,p_request);
+IF v_id IS NOT NULL THEN SELECT * INTO s FROM license_sales WHERE id=v_id; IF s.negotiated_once_total IS DISTINCT FROM p_total OR s.term_months IS DISTINCT FROM p_months THEN RAISE EXCEPTION 'Vorgangskennung bereits für anderen Gesamtpreis verwendet'; END IF; RETURN v_id; END IF;
+v_id:=finalize_license_sale_options(p_tenant,p_kind,p_code,p_quantity,'once',p_price,p_start,p_payment,p_request,p_discount,NULL,NULL,p_reason,'continue');
+UPDATE license_sales SET negotiated_once_total=p_total WHERE id=v_id;
+PERFORM set_license_sale_term(v_id,p_months,false); RETURN v_id;
+END $$;
+REVOKE ALL ON FUNCTION public.finalize_license_sale_total(uuid,text,text,integer,numeric,date,text,uuid,numeric,integer,numeric,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.finalize_license_sale_total(uuid,text,text,integer,numeric,date,text,uuid,numeric,integer,numeric,text) TO authenticated;
+COMMENT ON FUNCTION public.preflight_license_sale(uuid,text,text,integer,text,numeric,date,text,uuid) IS 'package_fixed_terms_v1450: active fixed terms, setup terms and duplicate serialization';
+COMMENT ON FUNCTION public.cancel_mistaken_license_sale(uuid,text) IS 'package_fixed_terms_v1450: preserves cancelled issued documents';
+COMMENT ON COLUMN public.license_sales.negotiated_once_total IS 'Explicit fixed end-customer total for the whole once term; null retains existing half-month calculation and partner EK stays unchanged.';
+NOTIFY pgrst,'reload schema';

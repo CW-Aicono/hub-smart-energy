@@ -1,5 +1,7 @@
 # Agent Rules
 
+- Package prerequisite and duplicate checks use license_sale_covers_booking for fixed/setup terms; negotiated once totals are stored separately and finalized transactionally, leaving wholesale billing unchanged — prevents false missing prerequisites and rounding drift.
+
 - Deploy audit fixes use idempotent migration replay plus actual-state readiness checks; invoice bank synchronization preserves separately maintained details on empty master inputs, and user-triggered evidence finalization checks session RLS before service writes — prevents rollout drift and cross-tenant overwrites.
 
 - Every change gets an entry in `CHANGELOG.md` (internal); customer-visible changes also in `docs/RELEASE_NOTES.md` — keeps team and customers informed.

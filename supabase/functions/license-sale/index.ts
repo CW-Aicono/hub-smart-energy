@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
-const schema = z.object({ tenant_id: z.string().uuid(), product_kind: z.enum(["module","package","unit"]), product_code: z.string().regex(/^[a-z0-9_]{2,64}$/), quantity: z.number().int().min(1).max(100000), cadence: z.enum(["once","monthly","quarterly","halfyearly","yearly"]), sale_price: z.number().finite().min(0).max(1000000), starts_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), payment_method: z.enum(["invoice","sepa"]), request_id: z.string().uuid(), price_reason: z.string().trim().max(500).optional(), term_months: z.number().int().min(1).max(240).nullable().optional(), auto_renew: z.boolean().optional(), discount_starts_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(), discount_ends_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(), discount_after: z.enum(["continue","end"]).optional(), customer_discount_pct: z.number().finite().min(0).max(100).optional() });
+const schema = z.object({ tenant_id: z.string().uuid(), product_kind: z.enum(["module","package","unit"]), product_code: z.string().regex(/^[a-z0-9_]{2,64}$/), quantity: z.number().int().min(1).max(100000), cadence: z.enum(["once","monthly","quarterly","halfyearly","yearly"]), sale_price: z.number().finite().min(0).max(1000000), starts_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), payment_method: z.enum(["invoice","sepa"]), request_id: z.string().uuid(), price_reason: z.string().trim().max(500).optional(), term_months: z.number().int().min(1).max(240).nullable().optional(), auto_renew: z.boolean().optional(), discount_starts_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(), discount_ends_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(), discount_after: z.enum(["continue","end"]).optional(), negotiated_once_total: z.number().finite().min(0).max(100000000).optional(), customer_discount_pct: z.number().finite().min(0).max(100).optional() });
 const endSchema = z.object({ action: z.literal("end"), sale_id: z.string().uuid() });
 Deno.serve(async req => {
   const json = (b: unknown, status=200) => new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type":"application/json" } });
@@ -35,7 +35,7 @@ Deno.serve(async req => {
       const [{data:mods},{data:defs},{data:sales},{data:bookings},{data:tms}]=await Promise.all([
         admin.from("pricing_package_modules").select("package_code,module_code"),
         admin.from("pricing_packages").select("code,always_active"),
-        admin.from("license_sales").select("product_kind,product_code").eq("tenant_id",sale.tenant_id).is("ended_on",null),
+        admin.from("license_sales").select("product_kind,product_code").eq("tenant_id",sale.tenant_id).or(`ended_on.is.null,ended_on.gte.${new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Berlin"})}`),
         admin.from("tenant_package_bookings").select("package_code").eq("tenant_id",sale.tenant_id).is("cancelled_at",null),
         admin.from("tenant_modules").select("module_code,is_enabled,individual_grant").eq("tenant_id",sale.tenant_id),
       ]);
@@ -70,7 +70,7 @@ Deno.serve(async req => {
     const args={p_tenant:p.tenant_id,p_kind:p.product_kind,p_code:p.product_code,p_quantity:p.quantity,p_cadence:p.cadence,p_price:p.sale_price,p_start:p.starts_on,p_payment:p.payment_method,p_request:p.request_id};
     const {data:existing,error:preflightError}=await client.rpc("preflight_license_sale",args);
     if(preflightError)return json({error:preflightError.message},400);
-    if(existing)return json({id:existing});
+    if(existing && p.negotiated_once_total === undefined)return json({id:existing});
     if(p.product_kind==="module") return json({error:"Neue Verkäufe nur als Paket"},400);
     let modules:string[]=[];
     if(p.product_kind==="package") {
@@ -88,6 +88,12 @@ Deno.serve(async req => {
       const err=await setModule(!!portal,p.tenant_id,code,true);
       if(err){await rollback();return json({error:err},400);}
       granted.push(code);
+    }
+    if(p.negotiated_once_total !== undefined){
+      if(!onceTerm || p.discount_starts_on || p.discount_ends_on || p.discount_after==="end") return json({error:"Gesamtpreis nur für Einmalzahlung ohne Rabattzeitraum"},400);
+      const {data,error}=await client.rpc("finalize_license_sale_total",{p_tenant:p.tenant_id,p_kind:p.product_kind,p_code:p.product_code,p_quantity:p.quantity,p_price:p.sale_price,p_start:p.starts_on,p_payment:p.payment_method,p_request:p.request_id,p_total:p.negotiated_once_total,p_months:p.term_months,p_discount:pct,p_reason:p.price_reason});
+      if(error){await rollback();return json({error:error.message},400);}
+      return json({id:data});
     }
     const {data,error}=await client.rpc("finalize_license_sale_options",{...args,p_after:p.discount_after??"continue",p_discount:pct,p_discount_from:p.discount_starts_on??null,p_discount_to:p.discount_ends_on??null,p_reason:p.price_reason??null});
     if(error){await rollback();return json({error:error.message},400);}

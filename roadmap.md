@@ -1,5 +1,11 @@
 # Roadmap
 
+## Hagemann: Paketabhängigkeiten und verhandelter Einmalpreis (12.11., Dirk)
+- [x] v1.45.0: Aktive feste/Einrichtungs-Laufzeiten bei Voraussetzungen und Doppelbuchungsschutz berücksichtigt; Rücknahme nach Rechnungsstorno geprüft, historische Belege unverändert.
+- [x] Direkter Gesamtpreis für Einmalbuchungen mit Laufzeit; 6.000,00 € für 60 Monate centgenau gespeichert und per SQL abgerechnet, Wiederholung erzeugt keinen zweiten Entwurf; EK unverändert.
+- [x] Migration 0090 in Cloud installiert, Buchungsfunktion ausgerollt; Live-Readiness/Drift-Reparatur und Handbuch vier Sprachen enthalten. 24 Tests bestanden; angemeldete Vorschau 6.000,00 € und Laufzeitende sichtbar geprüft, keine reale Buchung/Versand ausgelöst.
+- [ ] Extern: Hagemanns konkrete Live-Verträge und Stornofehler prüfen; in Cloud kein Hagemann-Tenant vorhanden.
+
 ## Bestätigte Deploy-Prüfbefunde beheben (11.11., Dirk)
 - [x] v1.44.2: Übergabe von Einmalbuchungen und Kündigungsschutz korrigiert; echte SQL-Regressionen, keine Änderung ausgestellter Rechnungen.
 - [x] Partner-Bankdaten erhalten, Eichrecht-Abschluss und lange Analysezeiträume korrigiert; gezielte Tests erfolgreich.

@@ -8,7 +8,7 @@ afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: tru
 function fixture(failRelease = false) {
   const dir = mkdtempSync(join(tmpdir(), "live-runner-")); dirs.push(dir);
   for (const folder of ["bin", "scripts", "supabase/deploy", "supabase/migrations", "drizzle/migrations", "supabase/functions/_shared", "supabase/functions/support-session-impersonate", "supabase/functions/generate-monthly-invoices", "supabase/functions/ocpp-central", "supabase/functions/partner-create-tenant", "supabase/functions/license-sale", "supabase/functions/automation-scheduler", "supabase/functions/gateway-ingest"]) mkdirSync(join(dir, folder), { recursive: true });
-  for (const file of ["drizzle/migrations/0089_deploy_audit_billing_security.sql", "supabase/deploy/deploy-audit-ready.sql", "drizzle/migrations/0088_manual_invoice_booking_options.sql", "supabase/deploy/manual-invoice-ready.sql", "scripts/apply-migrations.sh", "supabase/deploy/tenant-setup-ready.sql", "supabase/deploy/live-release-check.sql", "supabase/deploy/verify-live-release.sh", "drizzle/migrations/0070_tenant_setup_phase.sql", "drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql", "drizzle/migrations/0072_charger_templates_variants.sql", "drizzle/migrations/0073_vestel_modbus_registers.sql", "drizzle/migrations/0074_package_sale_corrections_yearly.sql", "drizzle/migrations/0075_package_effective_entitlements.sql", "drizzle/migrations/0076_package_correction_security_guard.sql", "drizzle/migrations/0077_package_correction_collective_invoice_guard.sql", "drizzle/migrations/0078_package_correction_fail_closed_auth.sql", "drizzle/migrations/0079_tenant_setup_deploy_contract.sql", "drizzle/migrations/0083_effective_modules_auth_fix.sql", "supabase/deploy/package-entitlements-ready.sql", "supabase/deploy/package-corrections-ready.sql", "supabase/functions/_shared/supportSessionKind.ts"]) copyFileSync(file, join(dir,file));
+  for (const file of ["drizzle/migrations/0090_package_fixed_terms_total_price.sql", "supabase/deploy/package-fixed-terms-ready.sql","drizzle/migrations/0089_deploy_audit_billing_security.sql", "supabase/deploy/deploy-audit-ready.sql", "drizzle/migrations/0088_manual_invoice_booking_options.sql", "supabase/deploy/manual-invoice-ready.sql", "scripts/apply-migrations.sh", "supabase/deploy/tenant-setup-ready.sql", "supabase/deploy/live-release-check.sql", "supabase/deploy/verify-live-release.sh", "drizzle/migrations/0070_tenant_setup_phase.sql", "drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql", "drizzle/migrations/0072_charger_templates_variants.sql", "drizzle/migrations/0073_vestel_modbus_registers.sql", "drizzle/migrations/0074_package_sale_corrections_yearly.sql", "drizzle/migrations/0075_package_effective_entitlements.sql", "drizzle/migrations/0076_package_correction_security_guard.sql", "drizzle/migrations/0077_package_correction_collective_invoice_guard.sql", "drizzle/migrations/0078_package_correction_fail_closed_auth.sql", "drizzle/migrations/0079_tenant_setup_deploy_contract.sql", "drizzle/migrations/0083_effective_modules_auth_fix.sql", "supabase/deploy/package-entitlements-ready.sql", "supabase/deploy/package-corrections-ready.sql", "supabase/functions/_shared/supportSessionKind.ts"]) copyFileSync(file, join(dir,file));
   writeFileSync(join(dir,"supabase/functions/support-session-impersonate/index.ts"), "resolveSessionKind sessionSchemaError");
   writeFileSync(join(dir,"supabase/functions/partner-create-tenant/index.ts"), 'setup_status: "setup"');
   writeFileSync(join(dir,"supabase/functions/license-sale/index.ts"), 'finalize_license_sale_options');
@@ -26,7 +26,11 @@ if [[ "$*" == *" -c "* ]]; then
 fi
 input="$(cat)"
 printf '%s\\n' "$input" >> "$REPO_ROOT/queries.log"
-if [[ "$input" == *"AS deploy_audit_ready"* ]]; then
+if [[ "$input" == *"AS package_fixed_terms_ready"* ]]; then
+  if [ -f "$REPO_ROOT/fixed_ready" ]; then echo t; else echo f; fi
+elif [[ "$input" == *"package_fixed_terms_v1450: active"* ]]; then
+  touch "$REPO_ROOT/fixed_ready"
+elif [[ "$input" == *"AS deploy_audit_ready"* ]]; then
   if [ -f "$REPO_ROOT/audit_ready" ]; then echo t; else echo f; fi
 elif [[ "$input" == *"deploy_audit_v1442: handover"* ]]; then
   touch "$REPO_ROOT/audit_ready"
@@ -52,6 +56,10 @@ fi
   return { dir, run: () => execFileSync("bash", [join(dir,"scripts/apply-migrations.sh")], { env: {...process.env, REPO_ROOT: dir, PATH: `${join(dir,"bin")}:${process.env.PATH}`}, encoding: "utf8", stdio: "pipe" }) };
 }
 describe("live migration runner release gate", () => {
+  it("repairs fixed term and negotiated price drift despite tracking", () => {
+    const {dir,run} = fixture(); run();
+    expect(existsSync(join(dir,"fixed_ready"))).toBe(true);
+  });
   it("repairs billing and security drift despite applied tracking", () => {
     const { dir, run } = fixture(); run();
     expect(existsSync(join(dir, "audit_ready"))).toBe(true);

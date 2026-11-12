@@ -162,6 +162,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground mb-2">{T("manual.aiconoInvoices.body" as any)}</p>
             <p className="text-sm text-muted-foreground mb-2">{T("manual.invoiceOptions1440")}</p>
             <p className="text-sm text-muted-foreground mb-2">{T("manual.deployAudit1442")}</p>
+            <p className="text-sm text-muted-foreground mb-2">{T("manual.fixedTerms1450")}</p>
             <h4 className="font-semibold mb-2 mt-3">{T("manual.complexNested.title" as any)}</h4>
             <p className="text-sm text-muted-foreground mb-2">{T("manual.complexNested.body" as any)}</p>
             <div className="bg-muted/50 p-3 rounded-lg text-sm">
