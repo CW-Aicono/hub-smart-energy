@@ -1,17 +1,16 @@
 # Roadmap
 
 ## Bestätigte Deploy-Prüfbefunde beheben (11.11., Dirk)
-- [ ] Übergabe von Einmalbuchungen und Erhalt bestehender Kündigungen korrigieren, SQL-Regressionen.
-- [ ] Partner-Bankdaten erhalten, Eichrecht-Abschluss und lange Analysezeiträume korrigieren.
-- [ ] Reparatur-Backup und Bridge-Serverdaten absichern; tatsächlichen Zustand im Live-Deploy prüfen.
-- [ ] Testfehler eingrenzen/beheben, betroffene Abläufe prüfen, Handbuch vier Sprachen und Version pflegen.
+- [x] v1.44.2: Übergabe von Einmalbuchungen und Kündigungsschutz korrigiert; echte SQL-Regressionen, keine Änderung ausgestellter Rechnungen.
+- [x] Partner-Bankdaten erhalten, Eichrecht-Abschluss und lange Analysezeiträume korrigiert; gezielte Tests erfolgreich.
+- [x] Migration 0089: Reparatur-Backup und Bridge-Daten geschützt, tatsächliche Installation auf Cloud geprüft; Live-Gate mit Drift-Reparatur enthalten.
+- [x] Alte Testvoraussetzungen korrigiert; vollständige Abdeckung in getrennten Gruppen statt speicherintensivem Gesamtlauf. Handbuch vier Sprachen und Version gepflegt.
 - [ ] Extern: separate Live-Datenbank und echter Live-Einladungsversand nach Deploy prüfen.
 
 ## Prüfung vor Live-Deploy (11.11., Dirk)
 - [x] Prüfung durchgeführt: Preview-Build OK; Kernprüfungen 406 bestanden / 1 fehlgeschlagen; Migrationsrunner und Rückfallprüfung im begrenzten Testlauf bestanden. Datenbankfunktion für neue Rechnung auf Staging korrekt geschützt vorhanden.
-- [ ] Deploy-Freigabe offen: Einmalbuchungen in Einrichtung werden bei Übergabe wegen gesetztem ended_on übersprungen; Partner-Stammdaten überschreiben leere Bankfelder; Eichrecht-Abschluss fragt eine fehlende Spalte ab. Korrekturen separat erforderlich.
-- [ ] Sicherheitsbefund offen: Reparatur-Backup-Tabelle ohne RLS mit anonymen Lese-/Schreibrechten; bridge_workers für alle angemeldeten Benutzer lesbar. Prüfung/Korrektur vor Freigabe erforderlich.
-- [ ] Vollsuite nicht grün: Gesamtversuch Speicherabbruch, Seiten-/Hooktests teilweise mit fehlenden Test-Providern; Setup-Pfadtest berücksichtigt die delegierte Erstellung nicht. Live-Datenbank, Live-Einladungsmail und Gateway weiterhin hier nicht Ende-zu-Ende verifiziert.
+- [x] Bestätigte Fehler und Sicherheitsbefunde in v1.44.2 korrigiert (siehe oben).
+- [ ] Externe Prüfung bleibt: separate Live-Datenbank, Live-Einladungsmail und reales Gateway nach Deploy; hier kein Zugriff.
 
 ## Supportkontakt (11.11., Dirk)
 - [x] v1.44.1: Supportadresse info@aicono.org, Telefon-Support entfernt; Handbuch vier Sprachen aktualisiert. Keine Datenbankänderung.

@@ -9,6 +9,7 @@ const { mockSupabase } = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 vi.mock("@/i18n/getT", () => ({ getT: () => (k: string) => k }));
+vi.mock("@/hooks/useTenant", () => ({ useTenant: () => ({ tenant: { id: "tenant-test" } }) }));
 
 import { useChargingTariffs } from "../useChargingTariffs";
 
@@ -40,12 +41,14 @@ beforeEach(() => vi.clearAllMocks());
 describe("useChargingTariffs", () => {
   it("fetches tariffs", async () => {
     const tariffs = [{ id: "t-1", name: "Standard", price_per_kwh: 0.35 }];
-    mockSupabase.from.mockReturnValue(chainMock(tariffs));
+    const chain = chainMock(tariffs);
+    mockSupabase.from.mockReturnValue(chain);
 
     const { result } = renderHook(() => useChargingTariffs(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.tariffs).toEqual(tariffs);
+    expect(chain.eq).toHaveBeenCalledWith("tenant_id", "tenant-test");
   });
 
   it("exposes mutation functions", () => {

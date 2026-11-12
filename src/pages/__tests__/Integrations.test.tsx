@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+const state = vi.hoisted(() => ({ integrations: [], categories: [] }));
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { id: "u1" }, loading: false }),
@@ -20,8 +21,8 @@ vi.mock("@/hooks/useTenant", () => ({
 }));
 vi.mock("@/hooks/useIntegrations", () => ({
   useIntegrations: () => ({
-    integrations: [],
-    categories: [],
+    integrations: state.integrations,
+    categories: state.categories,
     loading: false,
     createIntegration: vi.fn(),
     updateIntegration: vi.fn(),
@@ -37,6 +38,9 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@/components/dashboard/DashboardSidebar", () => ({ default: () => <div data-testid="sidebar" /> }));
 vi.mock("@/components/integrations/ScannerManagement", () => ({ ScannerManagement: () => <div /> }));
+vi.mock("@/components/settings/ApiSettings", () => ({ ApiSettings: () => null }));
+vi.mock("@/components/integrations/AiconoHubManager", () => ({ AiconoHubManager: () => null }));
+vi.mock("@/components/integrations/SmartMeterImport", () => ({ SmartMeterImport: () => null }));
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const W = ({ children }: any) => (
