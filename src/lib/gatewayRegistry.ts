@@ -41,13 +41,14 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
     type: "loxone_miniserver",
     label: "Loxone Miniserver",
     icon: "server",
-    description: "Loxone Miniserver über Cloud DNS",
+    description: "Loxone Miniserver über direkte Adresse (DynDNS/Portweiterleitung) oder Cloud DNS",
     edgeFunctionName: "loxone-api",
     supportsBackfill: true,
     configFields: [
       { name: "serial_number", label: "Seriennummer", placeholder: "504F94A0XXXX", type: "text", description: "Seriennummer des Loxone Miniservers", required: true },
       { name: "username", label: "Benutzername", placeholder: "admin", type: "text", required: true },
       { name: "password", label: "Passwort", placeholder: "••••••••", type: "password", required: true },
+      { name: "local_host", label: "Direkte Adresse / DynDNS (optional)", placeholder: "https://kunde.dyndns.de:8443", type: "text", description: "Öffentliche Adresse mit Port (Portweiterleitung am Router). Erforderlich, da Loxone Remote Connect keinen Drittzugriff mehr erlaubt.", required: false },
     ],
   },
   shelly_cloud: {

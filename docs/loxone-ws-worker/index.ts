@@ -468,6 +468,8 @@ function accumulatePulseTotal(entry: UuidEntry, totalValue: number, nowMs: numbe
 
 interface ConnState {
   serialNumber: string;
+  /** Optional direkte Adresse (DynDNS/feste IP + Port), umgeht Loxone Remote Connect. */
+  localHost: string | null;
   username: string;
   password: string;
   tenantId: string;
@@ -501,10 +503,26 @@ const connections = new Map<string, ConnState>(); // key = serial
 // ─── Loxone DNS-Auflösung (Remote Connect) ───────────────────────────────────
 
 const dnsCache = new Map<string, string>();
+
+/** Normalisiert eine direkte Adresse zu { host, secure }. http:// oder ohne Schema → WS, https:// → WSS (wie loxone-api). */
+export function parseDirectHost(raw: string | null | undefined): { host: string; secure: boolean } | null {
+  const v = (raw || "").trim();
+  if (!v) return null;
+  try {
+    const u = new URL(/^https?:\/\//i.test(v) ? v : `http://${v}`);
+    if (!u.host) return null;
+    return { host: u.host, secure: u.protocol !== "http:" };
+  } catch {
+    return null;
+  }
+}
+
 async function resolveLoxoneHost(serial: string): Promise<string | null> {
   if (dnsCache.has(serial)) return dnsCache.get(serial)!;
   try {
-    const r = await fetch(`https://dns.loxonecloud.com/${serial}`, {
+    // Loxone hat dns.loxonecloud.com durch connect.loxonecloud.com ersetzt.
+    // Seit 11/2026 sperrt Loxone Remote Connect für Drittsysteme (Code 418/403).
+    const r = await fetch(`https://connect.loxonecloud.com/${serial}`, {
       method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000),
     });
     const finalUrl = r.url;
@@ -514,12 +532,15 @@ async function resolveLoxoneHost(serial: string): Promise<string | null> {
       // Nur cachen, wenn der Redirect wirklich auf die dyndns-Adresse des Miniservers zeigt.
       // Andernfalls (z.B. wenn r.url noch die dns.loxonecloud.com-Ausgangs-URL ist) NICHT
       // fälschlich "dns.loxonecloud.com" als Ziel-Host speichern → sonst 404 bei LxCommunicator.open().
-      if (hostLc !== "dns.loxonecloud.com" && hostLc.includes(serial.toLowerCase())) {
+      if (hostLc !== "dns.loxonecloud.com" && hostLc !== "connect.loxonecloud.com" && hostLc.includes(serial.toLowerCase())) {
         dnsCache.set(serial, host);
         log("info", `[DNS] ${serial} → ${host}`);
         return host;
       }
       log("warn", `[DNS] ${serial} kein gültiger Redirect-Host (finalUrl=${finalUrl}) — Fallback`);
+      if (r.status === 403 || r.status === 418) {
+        log("error", `[DNS] ${serial}: Loxone Remote Connect verweigert Drittzugriff (HTTP ${r.status}) — direkte Adresse (DynDNS/Portweiterleitung) in der Integration hinterlegen`);
+      }
     }
   } catch (err) {
     log("warn", `[DNS] ${serial} fehlgeschlagen: ${(err as Error).message}`);
@@ -601,7 +622,9 @@ async function connect(state: ConnState): Promise<void> {
   // stage wird sowohl in bridgeLog(details.stage) als auch in der Konsole geloggt.
   let stage: string = "dns-resolve";
 
-  const host = await resolveLoxoneHost(state.serialNumber);
+  const direct = parseDirectHost(state.localHost);
+  const host = direct ? direct.host : await resolveLoxoneHost(state.serialNumber);
+  if (direct) log("info", `[WS] ${state.serialNumber} nutzt direkte Adresse ${direct.host} (${direct.secure ? "WSS" : "WS"})`);
   if (!host) {
     bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber, {
       stage,
@@ -615,7 +638,7 @@ async function connect(state: ConnState): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const LxCommunicator = require("lxcommunicator");
   const config = new LxCommunicator.WebSocketConfig(
-    LxCommunicator.WebSocketConfig.protocol.WSS,
+    direct && !direct.secure ? LxCommunicator.WebSocketConfig.protocol.WS : LxCommunicator.WebSocketConfig.protocol.WSS,
     state.serialNumber,
     "LoxoneWsWorker",
     LxCommunicator.WebSocketConfig.permission.APP,
@@ -1471,6 +1494,7 @@ async function reloadMeters(): Promise<void> {
     if (!state) {
       state = {
         serialNumber: serial,
+        localHost: group.config.local_host?.trim() || null,
         username: group.config.username,
         password: group.config.password,
         tenantId: group.tenantId,
@@ -1499,13 +1523,16 @@ async function reloadMeters(): Promise<void> {
       const passwordChanged = state.password !== group.config.password;
       const integrationChanged = state.locationIntegrationId !== group.integrationId;
       const tenantChanged = state.tenantId !== group.tenantId;
+      const newLocalHost = group.config.local_host?.trim() || null;
+      const hostChanged = state.localHost !== newLocalHost;
+      state.localHost = newLocalHost;
 
       state.username = group.config.username;
       state.password = group.config.password;
       state.tenantId = group.tenantId;
       state.locationIntegrationId = group.integrationId;
 
-      if (usernameChanged || passwordChanged || integrationChanged || tenantChanged) {
+      if (usernameChanged || passwordChanged || integrationChanged || tenantChanged || hostChanged) {
         log("warn", `[Reload] ${serial}: Konfiguration geändert — baue WS mit neuen Zugangsdaten neu auf`);
         bridgeLog("warn", "ws_config_changed", "Konfiguration geändert – WebSocket wird mit neuen Zugangsdaten neu aufgebaut", serial, {
           username_changed: usernameChanged,

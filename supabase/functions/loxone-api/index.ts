@@ -1063,7 +1063,7 @@ serve(async (req) => {
       if (shouldPersistReadings) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
       }
-      throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar.");
+      throw new Error("Miniserver über Loxone Remote Connect nicht erreichbar (Loxone erlaubt keinen Drittzugriff mehr). Bitte in der Integration eine direkte Adresse / DynDNS mit Portweiterleitung hinterlegen.");
     }
 
     const credentials = btoa(`${config.username}:${config.password}`);

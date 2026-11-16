@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.45.2 – 16.11.2026
+- Loxone Miniserver können über eine direkte Adresse / DynDNS mit Portweiterleitung angebunden werden, da Loxone Remote Connect keinen Fremdzugriff mehr erlaubt.
+
 ## v1.45.1 – 12.11.2026
 - Live-Deploy erkennt und ergänzt fehlende Ladepunkt-Felder und ELMI-/Gemini-Vorlagen trotz früherer Erledigt-Markierung.
 - Aktuelle Vestel-Register werden geprüft; bei verbleibenden Fehlern wird die neue Version nicht aktiviert. Bestehende Stationen und Tenant-Daten bleiben erhalten.

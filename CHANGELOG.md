@@ -1,5 +1,8 @@
 # Änderungsprotokoll (intern)
 
+## v1.45.2 – 16.11.2026
+- Loxone: optionales Feld `local_host` (Direkte Adresse/DynDNS) im Integrationsdialog; loxone-api/template-sync nutzten es bereits. WS-Worker nutzt `local_host` vorrangig (http/ohne Schema → WS, https → WSS), Reconnect bei Adressänderung, Resolver auf connect.loxonecloud.com, 403/418 explizit geloggt. Klarere Fehlermeldung bei gesperrtem Remote Connect. Worker muss auf Hetzner neu gebaut werden; keine DB-Änderung.
+
 ## v1.45.1 – 12.11.2026
 - Ladevorlagen-Readiness prüft acht Spalten, aktiven Vorlagenschutz, aktive ELMI/Gemini-Modelle sowie Vestel FC 0x04 und Schreibregister. Teilinstallationen liefern false statt Spaltenfehler.
 - Migrationsrunner repariert 0072/0073/0082 vor abhängigen Migrationen trotz Tracking; 0082 läuft zuletzt, danach erneute Prüfung. Keine automatische Änderung/Löschung von Stationen oder Tenant-Daten. Unreparierbare Katalogzustände stoppen den Deploy.

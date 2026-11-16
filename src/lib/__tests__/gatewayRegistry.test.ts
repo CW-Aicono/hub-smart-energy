@@ -72,7 +72,12 @@ describe("gatewayRegistry", () => {
       expect(names).toContain("serial_number");
       expect(names).toContain("username");
       expect(names).toContain("password");
-      expect(fields.every((f) => f.required)).toBe(true);
+      expect(fields.filter((f) => f.name !== "local_host").every((f) => f.required)).toBe(true);
+    });
+
+    it("loxone offers optional direct address (Remote Connect blocked for third parties)", () => {
+      const f = GATEWAY_DEFINITIONS.loxone_miniserver.configFields.find((x) => x.name === "local_host");
+      expect(f?.required).toBe(false);
     });
 
     it("omada has an optional device_id field", () => {
