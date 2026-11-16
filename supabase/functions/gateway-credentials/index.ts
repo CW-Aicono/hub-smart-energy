@@ -234,13 +234,16 @@ async function handleAssign(req: Request): Promise<Response> {
 }
 
 /** GET ?action=pending – list unassigned devices (heartbeat seen, no tenant). */
-async function handlePending(_req: Request): Promise<Response> {
-  // Pending devices are tenant-agnostic by definition; any authenticated user
-  // may list them so they can be claimed.
+async function handlePending(req: Request): Promise<Response> {
+  // Only signed-in tenant administrators may list claimable devices.
+  const ctx = await resolveTenant(req);
+  if (!ctx) return json({ error: "Unauthorized" }, 401);
   const svc = getServiceClient();
+  const { data: roles } = await svc.from("user_roles").select("role").eq("user_id", ctx.userId).in("role", ["admin", "super_admin"]);
+  if (!roles?.length) return json({ error: "Forbidden" }, 403);
   const { data, error } = await svc
     .from("gateway_devices")
-    .select("id, mac_address, gateway_username, last_heartbeat_at, local_ip")
+    .select("id, mac_address, gateway_username, last_heartbeat_at")
     .is("tenant_id", null)
     .not("mac_address", "is", null)
     .order("last_heartbeat_at", { ascending: false })

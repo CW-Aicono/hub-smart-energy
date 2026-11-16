@@ -1,3 +1,5 @@
+import { safeCell } from "@/lib/spreadsheetSafe";
+import { escapeHtml } from "@/lib/sanitizeHtml";
 import JSZip from "jszip";
 import * as XLSX from "@e965/xlsx";
 
@@ -13,12 +15,12 @@ export function buildCSV(
 ): string {
   if (!data.length) return "";
   const keys = Object.keys(headers || data[0]);
-  const headerRow = keys.map((k) => headers?.[k] ?? k).join(";");
+  const headerRow = keys.map((k) => String(safeCell(headers?.[k] ?? k))).join(";");
   const rows = data.map((row) =>
     keys.map((k) => {
       const val = row[k];
       if (val === null || val === undefined || val === "") return "";
-      const str = typeof val === "number" ? formatNumberDE(val) : String(val);
+      const str = typeof val === "number" ? formatNumberDE(val) : String(safeCell(String(val)));
       return str.includes(";") || str.includes('"') || str.includes("\n")
         ? `"${str.replace(/"/g, '""')}"`
         : str;
@@ -78,8 +80,8 @@ export function downloadXlsxMulti(
   for (const s of sheets) {
     if (!s.data.length) continue;
     const keys = Object.keys(s.headers || s.data[0]);
-    const headerRow = keys.map((k) => s.headers?.[k] ?? k);
-    const rows = s.data.map((r) => keys.map((k) => r[k] ?? ""));
+    const headerRow = keys.map((k) => safeCell(s.headers?.[k] ?? k));
+    const rows = s.data.map((r) => keys.map((k) => safeCell(r[k] ?? "")));
     const ws = XLSX.utils.aoa_to_sheet([headerRow, ...rows]);
     // Trim sheet name to 31 chars (Excel limit) and strip invalid characters
     const safeName = s.name.replace(/[\\/?*[\]:]/g, "_").slice(0, 31);
@@ -113,7 +115,7 @@ function buildBarChartSVG(data: { label: string; value: number; color: string }[
     return `
       <rect x="${x}" y="${y}" width="${barWidth}" height="${barH}" rx="4" fill="${d.color}" opacity="0.85"/>
       <text x="${x + barWidth / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="#333" font-weight="600">${formatDE(d.value)}</text>
-      <text x="${x + barWidth / 2}" y="${chartHeight - 6}" text-anchor="middle" font-size="10" fill="#666">${d.label}</text>
+      <text x="${x + barWidth / 2}" y="${chartHeight - 6}" text-anchor="middle" font-size="10" fill="#666">${escapeHtml(d.label)}</text>
     `;
   }).join("");
 
@@ -145,7 +147,7 @@ function buildDonutSVG(data: { label: string; value: number; color: string }[]):
     const pct = ((d.value / total) * 100).toFixed(1);
     return `<g transform="translate(175, ${i * 24 + 20})">
       <rect width="14" height="14" rx="3" fill="${d.color}" opacity="0.85"/>
-      <text x="20" y="11" font-size="11" fill="#333">${d.label}: ${pct}%</text>
+      <text x="20" y="11" font-size="11" fill="#333">${escapeHtml(d.label)}: ${pct}%</text>
     </g>`;
   }).join("");
 
@@ -182,7 +184,7 @@ export function buildStackedBarChartSVG(
     }).join("");
     return `${segments}
       <text x="${x + barWidth / 2}" y="${chartHeight - 25 - barH - 6}" text-anchor="middle" font-size="10" fill="#333" font-weight="600">${formatDE(total)}</text>
-      <text x="${x + barWidth / 2}" y="${chartHeight - 6}" text-anchor="middle" font-size="9" fill="#666">${d.label.substring(0, 10)}</text>`;
+      <text x="${x + barWidth / 2}" y="${chartHeight - 6}" text-anchor="middle" font-size="9" fill="#666">${escapeHtml(d.label.substring(0, 10))}</text>`;
   }).join("");
 
   return `<svg width="${chartWidth}" height="${chartHeight}" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto">${bars}</svg>`;
@@ -301,7 +303,7 @@ export function downloadPDF(
       const label = headers?.[k] ?? k;
       if (label === "Datum" && typeof val === "string" && val.includes("-")) val = formatDateDE(val as string);
       if (label === "Wert" && typeof val === "number") val = formatDE(val as number);
-      return `<td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${val}</td>`;
+      return `<td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${escapeHtml(val)}</td>`;
     }).join("") + "</tr>";
   }).join("");
 
@@ -312,7 +314,7 @@ export function downloadPDF(
     const pct = Math.round((l.count / maxLocCount) * 100);
     return `<div style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
-        <span style="color:#334155;font-weight:500">${l.name}</span>
+        <span style="color:#334155;font-weight:500">${escapeHtml(l.name)}</span>
         <span style="color:#64748b">${l.count} Einträge</span>
       </div>
       <div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden">
@@ -324,7 +326,7 @@ export function downloadPDF(
   const html = `<!DOCTYPE html>
 <html lang="de"><head>
 <meta charset="UTF-8"/>
-<title>${title || filename}</title>
+<title>${escapeHtml(title || filename)}</title>
 <style>
   @media print {
     body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -339,10 +341,10 @@ export function downloadPDF(
   <!-- Title bar -->
   <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px 28px;margin-bottom:24px;color:white;display:flex;align-items:center;justify-content:space-between">
     <div>
-      <div style="font-size:22px;font-weight:700;margin-bottom:4px">${title || "Energiedaten Export"}</div>
-      <div style="font-size:13px;opacity:0.8">Erstellt am ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })}${options?.tenantName ? ` · ${options.tenantName}` : ""}</div>
+      <div style="font-size:22px;font-weight:700;margin-bottom:4px">${escapeHtml(title || "Energiedaten Export")}</div>
+      <div style="font-size:13px;opacity:0.8">Erstellt am ${new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })}${options?.tenantName ? ` · ${escapeHtml(options.tenantName)}` : ""}</div>
     </div>
-    ${options?.logoUrl ? `<img src="${options.logoUrl}" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;border-radius:6px" />` : ""}
+    ${options?.logoUrl ? `<img src="${escapeHtml(options.logoUrl)}" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;border-radius:6px" />` : ""}
   </div>
 
   <!-- KPI Cards -->
@@ -384,7 +386,7 @@ export function downloadPDF(
   <div style="margin-bottom:24px">
     <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:12px">Detaildaten</div>
     <table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
-      <thead><tr>${headerLabels.map((h) => `<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">${h}</th>`).join("")}</tr></thead>
+      <thead><tr>${headerLabels.map((h) => `<th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">${escapeHtml(h)}</th>`).join("")}</tr></thead>
       <tbody>${tableRows}</tbody>
     </table>
   </div>

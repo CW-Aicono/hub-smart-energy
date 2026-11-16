@@ -14,7 +14,7 @@ const STATUS_MAP: Record<string, string> = {
 };
 
 Deno.serve(async (req) => {
-  { const __deny = await requireInternalOrUser(req, ["admin","super_admin","partner_admin"]); if (__deny) return __deny; }
+  { const __deny = await requireInternalOrUser(req, ["super_admin","portal_commercial"]); if (__deny) return __deny; }
   const cors = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: cors });
@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
 
         if (!res.ok) {
           const errBody = await res.text();
-          console.log(`Voucherlist ${voucherStatus} page ${page}: HTTP ${res.status} - ${errBody}`);
+          console.log(`Voucherlist ${voucherStatus} page ${page}: HTTP ${res.status}`);
           if (res.status === 429) {
             // Wait and retry once
             await sleep(2000);
@@ -85,7 +85,6 @@ Deno.serve(async (req) => {
             const retryContent = retryData.content || [];
             // Process retry content same as below
             if (page === 0 && retryContent.length > 0) {
-              console.log(`[DEBUG] Sample ${voucherStatus} voucher:`, JSON.stringify(retryContent[0], null, 2));
             }
             for (const voucher of retryContent) {
               if (!summaryByStatus[voucherStatus]) summaryByStatus[voucherStatus] = { count: 0, totalAmount: 0, openAmount: 0 };
@@ -113,7 +112,6 @@ Deno.serve(async (req) => {
 
         // DEBUG: Log first voucher to see all available fields
         if (page === 0 && content.length > 0) {
-          console.log(`[DEBUG] Sample ${voucherStatus} voucher:`, JSON.stringify(content[0], null, 2));
         }
 
         for (const voucher of content) {

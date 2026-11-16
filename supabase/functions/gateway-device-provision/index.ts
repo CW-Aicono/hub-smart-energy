@@ -160,7 +160,9 @@ Deno.serve(async (req) => {
     if (body?.discovery_id) {
       await sb.from("gateway_device_discoveries")
         .update({ is_provisioned: true })
-        .eq("id", body.discovery_id);
+        .eq("id", body.discovery_id)
+        .eq("tenant_id", device.tenant_id)
+        .eq("gateway_device_id", device.id);
     }
 
     await enqueueProvisionCommand(row);

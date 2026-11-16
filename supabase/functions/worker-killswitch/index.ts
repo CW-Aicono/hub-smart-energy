@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
 
   const { data, error } = await sb
     .from("worker_controls")
-    .select("worker_key, enabled, paused_at, note")
+    .select("worker_key, enabled, paused_at")
     .eq("worker_key", key)
     .maybeSingle();
 
@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
     // externe Worker nicht einfach weiterfeuern. Für den Loxone-WS-Worker gilt
     // deshalb: im Zweifel pausieren, damit sich die Cloud erholen kann.
     const failClosed = key === "loxone_ws_worker";
-    return new Response(JSON.stringify({ enabled: !failClosed, fallback: true, error: error.message }), {
+    return new Response(JSON.stringify({ enabled: !failClosed, fallback: true }), {
       status: 200,
       headers: { ...cors, "Content-Type": "application/json" },
     });
@@ -45,7 +45,6 @@ Deno.serve(async (req) => {
       worker_key: key,
       enabled: data?.enabled ?? true,
       paused_at: data?.paused_at ?? null,
-      note: data?.note ?? null,
     }),
     { status: 200, headers: { ...cors, "Content-Type": "application/json" } },
   );

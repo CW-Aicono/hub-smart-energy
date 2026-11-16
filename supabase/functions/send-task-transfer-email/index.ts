@@ -167,6 +167,19 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // Recipient must be a stored contact or a user of this tenant — no arbitrary addresses.
+    const recipient = String(body.contactEmail).trim().toLowerCase();
+    const [{ data: contact }, { data: member }] = await Promise.all([
+      serviceClient.from("external_contacts").select("id").eq("tenant_id", body.tenantId).ilike("email", recipient).limit(1),
+      serviceClient.from("profiles").select("id").eq("tenant_id", body.tenantId).ilike("email", recipient).limit(1),
+    ]);
+    if (!contact?.length && !member?.length) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Recipient is not a contact of this tenant" }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const branding = await getTenantBranding(body.tenantId);
 
     const resend = new Resend(RESEND_API_KEY);
@@ -180,7 +193,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("Task transfer email sent:", emailResponse);
 
-    return new Response(JSON.stringify({ success: true, data: emailResponse }), {
+    return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

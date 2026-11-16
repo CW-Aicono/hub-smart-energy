@@ -1,3 +1,4 @@
+import { safeCell } from "@/lib/spreadsheetSafe";
 import { useState, useMemo, useEffect } from "react";
 import { useMeters, Meter } from "@/hooks/useMeters";
 import { SortableHead as SortableHeadUI } from "@/components/ui/sortable-head";
@@ -764,7 +765,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                           const v = latestMeterValues.get(r.id)?.value;
                           const val = v != null ? v.toLocaleString("de-DE", { maximumFractionDigits: 2 }) : "";
                           return [r.name, room, r.energy_type ?? "", r.capture_type ?? "", val, unit]
-                            .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+                            .map((v) => `"${String(safeCell(String(v))).replace(/"/g, '""')}"`)
                             .join(";");
                         }),
                       )

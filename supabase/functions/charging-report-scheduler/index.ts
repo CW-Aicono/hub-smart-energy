@@ -1,4 +1,4 @@
-import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { resolveCaller, canAdminTenant } from "../_shared/authz.ts";
 // Charging Reporting: geplanter Versand
 // Cron-getriggert. Läuft fällige charging_report_schedules ab, generiert CSV
 // über die aktuellen charging_sessions + charging_invoices und verschickt sie
@@ -44,7 +44,8 @@ const METRIC_LABEL: Record<Metric, string> = {
 };
 
 function csvEscape(v: unknown) {
-  const s = v == null ? "" : String(v);
+  let s = v == null ? "" : String(v);
+  if (typeof v === "string" && !/^-?[\d.,\s]+$/.test(s) && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 function toCsv(rows: (string | number)[][]) {
@@ -79,7 +80,6 @@ function nextRun(freq: Frequency, from = new Date()): Date {
 }
 
 serve(async (req) => {
-  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -104,6 +104,17 @@ serve(async (req) => {
     }
   } catch { /* ignore */ }
 
+  // Users may only run a single schedule of a tenant they administer; full runs are cron-only.
+  const caller = await resolveCaller(req, supabase);
+  if (!caller) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (!caller.internal) {
+    if (!scheduleId) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const { data: sched } = await supabase.from("charging_report_schedules").select("tenant_id").eq("id", scheduleId).maybeSingle();
+    if (!sched || !(await canAdminTenant(supabase, caller, (sched as any).tenant_id))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
   let query = supabase
     .from("charging_report_schedules")
     .select("*")
@@ -113,7 +124,7 @@ serve(async (req) => {
 
   const { data: schedules, error: sErr } = await query;
   if (sErr) {
-    return new Response(JSON.stringify({ error: sErr.message }), {
+    return new Response(JSON.stringify({ error: "Database error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

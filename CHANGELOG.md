@@ -1,5 +1,11 @@
 # Änderungsprotokoll (intern)
 
+## v1.45.3 – 16.11.2026
+- Sicherheits-Härtung: neues `_shared/authz.ts` (Aufrufer-/Tenant-Prüfung serverseitig), über 30 Edge Functions prüfen Tenant/Rolle statt Client-Angaben (u. a. Support-Sitzung, Netzbetreiber-Abregelung, Lade-/Peak-Berichte, Sales, Wallbox-Vorlagen, Sentron/Schneider, Lexware, Ad-hoc-Zahlungen nur Admins, Gateway-Befehle/Loxone-Schreibaufträge/Ausführungslogs tenant-gebunden, ausstehende Gateways nur Admins, RFID-Wildcards, Fern-Stopp nur eigener Tenant).
+- E-Mails/Rechnungen/Berichte: HTML-Escaping und Farbprüfung; Einladungs-Weiterleitungen nur erlaubte AICONO-Adressen; Einladungen nur für eigenen Tenant.
+- Frontend: KI-/Berichtstexte via DOMPurify, Druckansichten (QR, Laderechnung, Energiedaten) escaped; CSV/XLSX neutralisieren Formeln.
+- DB 0091 (Community-Tabellen nur Tenant/Admin, Workspaces, Rechte-Tabellen, Firmware-/Loxone-Speicher) und 0092 (Modulpreise nur Preiskatalog-Berechtigte). Offen: OCPP-Backend-Secret und Ladepunkt-Passwörter (benötigen Server-Rollout).
+
 ## v1.45.2 – 16.11.2026
 - Loxone: optionales Feld `local_host` (Direkte Adresse/DynDNS) im Integrationsdialog; loxone-api/template-sync nutzten es bereits. WS-Worker nutzt `local_host` vorrangig (http/ohne Schema → WS, https → WSS), Reconnect bei Adressänderung, Resolver auf connect.loxonecloud.com, 403/418 explizit geloggt. Klarere Fehlermeldung bei gesperrtem Remote Connect. Worker muss auf Hetzner neu gebaut werden; keine DB-Änderung.
 

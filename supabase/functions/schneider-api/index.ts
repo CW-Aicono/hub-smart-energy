@@ -25,6 +25,7 @@ import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resolveCaller, canAccessTenant } from "../_shared/authz.ts";
 
 let corsHeaders: Record<string, string> = getCorsHeaders();
 
@@ -547,6 +548,9 @@ Deno.serve(async (req) => {
     if (!tenantId) {
       return json({ error: "Integration tenant not found" }, 400);
     }
+    const caller = await resolveCaller(req, supabase);
+    if (!caller) return json({ error: "Unauthorized" }, 401);
+    if (!(await canAccessTenant(supabase, caller, tenantId))) return json({ error: "Forbidden" }, 403);
 
     // Default endpoints based on research
     const apiUrl = config.api_url || "https://api.exchange.se.com";

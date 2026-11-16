@@ -1,8 +1,9 @@
+import { safeCell } from "@/lib/spreadsheetSafe";
 import { format } from "date-fns";
 
 /** Excel-taugliches CSV: UTF-8-BOM, Semikolon, deutsche Zahlen. */
 const esc = (v: unknown) => {
-  const s = v === null || v === undefined ? "" : String(v);
+  const s = v === null || v === undefined ? "" : String(safeCell(String(v)));
   return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

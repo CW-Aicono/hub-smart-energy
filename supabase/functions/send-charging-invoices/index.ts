@@ -1,4 +1,4 @@
-import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { resolveCaller, canAdminTenant, escapeHtml as escHtml } from "../_shared/authz.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
@@ -84,6 +84,19 @@ function buildInvoiceHTML(
   accentColor: string,
   invoiceDate: string,
 ): string {
+  // Escape every user/admin-controlled value before it reaches the HTML template.
+  invoiceNumber = escHtml(invoiceNumber);
+  userName = escHtml(userName);
+  userEmail = escHtml(userEmail);
+  userTags = userTags.map((t) => ({ tag: escHtml(t.tag), label: t.label == null ? null : escHtml(t.label) }));
+  sessions = sessions.map((x) => ({ ...x, id_tag: x.id_tag == null ? x.id_tag : escHtml(x.id_tag) }));
+  tariffName = escHtml(tariffName);
+  currency = escHtml(currency);
+  period = { from: period.from, to: period.to, label: escHtml(period.label) };
+  tenantName = escHtml(tenantName);
+  logoUrl = logoUrl ? escHtml(logoUrl) : null;
+  primaryColor = /^#[0-9a-fA-F]{3,8}$/.test(String(primaryColor)) ? primaryColor : "#1a365d";
+  accentColor = /^#[0-9a-fA-F]{3,8}$/.test(String(accentColor)) ? accentColor : "#2d8a6e";
   const currencySymbol = currency === "EUR" ? "€" : currency;
 
   const tagLabelMap = new Map<string, string | null>();
@@ -350,7 +363,6 @@ async function sendInvoiceById(
 }
 
 serve(async (req) => {
-  { const __deny = await requireInternalOrUser(req, ["admin","super_admin","partner_admin"]); if (__deny) return __deny; }
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -384,6 +396,22 @@ serve(async (req) => {
       if (Array.isArray(body.invoice_ids)) invoiceIdsToSend = body.invoice_ids.filter((x: any) => typeof x === "string");
       if (body.allow_draft === true) allowDraftSend = true;
     } catch { /* no body = cron run */ }
+
+    // Users act only on tenants they administer; untargeted runs are cron-only.
+    const caller = await resolveCaller(req, supabase);
+    const deny = (status: number, error: string) => new Response(JSON.stringify({ error }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!caller) return deny(401, "Unauthorized");
+    if (!caller.internal) {
+      if (mode === "send-selected") {
+        const { data: invRows } = await supabase.from("charging_invoices").select("id, tenant_id").in("id", invoiceIdsToSend);
+        if ((invRows ?? []).length !== new Set(invoiceIdsToSend).size) return deny(403, "Forbidden");
+        for (const r of invRows ?? []) {
+          if (!(await canAdminTenant(supabase, caller, (r as any).tenant_id))) return deny(403, "Forbidden");
+        }
+      } else if (!tenantFilter || !(await canAdminTenant(supabase, caller, tenantFilter))) {
+        return deny(403, "Forbidden");
+      }
+    }
 
     // ============ NEW: send-selected mode (per-invoice) ============
     if (mode === "send-selected") {

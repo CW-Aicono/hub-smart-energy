@@ -1,4 +1,4 @@
-import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { resolveCaller, canAccessTenant, serviceClient } from "../_shared/authz.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -13,8 +13,21 @@ import { getCorsHeaders } from "../_shared/cors.ts";
  *   action=discover – list devices available on the Powercenter
  */
 
+function isAllowedTarget(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    if (h === "localhost" || h.endsWith(".internal") || h.endsWith(".local") || h === "metadata.google.internal") return false;
+    if (/^(127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(h)) return false;
+    if (h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req: Request) => {
-  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   const cors = getCorsHeaders(req);
 
   if (req.method === "OPTIONS") {
@@ -23,17 +36,26 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const {
-      action = "sync",
-      integration_id,
-      config,
-      tenant_id,
-    } = body as {
-      action?: string;
-      integration_id?: string;
-      config?: Record<string, string>;
-      tenant_id?: string;
-    };
+    const { action = "sync" } = body as { action?: string };
+    const integration_id = (body?.integration_id ?? body?.locationIntegrationId) as string | undefined;
+    const jsonHdr = { ...cors, "Content-Type": "application/json" };
+    const svcDb = serviceClient();
+    const caller = await resolveCaller(req, svcDb);
+    if (!caller) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: jsonHdr });
+    if (!integration_id) return new Response(JSON.stringify({ error: "integration_id is required" }), { status: 400, headers: jsonHdr });
+    // Config and tenant always come from the stored integration, never from the request body.
+    const { data: li } = await svcDb
+      .from("location_integrations")
+      .select("id, config, location:locations!inner(tenant_id)")
+      .eq("id", integration_id)
+      .maybeSingle();
+    const tenant_id = (li as any)?.location?.tenant_id as string | undefined;
+    if (!li || !tenant_id) return new Response(JSON.stringify({ error: "Integration not found" }), { status: 404, headers: jsonHdr });
+    if (!(await canAccessTenant(svcDb, caller, tenant_id))) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: jsonHdr });
+    const config = ((li as any).config ?? {}) as Record<string, string>;
+    if (config?.api_url && !isAllowedTarget(config.api_url)) {
+      return new Response(JSON.stringify({ error: "api_url not allowed" }), { status: 400, headers: jsonHdr });
+    }
 
     if (!config?.api_url) {
       return new Response(
@@ -124,6 +146,7 @@ Deno.serve(async (req: Request) => {
             .from("meters")
             .select("id, tenant_id, energy_type")
             .eq("external_id", deviceId)
+            .eq("tenant_id", tenant_id)
             .limit(1);
 
           const meter = meters?.[0];

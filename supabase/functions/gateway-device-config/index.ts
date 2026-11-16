@@ -42,12 +42,8 @@ function isServiceRoleToken(token: string): boolean {
   if (!token) return false;
   if (GATEWAY_API_KEY && token === GATEWAY_API_KEY) return true;
   if (token === SERVICE_KEY) return true;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
-    return payload?.role === "service_role";
-  } catch {
-    return false;
-  }
+  // Never trust unverified JWT role claims.
+  return false;
 }
 
 async function resolveUserContext(token: string): Promise<{
@@ -248,7 +244,14 @@ Deno.serve(async (req) => {
   const deviceId = String(body?.device_id || "");
   if (!deviceId) return json({ error: "device_id is required" }, 400);
 
-  if (action === "get") return await handleGet(deviceId);
+  if (action === "get") {
+    if (!isService) {
+      const { data: dev } = await svc().from("gateway_devices").select("tenant_id").eq("id", deviceId).maybeSingle();
+      const ok = userCtx?.isSuperAdmin || ((dev as any)?.tenant_id && (dev as any).tenant_id === userCtx?.tenantId);
+      if (!dev || !ok) return json({ error: "Forbidden" }, 403);
+    }
+    return await handleGet(deviceId);
+  }
   if (action === "update") {
     return await handleUpdate({
       deviceId,

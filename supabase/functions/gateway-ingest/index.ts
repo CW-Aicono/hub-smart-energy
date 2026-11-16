@@ -2176,12 +2176,14 @@ async function handleAddonVersion(): Promise<Response> {
  * Validates either GATEWAY_API_KEY or an authenticated admin user JWT.
  * Returns null on success or a Response on failure.
  */
-async function validateApiKeyOrAdmin(req: Request): Promise<Response | null> {
-  // Try API key first
+// Returns the allowed tenant scope (null = global trusted key / portal admin) or an error response.
+async function validateApiKeyOrAdmin(req: Request): Promise<Response | { tenantId: string | null }> {
   const apiKeyResult = await validateApiKey(req);
-  if (!isAuthError(apiKeyResult)) return null; // API key is valid
+  if (!isAuthError(apiKeyResult)) {
+    if (apiKeyResult.pendingDevice) return json({ error: "Gateway not assigned to a tenant" }, 403);
+    return { tenantId: apiKeyResult.tenantId ?? null };
+  }
 
-  // Fall back to JWT auth for admin users
   const authHeader = req.headers.get("Authorization") || "";
   if (!authHeader.startsWith("Bearer ")) return apiKeyResult;
 
@@ -2194,23 +2196,23 @@ async function validateApiKeyOrAdmin(req: Request): Promise<Response | null> {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
-  // Check admin role
   const serviceClient = getSupabase();
-  const { data: roleData } = await serviceClient
+  const { data: roles } = await serviceClient
     .from("user_roles")
     .select("role")
     .eq("user_id", user.id)
-    .in("role", ["admin", "super_admin"])
-    .maybeSingle();
-
-  if (!roleData) return json({ error: "Forbidden – admin role required" }, 403);
-
-  return null; // Authenticated admin
+    .in("role", ["admin", "super_admin"]);
+  const roleSet = new Set((roles ?? []).map((r: any) => r.role));
+  if (roleSet.has("super_admin")) return { tenantId: null };
+  if (!roleSet.has("admin")) return json({ error: "Forbidden – admin role required" }, 403);
+  const { data: profile } = await serviceClient.from("profiles").select("tenant_id").eq("user_id", user.id).maybeSingle();
+  if (!profile?.tenant_id) return json({ error: "Forbidden" }, 403);
+  return { tenantId: profile.tenant_id };
 }
 
 async function handleGatewayCommand(req: Request): Promise<Response> {
-  const authErr = await validateApiKeyOrAdmin(req);
-  if (authErr) return authErr;
+  const scope = await validateApiKeyOrAdmin(req);
+  if (scope instanceof Response) return scope;
 
   let body: { device_id?: string; command?: string; params?: Record<string, unknown> };
   try {
@@ -2235,7 +2237,7 @@ async function handleGatewayCommand(req: Request): Promise<Response> {
     .eq("id", body.device_id)
     .single();
 
-  if (fetchErr || !device) {
+  if (fetchErr || !device || (scope.tenantId && device.tenant_id !== scope.tenantId)) {
     return json({ error: "Device not found" }, 404);
   }
 
@@ -2488,18 +2490,35 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
     return json({ error: "logs array is required" }, 400);
   }
 
+  if (_auth.pendingDevice) return json({ error: "Gateway not assigned to a tenant" }, 403);
   const supabase = getSupabase();
 
-  const rows = body.logs.map((log) => ({
+  // Tenant-scoped keys may only report on their own automations; timestamps are clamped to "now".
+  const autoIds = [...new Set(body.logs.map((l) => String(l.automation_id ?? "")).filter(Boolean))];
+  const { data: autoRows } = autoIds.length
+    ? await supabase.from("location_automations").select("id, tenant_id").in("id", autoIds)
+    : { data: [] as any[] };
+  const autoTenant = new Map<string, string>((autoRows ?? []).map((a: any) => [a.id, a.tenant_id]));
+  const nowMs = Date.now();
+  const scopedLogs = body.logs.filter((l) => {
+    const t = autoTenant.get(l.automation_id);
+    return !!t && (!_auth.tenantId || t === _auth.tenantId);
+  });
+  if (scopedLogs.length === 0) return json({ error: "No valid logs for this gateway" }, 403);
+
+  const rows = scopedLogs.map((log) => ({
     automation_id: log.automation_id,
-    tenant_id: log.tenant_id,
+    tenant_id: autoTenant.get(log.automation_id)!,
     trigger_type: log.trigger_type || "scheduled",
     status: log.status,
     error_message: log.error_message || null,
     actions_executed: log.actions_executed || null,
     duration_ms: log.duration_ms || null,
     execution_source: log.execution_source || "local",
-    executed_at: log.executed_at || new Date().toISOString(),
+    executed_at: (() => {
+      const t = log.executed_at ? Date.parse(log.executed_at) : NaN;
+      return Number.isFinite(t) && t <= nowMs ? new Date(t).toISOString() : new Date(nowMs).toISOString();
+    })(),
   }));
 
   const { error } = await supabase.from("automation_execution_log").insert(rows);
@@ -2855,6 +2874,9 @@ Deno.serve(async (req) => {
 /* ── Loxone Pending Writes (Cloud → Worker → Miniserver) ───────────────────── */
 
 async function handleListPendingWrites(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+  if (_auth.pendingDevice) return json({ error: "Gateway not assigned to a tenant" }, 403);
   try {
     const supabase = createServiceClient();
     const url = new URL(req.url);
@@ -2871,6 +2893,7 @@ async function handleListPendingWrites(req: Request): Promise<Response> {
       .order("requested_at", { ascending: true })
       .limit(limit);
     if (integrationId) q = q.eq("location_integration_id", integrationId);
+    if (_auth.tenantId) q = q.eq("tenant_id", _auth.tenantId);
 
     const { data, error } = await q;
     if (error) return json({ success: false, error: error.message }, 500);
@@ -2881,10 +2904,17 @@ async function handleListPendingWrites(req: Request): Promise<Response> {
 }
 
 async function handleAckPendingWrite(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+  if (_auth.pendingDevice) return json({ error: "Gateway not assigned to a tenant" }, 403);
   try {
     const supabase = createServiceClient();
     const body = await req.json().catch(() => ({}));
     const id = String(body?.id ?? "");
+    if (id && _auth.tenantId) {
+      const { data: own } = await supabase.from("loxone_pending_writes").select("tenant_id").eq("id", id).maybeSingle();
+      if (!own || own.tenant_id !== _auth.tenantId) return json({ success: false, error: "Forbidden" }, 403);
+    }
     const ok = Boolean(body?.success);
     const errorMessage = body?.error_message ? String(body.error_message).slice(0, 500) : null;
     const targetUuid = body?.target_uuid ? String(body.target_uuid) : null;

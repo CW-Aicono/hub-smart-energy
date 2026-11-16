@@ -193,10 +193,29 @@ Deno.serve(async (req) => {
       const canManage = su || (await hasGatewayManage(admin, user.id));
       if (!canManage) return json(403, { error: "integrations.edit permission required" });
 
+      // Every referenced instance, gateway, template-bound charge point and location must belong to the caller's tenant.
+      const ownsInstance = async (id: string) => {
+        const { data } = await admin.from("wallbox_modbus_instances").select("tenant_id").eq("id", id).maybeSingle();
+        return !!data && (su || (data as any).tenant_id === tenantId);
+      };
+      const ownsRow = async (table: string, id: string | null | undefined) => {
+        if (!id) return true;
+        const { data } = await admin.from(table).select("tenant_id").eq("id", id).maybeSingle();
+        return !!data && (su || (data as any).tenant_id === tenantId);
+      };
+      if (sub.length >= 2 && !(await ownsInstance(sub[1]))) return json(404, { error: "Instance not found" });
+
       if (req.method === "POST" && sub.length === 1) {
         const body = await req.json();
         if (!body.template_id || !body.gateway_id || !body.modbus_host) {
           return json(400, { error: "template_id, gateway_id, modbus_host required" });
+        }
+
+        if (!tenantId) return json(400, { error: "Tenant required" });
+        if (!(await ownsRow("gateway_devices", body.gateway_id)) ||
+            !(await ownsRow("charge_points", body.charge_point_id)) ||
+            !(await ownsRow("locations", body.location_id))) {
+          return json(403, { error: "Forbidden" });
         }
 
         // Fetch template for charge-point seeding
@@ -261,6 +280,9 @@ Deno.serve(async (req) => {
         for (const k of ["template_id", "modbus_host", "modbus_port", "unit_id", "label", "location_id"]) {
           if (k in body) updates[k] = body[k];
         }
+        if ("location_id" in updates && !(await ownsRow("locations", updates.location_id as string))) {
+          return json(403, { error: "Forbidden" });
+        }
         const { data: inst, error } = await admin
           .from("wallbox_modbus_instances")
           .update(updates)
@@ -317,6 +339,6 @@ Deno.serve(async (req) => {
     return json(404, { error: "Unknown route", path: sub });
   } catch (err) {
     console.error("[wallbox-template-control] error", err);
-    return json(500, { error: (err as Error).message });
+    return json(500, { error: "Internal error" });
   }
 });

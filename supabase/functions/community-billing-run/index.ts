@@ -50,7 +50,8 @@ Deno.serve(async (req) => {
     const { data: roles } = await admin
       .from("user_roles").select("role").eq("user_id", userData.user.id);
     const isSuper = (roles ?? []).some((r) => r.role === "super_admin");
-    if (!isSuper && profile?.tenant_id !== community.tenant_id) {
+    const isTenantAdmin = (roles ?? []).some((r) => r.role === "admin");
+    if (!isSuper && (profile?.tenant_id !== community.tenant_id || !isTenantAdmin)) {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

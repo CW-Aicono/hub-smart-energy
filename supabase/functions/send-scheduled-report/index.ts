@@ -89,7 +89,12 @@ function buildCSV(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
   const keys = Object.keys(rows[0]);
   const header = keys.join(";");
-  const body = rows.map((r) => keys.map((k) => String(r[k] ?? "")).join(";")).join("\n");
+  const cell = (v: unknown) => {
+    let s = String(v ?? "");
+    if (typeof v === "string" && !/^-?[\d.,\s]+$/.test(s) && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const body = rows.map((r) => keys.map((k) => cell(r[k])).join(";")).join("\n");
   return "\uFEFF" + header + "\n" + body;
 }
 
@@ -298,6 +303,16 @@ function buildReportHTML(
   primaryColor = "#1e293b",
   accentColor = "#334155",
 ): string {
+  // All configurable/user-provided values are HTML-escaped before interpolation.
+  const H = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  reportTitle = H(reportTitle);
+  tenantName = H(tenantName);
+  logoUrl = logoUrl && /^https:\/\//i.test(logoUrl) ? H(logoUrl) : null;
+  primaryColor = /^#[0-9a-fA-F]{3,8}$/.test(String(primaryColor)) ? primaryColor : "#1e293b";
+  accentColor = /^#[0-9a-fA-F]{3,8}$/.test(String(accentColor)) ? accentColor : "#334155";
+  energySummary = energySummary.map((e) => ({ ...e, label: H(e.label), color: /^#[0-9a-fA-F]{3,8}$/.test(e.color) ? e.color : "#64748b" }));
+  locationSummary = locationSummary.map((l) => ({ ...l, name: H(l.name) }));
+  rows = rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [H(k), typeof v === "string" ? H(v) : v])));
   // KPI cards
   const totalReadings = rows.length;
   const totalLocations = new Set(rows.map((r) => r["Standort"])).size;

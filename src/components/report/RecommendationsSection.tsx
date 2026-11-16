@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { sanitizeHtml } from "@/lib/sanitizeHtml";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, ClipboardList } from "lucide-react";
@@ -94,7 +95,7 @@ export function RecommendationsSection({
             <div
               className="prose prose-sm max-w-none"
               data-report-recommendations-html
-              dangerouslySetInnerHTML={{ __html: html }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }}
             />
             <AiDisclaimer text="Maßnahmenempfehlungen sind KI-generiert und ersetzen keine fachliche Sanierungsplanung." />
           </>

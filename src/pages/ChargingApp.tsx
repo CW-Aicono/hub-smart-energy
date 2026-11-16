@@ -1,4 +1,5 @@
 import { CHARGE_POINT_STATUS_META, getChargePointStatusMeta } from "@/lib/chargePointStatusPresentation";
+import { escapeHtml } from "@/lib/sanitizeHtml";
 import { normalizeConnectorStatus } from "@/lib/formatCharging";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useState, useEffect, useRef, useCallback, lazy, Suspense, useMemo } from "react";
@@ -1198,12 +1199,12 @@ function InvoicesTab({ invoices, sessions, chargePoints, tariff, tenantInfo, use
   const getCpName = (id: string | null) => chargePoints.find((cp) => cp.id === id)?.name || "—";
 
   const handlePrint = (inv: AppInvoice) => {
-    const currencySymbol = inv.currency === "EUR" ? "€" : inv.currency;
+    const currencySymbol = escapeHtml(inv.currency === "EUR" ? "€" : inv.currency);
     const invoiceDate = inv.issued_at ? format(new Date(inv.issued_at), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy");
-    const tenantName = tenantInfo?.name || "Ladeinfrastruktur-Betreiber";
-    const logoUrl = tenantInfo?.logo_url || null;
-    const primaryColor = tenantInfo?.branding?.primary_color || "#1e293b";
-    const accentColor = tenantInfo?.branding?.accent_color || "#334155";
+    const tenantName = escapeHtml(tenantInfo?.name || "Ladeinfrastruktur-Betreiber");
+    const logoUrl = tenantInfo?.logo_url && /^https?:\/\//i.test(tenantInfo.logo_url) ? escapeHtml(tenantInfo.logo_url) : null;
+    const primaryColor = /^#[0-9a-fA-F]{3,8}$/.test(String(tenantInfo?.branding?.primary_color ?? "")) ? tenantInfo!.branding!.primary_color : "#1e293b";
+    const accentColor = /^#[0-9a-fA-F]{3,8}$/.test(String(tenantInfo?.branding?.accent_color ?? "")) ? tenantInfo!.branding!.accent_color : "#334155";
     const pricePerKwh = tariff?.price_per_kwh ?? 0;
     const baseFee = tariff?.base_fee ?? 0;
     const idleFeePerMinute = tariff?.idle_fee_per_minute ?? 0;
@@ -1226,7 +1227,7 @@ function InvoicesTab({ invoices, sessions, chargePoints, tariff, tenantInfo, use
         <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${i + 1}</td>
         <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleDateString("de-DE")}</td>
         <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}${endDate ? " – " + endDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : ""}</td>
-        <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${getCpName(s.charge_point_id)}</td>
+        <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${escapeHtml(getCpName(s.charge_point_id))}</td>
         <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${durationStr}</td>
         <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${s.energy_kwh.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh</td>
         <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${energyCost.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}</td>
@@ -1240,7 +1241,7 @@ function InvoicesTab({ invoices, sessions, chargePoints, tariff, tenantInfo, use
     const grossAmount = netAmount + vatAmount;
 
     const printContent = `<!DOCTYPE html>
-<html lang="de"><head><meta charset="UTF-8"/><title>Rechnung ${inv.invoice_number}</title>
+<html lang="de"><head><meta charset="UTF-8"/><title>Rechnung ${escapeHtml(inv.invoice_number)}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
   @media print { body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none !important; } @page { margin: 12mm 15mm; size: A4; } }
@@ -1263,7 +1264,7 @@ function InvoicesTab({ invoices, sessions, chargePoints, tariff, tenantInfo, use
       </td>
       <td style="vertical-align:top;text-align:right">
         <div style="font-size:24px;font-weight:800;color:${primaryColor};margin-bottom:4px">RECHNUNG</div>
-        <div style="font-size:13px;color:#64748b">${inv.invoice_number || "Entwurf"}</div>
+        <div style="font-size:13px;color:#64748b">${escapeHtml(inv.invoice_number || "Entwurf")}</div>
       </td>
     </tr>
   </table>
@@ -1278,7 +1279,7 @@ function InvoicesTab({ invoices, sessions, chargePoints, tariff, tenantInfo, use
       </td>
       <td style="vertical-align:top;width:50%">
         <div style="font-size:10px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:6px;font-weight:600">Rechnungsempfänger</div>
-        <div style="font-size:14px;font-weight:600">${userEmail}</div>
+        <div style="font-size:14px;font-weight:600">${escapeHtml(userEmail)}</div>
       </td>
     </tr>
   </table>
@@ -1292,7 +1293,7 @@ function InvoicesTab({ invoices, sessions, chargePoints, tariff, tenantInfo, use
       </td>
       <td style="padding:14px 20px;border-right:1px solid #e2e8f0">
         <div style="font-size:10px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Rechnungsnummer</div>
-        <div style="font-size:13px;font-weight:600">${inv.invoice_number || "—"}</div>
+        <div style="font-size:13px;font-weight:600">${escapeHtml(inv.invoice_number || "—")}</div>
       </td>
       <td style="padding:14px 20px;border-right:1px solid #e2e8f0">
         <div style="font-size:10px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Tarif</div>
@@ -1357,16 +1358,16 @@ function InvoicesTab({ invoices, sessions, chargePoints, tariff, tenantInfo, use
   <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:28px">
     <div style="font-size:12px;font-weight:700;color:#1e293b;margin-bottom:8px">Zahlungsinformationen</div>
     <div style="font-size:12px;color:#64748b;line-height:1.6">
-      Bitte überweisen Sie den Gesamtbetrag unter Angabe der Rechnungsnummer <strong>${inv.invoice_number || "—"}</strong> auf das folgende Konto:<br/>
+      Bitte überweisen Sie den Gesamtbetrag unter Angabe der Rechnungsnummer <strong>${escapeHtml(inv.invoice_number || "—")}</strong> auf das folgende Konto:<br/>
       <strong>Kontoinhaber:</strong> ${tenantName}<br/>
-      <strong>Verwendungszweck:</strong> ${inv.invoice_number || "Laderechnung"}
+      <strong>Verwendungszweck:</strong> ${escapeHtml(inv.invoice_number || "Laderechnung")}
     </div>
   </div>
 
   <!-- Footer -->
   <div style="border-top:1px solid #e2e8f0;padding-top:16px;text-align:center">
     <div style="font-size:11px;color:#94a3b8">
-      ${tenantName} · Rechnung ${inv.invoice_number || "Entwurf"} · Erstellt am ${format(new Date(inv.created_at), "dd.MM.yyyy")}
+      ${tenantName} · Rechnung ${escapeHtml(inv.invoice_number || "Entwurf")} · Erstellt am ${format(new Date(inv.created_at), "dd.MM.yyyy")}
     </div>
     <div style="font-size:10px;color:#cbd5e1;margin-top:4px">Vielen Dank für die Nutzung unserer Ladeinfrastruktur.</div>
   </div>

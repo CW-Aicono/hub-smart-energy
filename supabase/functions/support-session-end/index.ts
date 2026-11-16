@@ -1,4 +1,4 @@
-import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { resolveCaller, isSuperAdmin } from "../_shared/authz.ts";
 // Edge Function: support-session-end
 // Beendet eine Remote-Support-Sitzung: markiert support_sessions.ended_at und
 // widerruft alle Refresh-Tokens des impersonierten Support-Users (globaler Sign-Out).
@@ -24,7 +24,6 @@ function json(body: unknown, status = 200) {
 }
 
 Deno.serve(async (req) => {
-  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -36,13 +35,19 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    const caller = await resolveCaller(req, admin);
+    if (!caller) return json({ error: "Unauthorized" }, 401);
 
     const { data: session, error: getErr } = await admin
       .from("support_sessions")
-      .select("id, impersonated_user_id, ended_at")
+      .select("id, impersonated_user_id, super_admin_user_id, ended_at")
       .eq("id", sessionId)
       .maybeSingle();
     if (getErr || !session) return json({ error: "Session not found" }, 404);
+    // Only the starting admin, the impersonated support user or a portal admin may end it.
+    const allowed = isSuperAdmin(caller) || caller.userId === session.super_admin_user_id ||
+      caller.userId === session.impersonated_user_id;
+    if (!allowed) return json({ error: "Forbidden" }, 403);
 
     if (!session.ended_at) {
       await admin
@@ -60,6 +65,7 @@ Deno.serve(async (req) => {
 
     return json({ ok: true });
   } catch (e) {
-    return json({ error: (e as Error).message }, 500);
+    console.error("[support-session-end]", e);
+    return json({ error: "Internal error" }, 500);
   }
 });

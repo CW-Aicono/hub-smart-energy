@@ -1,3 +1,4 @@
+import { safeCell, safeRows } from "@/lib/spreadsheetSafe";
 import { useEffect, useMemo, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -764,7 +765,7 @@ const ChargingReporting = () => {
 
   // ── Exports ────────────────────────────────────────────────────────────────
   function csvEscape(v: unknown) {
-    const s = v == null ? "" : String(v);
+    const s = v == null ? "" : String(safeCell(v as string));
     return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }
   function downloadCsv(filename: string, rows: (string | number)[][]) {
@@ -806,7 +807,7 @@ const ChargingReporting = () => {
       ["Ø kWh/Session", Number(kpi.avgKwh.toFixed(2))],
       ["Ø €/kWh (abgerechnet)", Number(kpi.avgPrice.toFixed(4))],
     ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(overview), "Übersicht");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(safeRows(overview)), "Übersicht");
 
     // Detail
     const detail = [
@@ -818,20 +819,20 @@ const ChargingReporting = () => {
         r.billedKwh > 0 ? Number((r.revenue / r.billedKwh).toFixed(4)) : "",
       ]),
     ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detail), "Detail");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(safeRows(detail)), "Detail");
 
     // Zeitverlauf
     const trend = [
       ["Datum", "Sessions", "Energie (kWh)", "Umsatz (€)"],
       ...timeSeries.map((r) => [r.date, r.sessions, Number(r.kwh.toFixed(2)), Number(r.revenue.toFixed(2))]),
     ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(trend), "Zeitverlauf");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(safeRows(trend)), "Zeitverlauf");
 
     // Heatmap
     const weekdays = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
     const header = ["Wochentag", ...Array.from({ length: 24 }, (_, h) => `${h}:00`)];
     const heat = [header, ...heatmap.grid.map((row, i) => [weekdays[i], ...row.map((v) => Number(v.toFixed(2)))])];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(heat), "Heatmap");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(safeRows(heat)), "Heatmap");
 
     XLSX.writeFile(wb, `ladeinfrastruktur-report_${dimension}_${metric}_${stamp()}.xlsx`);
     toast.success("XLSX-Datei erstellt");

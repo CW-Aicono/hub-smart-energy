@@ -1,3 +1,4 @@
+import { resolveCaller, canAccessTenant } from "../_shared/authz.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -285,6 +286,12 @@ serve(async (req) => {
       .eq("id", location_id)
       .single();
     if (locErr || !location) throw new Error("Location not found");
+    {
+      const caller = await resolveCaller(req, supabase);
+      if (!caller || !(await canAccessTenant(supabase, caller, location.tenant_id))) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
     if (!location.latitude || !location.longitude) throw new Error("Location has no coordinates");
 
     // Fetch ALL active arrays for this location

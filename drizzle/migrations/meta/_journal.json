@@ -638,6 +638,20 @@
       "when": 1794491644452,
       "tag": "0090_package_fixed_terms_total_price",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1794852929601,
+      "tag": "0091_security_hardening_rls_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1794853788451,
+      "tag": "0092_restrict_module_prices_read",
+      "breakpoints": true
     }
   ]
 }

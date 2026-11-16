@@ -1,3 +1,4 @@
+import { safeRows } from "@/lib/spreadsheetSafe";
 /**
  * Import/Export für Lade-Nutzer, Nutzergruppen und NFC-Tags.
  *
@@ -63,7 +64,7 @@ function downloadBlob(filename: string, blob: Blob) {
 }
 
 function writeSheet(rows: (string | number | null)[][], format: ExportFormat, filename: string) {
-  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const ws = XLSX.utils.aoa_to_sheet(safeRows(rows));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Daten");
   if (format === "csv") {

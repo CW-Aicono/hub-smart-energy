@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { sanitizeHtml } from "@/lib/sanitizeHtml";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
@@ -194,7 +195,7 @@ const PrivatReport = () => {
   .badge-green{background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:4px;font-size:9pt}
   .badge-yellow{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-size:9pt}
   .badge-red{background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:4px;font-size:9pt}
-</style></head><body>${reportRef.current.innerHTML}</body></html>`;
+</style></head><body>${sanitizeHtml(reportRef.current.innerHTML)}</body></html>`;
   };
 
   const handlePrint = () => {
@@ -377,7 +378,7 @@ const PrivatReport = () => {
                 {profile.aiSections.map((s) => aiTexts[s.key] ? (
                   <div key={s.key} className="page page-break">
                     <h2>{s.label}</h2>
-                    <div dangerouslySetInnerHTML={{ __html: aiTexts[s.key] }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(aiTexts[s.key]) }} />
                   </div>
                 ) : null)}
 

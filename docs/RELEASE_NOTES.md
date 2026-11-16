@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.45.3 – 16.11.2026
+- Sicherheitsupdate: strengere Zugriffsprüfungen zwischen Tenants, geschützte E-Mails, Berichte und Exporte. Modulpreise sehen nur noch Portal- und Partner-Berechtigte.
+
 ## v1.45.2 – 16.11.2026
 - Loxone Miniserver können über eine direkte Adresse / DynDNS mit Portweiterleitung angebunden werden, da Loxone Remote Connect keinen Fremdzugriff mehr erlaubt.
 

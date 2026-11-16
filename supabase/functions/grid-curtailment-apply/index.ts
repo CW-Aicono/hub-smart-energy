@@ -1,4 +1,4 @@
-import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { resolveCaller, canAdminTenant } from "../_shared/authz.ts";
 // K2 §14a EnWG — Wendet ein Curtailment-Event auf alle SteuVE-Geräte einer Connection an.
 //
 // Eingabe: { event_id: uuid }  ODER  { connection_id: uuid }  (letzteres: nimmt aktuelles Event)
@@ -71,6 +71,7 @@ async function applyEvent(eventId: string) {
     const { data: cps } = await admin
       .from("charge_points")
       .select("id, ocpp_id, ws_connected, supports_charging_profile, max_power_kw")
+      .eq("tenant_id", ev.tenant_id)
       .in("id", cpIds);
     for (const cp of cps ?? []) cpMap.set(cp.id, cp);
   }
@@ -162,8 +163,11 @@ async function applyEvent(eventId: string) {
 }
 
 Deno.serve(async (req) => {
-  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const caller = await resolveCaller(req, admin);
+  if (!caller) {
+    return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
   try {
     const body = await req.json();
     let eventId: string | null = body.event_id ?? null;
@@ -187,6 +191,11 @@ Deno.serve(async (req) => {
       });
     }
 
+    const { data: evScope } = await admin.from("grid_curtailment_events").select("tenant_id").eq("id", eventId).maybeSingle();
+    if (!evScope || !(await canAdminTenant(admin, caller, evScope.tenant_id))) {
+      return new Response(JSON.stringify({ ok: false, error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const result = await applyEvent(eventId);
     return new Response(JSON.stringify({ ok: true, ...result }), {
       status: 200,
@@ -194,7 +203,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("[grid-curtailment-apply] error", e);
-    return new Response(JSON.stringify({ ok: false, error: (e as Error).message }), {
+    return new Response(JSON.stringify({ ok: false, error: "Internal error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -323,6 +323,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <p className="text-sm text-muted-foreground mt-2">{T("manual.chargerTemplates137")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.chargerDeploy1451")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.loxoneDirect1452")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{T("manual.security1453")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.vestelDlm1371")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.salesFlow")}</p>
             <p className="text-sm text-muted-foreground mt-2">{T("manual.billing.contractTerm")}</p>

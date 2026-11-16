@@ -709,7 +709,9 @@ async function handleRemoteCommand(
         .select("*, charge_points!inner(ocpp_id)")
         .eq("transaction_id", transactionId)
         .eq("status", "active")
-        .single();
+        .eq("tenant_id", tenantId)
+        .eq("charge_points.ocpp_id", chargePointOcppId)
+        .maybeSingle();
 
       if (!session) return { status: "Rejected", message: "No active session" };
 

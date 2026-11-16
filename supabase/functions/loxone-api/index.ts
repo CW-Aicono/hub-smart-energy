@@ -1,3 +1,4 @@
+import { isInternalCaller } from "../_shared/internalAuth.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { isWorkerPrimary } from "../_shared/workerStatus.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -910,19 +911,11 @@ serve(async (req) => {
     // Robust service-role detection: equality OR JWT payload role === "service_role".
     // Equality alone is brittle when keys are rotated or different deployment snapshots
     // hold different copies of SUPABASE_SERVICE_ROLE_KEY.
-    let isServiceRole = token === supabaseServiceKey;
-    if (!isServiceRole) {
-      try {
-        const part = token.split(".")[1];
-        if (part) {
-          const padded = part + "=".repeat((4 - (part.length % 4)) % 4);
-          const payload = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
-          if (payload?.role === "service_role") isServiceRole = true;
-        }
-      } catch { /* not a JWT, fall through */ }
-    }
+    // Only a real service/cron key counts as internal; JWT claims are never trusted unverified.
+    let isServiceRole = isInternalCaller(req);
 
     let userTenantId: string | null = null;
+    let callerIsAdmin = isServiceRole;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     if (isServiceRole) {
@@ -957,6 +950,8 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       userTenantId = profile?.tenant_id ?? null;
+      const { data: adminRow } = await supabase.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
+      callerIsAdmin = isSuperAdmin || !!adminRow;
       if (isSuperAdmin) {
         // Treat super-admin like service-role for downstream tenant checks
         isServiceRole = true;
@@ -2801,6 +2796,9 @@ serve(async (req) => {
     // ── ACTION: triggerUpdate ──
     if (action === "triggerUpdate") {
       const { confirmed } = requestBody;
+      if (!callerIsAdmin) {
+        return new Response(JSON.stringify({ success: false, error: "Nur Administratoren dürfen Firmware-Updates starten" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       if (!confirmed) {
         throw new Error("Update muss explizit bestätigt werden (confirmed: true)");
       }

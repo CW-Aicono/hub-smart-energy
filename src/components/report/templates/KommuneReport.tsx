@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { sanitizeHtml } from "@/lib/sanitizeHtml";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Input } from "@/components/ui/input";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
@@ -187,13 +188,14 @@ const KommuneReport = () => {
 
     // KI-Maßnahmen aus DOM einlesen
     const recHtml =
-      previewContainer?.querySelector("[data-report-recommendations-html]")?.innerHTML ?? "";
+      sanitizeHtml(previewContainer?.querySelector("[data-report-recommendations-html]")?.innerHTML ?? "");
 
     let contentHtml = reportRef.current.innerHTML;
     for (const [locId, svgHtml] of Object.entries(chartSvgs)) {
       const placeholder = `<!--chart-placeholder-${locId}-->`;
       contentHtml = contentHtml.replace(placeholder, svgHtml);
     }
+    contentHtml = sanitizeHtml(contentHtml);
     // Inject section charts at end of report (vor Per-Loc-Profilen wäre ideal, hier als Anhang Kostenanalyse)
     const chartsBlock = Object.entries(sectionChartSvgs)
       .map(([k, svg]) => `<div class="chart-container"><h3 style="font-size:11pt">${k}</h3>${svg}</div>`)
@@ -716,13 +718,13 @@ const KommuneReport = () => {
                 {aiTexts.vorwort && (
                   <div className="page page-break">
                     <h2>Vorwort</h2>
-                    <div dangerouslySetInnerHTML={{ __html: aiTexts.vorwort }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(aiTexts.vorwort) }} />
                   </div>
                 )}
                 {aiTexts.einleitung && (
                   <div className="page page-break">
                     <h2>Einleitung</h2>
-                    <div dangerouslySetInnerHTML={{ __html: aiTexts.einleitung }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(aiTexts.einleitung) }} />
                   </div>
                 )}
 
@@ -974,7 +976,7 @@ const KommuneReport = () => {
                 {aiTexts.ausblick && (
                   <div className="page page-break">
                     <h2>Ausblick</h2>
-                    <div dangerouslySetInnerHTML={{ __html: aiTexts.ausblick }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(aiTexts.ausblick) }} />
                   </div>
                 )}
               </div>

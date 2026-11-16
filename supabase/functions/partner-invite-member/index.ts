@@ -9,6 +9,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
 import { checkInviteConflict } from "../_shared/invite-conflict.ts";
 import { createSafeInviteLink } from "../_shared/inviteLink.ts";
+import { escapeHtml } from "../_shared/authz.ts";
 
 serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -107,7 +108,8 @@ serve(async (req: Request) => {
     if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY nicht konfiguriert.");
     const resend = new Resend(RESEND_API_KEY);
     const partnerName = (membership as any).partners?.name ?? "AICONO Partner";
-    const greeting = name ? `Hallo ${name},` : "Hallo,";
+    const greeting = name ? `Hallo ${escapeHtml(name)},` : "Hallo,";
+    const partnerNameHtml = escapeHtml(partnerName);
     const roleLabel = role === "partner_admin" ? "Partner-Admin" : "Partner-User";
 
     const emailRes = await resend.emails.send({
@@ -117,14 +119,14 @@ serve(async (req: Request) => {
       html: `<!DOCTYPE html><html><body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;">
   <div style="background:linear-gradient(135deg,#1a365d,#2d8a6e);padding:30px;border-radius:10px 10px 0 0;">
     <h1 style="color:white;margin:0;font-size:22px;">Willkommen im AICONO Partner-Portal</h1>
-    <div style="color:rgba(255,255,255,.8);font-size:13px;margin-top:4px;">${partnerName}</div>
+    <div style="color:rgba(255,255,255,.8);font-size:13px;margin-top:4px;">${partnerNameHtml}</div>
   </div>
   <div style="background:#f9fafb;padding:30px;border-radius:0 0 10px 10px;border:1px solid #e5e7eb;border-top:none;">
     <p>${greeting}</p>
-    <p>Sie wurden als <strong>${roleLabel}</strong> für <strong>${partnerName}</strong> eingeladen.</p>
+    <p>Sie wurden als <strong>${roleLabel}</strong> für <strong>${partnerNameHtml}</strong> eingeladen.</p>
     <p>Bitte legen Sie über den folgenden Link Ihr Passwort fest:</p>
     <p style="text-align:center;margin:24px 0;">
-      <a href="${actionLink}" style="display:inline-block;background:#1a365d;color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Passwort festlegen &amp; Anmelden</a>
+      <a href="${escapeHtml(actionLink)}" style="display:inline-block;background:#1a365d;color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Passwort festlegen &amp; Anmelden</a>
     </p>
     <p style="font-size:13px;color:#6b7280;">Der Link ist 7 Tage gültig.</p>
   </div></body></html>`,

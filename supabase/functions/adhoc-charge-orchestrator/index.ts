@@ -69,6 +69,12 @@ Deno.serve(async (req) => {
   if (!tenant_id) return jsonResp({ error: "No tenant (super-admin: bitte tenant_id im Body angeben)" }, 403);
   const action = body.action as string;
 
+  // Payment configuration, refunds and money-moving actions require a tenant admin (or super admin).
+  if (!isSuper) {
+    const { data: isAdmin } = await svc.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    if (!isAdmin) return jsonResp({ error: "Forbidden" }, 403);
+  }
+
   async function loadSession(session_id: string) {
     const { data, error } = await svc
       .from("adhoc_payment_sessions").select("*, provider:payment_providers(provider_type)")

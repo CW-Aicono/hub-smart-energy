@@ -32,7 +32,7 @@ async function lexFetch(url: string, options: RequestInit, maxRetries = 3): Prom
 }
 
 Deno.serve(async (req) => {
-  { const __deny = await requireInternalOrUser(req, ["admin","super_admin","partner_admin"]); if (__deny) return __deny; }
+  { const __deny = await requireInternalOrUser(req, ["super_admin","portal_commercial"]); if (__deny) return __deny; }
   const cors = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: cors });

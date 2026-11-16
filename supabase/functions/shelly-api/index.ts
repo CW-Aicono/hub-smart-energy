@@ -1,3 +1,4 @@
+import { isInternalCaller } from "../_shared/internalAuth.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -162,17 +163,8 @@ serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    let isServiceInvocation = token === supabaseServiceKey;
-    if (!isServiceInvocation) {
-      try {
-        const part = token.split(".")[1];
-        if (part) {
-          const padded = part + "=".repeat((4 - (part.length % 4)) % 4);
-          const payload = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
-          if (payload?.role === "service_role") isServiceInvocation = true;
-        }
-      } catch { /* not a JWT, fall through */ }
-    }
+    // Only a real service/cron key counts as internal; JWT claims are never trusted unverified.
+    let isServiceInvocation = isInternalCaller(req);
 
     let tenantId: string | null = null;
 

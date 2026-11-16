@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { sanitizeHtml } from "@/lib/sanitizeHtml";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
@@ -176,7 +177,7 @@ const SonstigeReport = () => {
   .kpi-box{border:1px solid #e5e7eb;border-radius:8px;padding:12px;text-align:center}
   .kpi-box .value{font-size:18pt;font-weight:700;color:#0d9488}
   .kpi-box .label{font-size:9pt;color:#6b7280}
-</style></head><body>${reportRef.current.innerHTML}</body></html>`;
+</style></head><body>${sanitizeHtml(reportRef.current.innerHTML)}</body></html>`;
   };
 
   const handlePrint = () => {
@@ -364,7 +365,7 @@ const SonstigeReport = () => {
                 {profile.aiSections.map((s) => aiTexts[s.key] ? (
                   <div key={s.key} className="page page-break">
                     <h2>{s.label}</h2>
-                    <div dangerouslySetInnerHTML={{ __html: aiTexts[s.key] }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(aiTexts[s.key]) }} />
                   </div>
                 ) : null)}
 

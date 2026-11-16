@@ -1,3 +1,4 @@
+import { isInternalCaller } from "../_shared/internalAuth.ts";
 // Loxone Template Sync
 // -----------------------------------------------------------------------------
 // Discovery + Parameter-Push für die AICONO Loxone-Template-Bibliothek.
@@ -464,17 +465,8 @@ serve(async (req) => {
     }
     const token = authHeader.replace("Bearer ", "");
 
-    let isServiceRole = token === supabaseServiceKey;
-    if (!isServiceRole) {
-      try {
-        const part = token.split(".")[1];
-        if (part) {
-          const padded = part + "=".repeat((4 - (part.length % 4)) % 4);
-          const payload = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
-          if (payload?.role === "service_role") isServiceRole = true;
-        }
-      } catch { /* ignore */ }
-    }
+    // Only a real service/cron key counts as internal; JWT claims are never trusted unverified.
+    let isServiceRole = isInternalCaller(req);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     let userTenantId: string | null = null;

@@ -1,4 +1,4 @@
-import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 /**
  * bridge-aggregator
  * =================
@@ -199,7 +199,7 @@ async function run(): Promise<{
 }
 
 Deno.serve(async (req: Request) => {
-  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
+  { const __deny = rejectIfNotInternal(req, corsHeaders); if (__deny) return __deny; }
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -211,7 +211,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     console.error('[bridge-aggregator] FATAL', err);
-    return new Response(JSON.stringify({ success: false, error: (err as Error).message }), {
+    return new Response(JSON.stringify({ success: false, error: 'Internal error' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { canAccessSalesProject } from "../_shared/authz.ts";
 
 function slugify(s: string): string {
   return s.toLowerCase()
@@ -57,6 +58,9 @@ Deno.serve(async (req) => {
     const { data: project, error: pErr } = await admin
       .from("sales_projects").select("*").eq("id", project_id).maybeSingle();
     if (pErr || !project) throw new Error("Projekt nicht gefunden");
+    if (!(await canAccessSalesProject(req, project_id))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+    }
     if (project.converted_tenant_id) {
       return new Response(JSON.stringify({
         error: "Bereits konvertiert",
@@ -71,7 +75,7 @@ Deno.serve(async (req) => {
       .order("version", { ascending: false })
       .limit(1);
     const { data: quotes } = quote_id
-      ? await admin.from("sales_quotes").select("id, version").eq("id", quote_id).limit(1)
+      ? await admin.from("sales_quotes").select("id, version").eq("id", quote_id).eq("project_id", project_id).limit(1)
       : await quoteQ;
     const quote = quotes?.[0];
     if (!quote) throw new Error("Kein Angebot gefunden – bitte zuerst eines generieren");

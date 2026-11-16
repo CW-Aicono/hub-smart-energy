@@ -1,4 +1,4 @@
-import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { resolveCaller, canAdminTenant, escapeHtml as esc } from "../_shared/authz.ts";
 // Sammelrechnungen (Gruppenrechnungen) für Ladeinfrastruktur
 // Aggregiert alle Ladevorgänge der Mitglieder einer Rechnungsgruppe im Zeitraum
 // und erstellt EINE Sammelrechnung pro Gruppe an billing_email.
@@ -56,7 +56,7 @@ function buildHtml(opts: {
 }): string {
   const cur = opts.currency === "EUR" ? "€" : opts.currency;
   const logoTag = opts.logoUrl
-    ? `<img src="${opts.logoUrl}" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;border-radius:6px"/>`
+    ? `<img src="${esc(opts.logoUrl)}" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;border-radius:6px"/>`
     : "";
 
   const memberRows = opts.lines.map((l) => {
@@ -69,18 +69,18 @@ function buildHtml(opts: {
         <td style="padding:6px 10px;font-size:11px;color:#475569;border-bottom:1px solid #f1f5f9">${start.toLocaleDateString("de-DE")} ${start.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})}</td>
         <td style="padding:6px 10px;font-size:11px;color:#475569;border-bottom:1px solid #f1f5f9">${durStr}</td>
         <td style="padding:6px 10px;font-size:11px;color:#475569;border-bottom:1px solid #f1f5f9;text-align:right">${fmtDE(s.energy_kwh || 0)} kWh</td>
-        <td style="padding:6px 10px;font-size:11px;color:#475569;border-bottom:1px solid #f1f5f9;text-align:right;font-family:ui-monospace,monospace">${(s.id_tag || "—").toUpperCase()}</td>
+        <td style="padding:6px 10px;font-size:11px;color:#475569;border-bottom:1px solid #f1f5f9;text-align:right;font-family:ui-monospace,monospace">${esc((s.id_tag || "—").toUpperCase())}</td>
       </tr>`;
     }).join("");
     return `<div style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
       <div style="padding:10px 14px;background:#f1f5f9;display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div style="font-size:13px;font-weight:600;color:#0f172a">${l.user.name || "—"}</div>
-          <div style="font-size:11px;color:#64748b">${l.user.email || ""} · Tarif: ${l.tariff?.name || "Standard"} (${fmtDE(l.tariff?.price_per_kwh ?? 0, 4)} ${cur}/kWh)</div>
+          <div style="font-size:13px;font-weight:600;color:#0f172a">${esc(l.user.name || "—")}</div>
+          <div style="font-size:11px;color:#64748b">${esc(l.user.email || "")} · Tarif: ${esc(l.tariff?.name || "Standard")} (${fmtDE(l.tariff?.price_per_kwh ?? 0, 4)} ${esc(cur)}/kWh)</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:11px;color:#64748b">${l.sessions.length} Vorgang/Vorgänge · ${fmtDE(l.totalEnergy)} kWh</div>
-          <div style="font-size:14px;font-weight:700;color:#0f172a">${fmtDE(l.gross)} ${cur}</div>
+          <div style="font-size:14px;font-weight:700;color:#0f172a">${fmtDE(l.gross)} ${esc(cur)}</div>
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse">
@@ -95,14 +95,14 @@ function buildHtml(opts: {
     </div>`;
   }).join("");
 
-  return `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"/><title>Sammelrechnung ${opts.invoiceNumber}</title></head>
+  return `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"/><title>Sammelrechnung ${esc(opts.invoiceNumber)}</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1e293b;margin:0;padding:0;background:#f8fafc">
 <div style="max-width:760px;margin:0 auto;padding:32px;background:#fff">
-  <table style="width:100%;background:linear-gradient(135deg,${opts.primary} 0%,${opts.accent} 100%);border-radius:12px;margin-bottom:24px;border-spacing:0">
+  <table style="width:100%;background:linear-gradient(135deg,${esc(opts.primary)} 0%,${esc(opts.accent)} 100%);border-radius:12px;margin-bottom:24px;border-spacing:0">
     <tr>
       <td style="padding:24px 28px;vertical-align:middle">
         <div style="font-size:20px;font-weight:700;color:white;margin-bottom:4px">Sammelrechnung Ladeinfrastruktur</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.85)">${opts.period.label}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.85)">${esc(opts.period.label)}</div>
       </td>
       ${logoTag ? `<td style="padding:24px 28px;vertical-align:middle;text-align:right">${logoTag}</td>` : ""}
     </tr>
@@ -111,7 +111,7 @@ function buildHtml(opts: {
     <tr>
       <td style="vertical-align:top;width:50%">
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Rechnungsnummer</div>
-        <div style="font-size:14px;font-weight:600">${opts.invoiceNumber}</div>
+        <div style="font-size:14px;font-weight:600">${esc(opts.invoiceNumber)}</div>
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px">Rechnungsdatum</div>
         <div style="font-size:13px">${fmtDateDE(opts.invoiceDate)}</div>
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px">Zeitraum</div>
@@ -119,10 +119,10 @@ function buildHtml(opts: {
       </td>
       <td style="vertical-align:top;width:50%">
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Rechnungsempfänger</div>
-        <div style="font-size:14px;font-weight:600">${opts.group.company_name || opts.group.name}</div>
-        ${opts.group.billing_address ? `<div style="font-size:12px;color:#64748b;white-space:pre-line">${opts.group.billing_address}</div>` : ""}
+        <div style="font-size:14px;font-weight:600">${esc(opts.group.company_name || opts.group.name)}</div>
+        ${opts.group.billing_address ? `<div style="font-size:12px;color:#64748b;white-space:pre-line">${esc(opts.group.billing_address)}</div>` : ""}
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px">Rechnungsgruppe</div>
-        <div style="font-size:13px">${opts.group.name}</div>
+        <div style="font-size:13px">${esc(opts.group.name)}</div>
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px">Mitglieder mit Verbrauch</div>
         <div style="font-size:13px">${opts.lines.length}</div>
       </td>
@@ -135,19 +135,18 @@ function buildHtml(opts: {
   </div>
 
   <table style="width:100%;margin-bottom:24px;border-collapse:collapse">
-    <tr style="border-top:1px solid #e2e8f0"><td style="padding:8px 12px;font-size:14px;font-weight:600">Nettobetrag</td><td style="padding:8px 12px;font-size:14px;text-align:right;font-weight:600">${fmtDE(opts.netSum)} ${cur}</td></tr>
-    <tr><td style="padding:6px 12px;font-size:13px;color:#64748b">MwSt (${fmtDE(opts.taxRate, 0)} %)</td><td style="padding:6px 12px;font-size:13px;text-align:right;color:#64748b">${fmtDE(opts.taxSum)} ${cur}</td></tr>
-    <tr style="border-top:2px solid ${opts.primary};background:#f0f9ff"><td style="padding:12px;font-size:16px;font-weight:700;color:${opts.primary}">Gesamtbetrag (brutto)</td><td style="padding:12px;font-size:16px;text-align:right;font-weight:700;color:${opts.primary}">${fmtDE(opts.totalSum)} ${cur}</td></tr>
+    <tr style="border-top:1px solid #e2e8f0"><td style="padding:8px 12px;font-size:14px;font-weight:600">Nettobetrag</td><td style="padding:8px 12px;font-size:14px;text-align:right;font-weight:600">${fmtDE(opts.netSum)} ${esc(cur)}</td></tr>
+    <tr><td style="padding:6px 12px;font-size:13px;color:#64748b">MwSt (${fmtDE(opts.taxRate, 0)} %)</td><td style="padding:6px 12px;font-size:13px;text-align:right;color:#64748b">${fmtDE(opts.taxSum)} ${esc(cur)}</td></tr>
+    <tr style="border-top:2px solid ${esc(opts.primary)};background:#f0f9ff"><td style="padding:12px;font-size:16px;font-weight:700;color:${esc(opts.primary)}">Gesamtbetrag (brutto)</td><td style="padding:12px;font-size:16px;text-align:right;font-weight:700;color:${esc(opts.primary)}">${fmtDE(opts.totalSum)} ${esc(cur)}</td></tr>
   </table>
 
   <div style="border-top:1px solid #e2e8f0;padding-top:16px;margin-top:32px;text-align:center">
-    <div style="font-size:11px;color:#94a3b8">${opts.tenantName} · Sammelrechnung ${opts.invoiceNumber} · ${fmtDateDE(opts.invoiceDate)}</div>
+    <div style="font-size:11px;color:#94a3b8">${esc(opts.tenantName)} · Sammelrechnung ${esc(opts.invoiceNumber)} · ${fmtDateDE(opts.invoiceDate)}</div>
   </div>
 </div></body></html>`;
 }
 
 serve(async (req) => {
-  { const __deny = await requireInternalOrUser(req, ["admin","super_admin","partner_admin"]); if (__deny) return __deny; }
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -169,6 +168,12 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "tenant_id, period_start, period_end required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    const caller = await resolveCaller(req, supabase);
+    if (!caller) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!(await canAdminTenant(supabase, caller, tenantId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const monthNames = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];

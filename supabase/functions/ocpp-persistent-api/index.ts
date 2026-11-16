@@ -264,7 +264,7 @@ async function handle(action: string, body: Record<string, unknown>) {
         .from("charging_users")
         .select("id, status, group_id")
         .eq("tenant_id", tenantId)
-        .ilike("rfid_tag", normalizedIdTag)
+        .ilike("rfid_tag", normalizedIdTag.replace(/[\\%_]/g, (c) => "\\" + c))
         .maybeSingle();
 
       // 2) Neue Multi-Tag-Tabelle

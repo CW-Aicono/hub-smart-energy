@@ -5,6 +5,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
 import { checkInviteConflict } from "../_shared/invite-conflict.ts";
 import { createSafeInviteLink } from "../_shared/inviteLink.ts";
+import { escapeHtml } from "../_shared/authz.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -149,20 +150,20 @@ const handler = async (req: Request): Promise<Response> => {
     const emailResponse = await resend.emails.send({
       from: fromAddress,
       to: [adminEmail],
-      subject: `Ihr Administrator-Konto bei ${tenantName}`,
+      subject: `Ihr Administrator-Konto bei ${String(tenantName).replace(/[\r\n]/g, " ")}`,
       html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%); padding: 30px; border-radius: 10px 10px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">Willkommen bei ${tenantName}</h1>
+  <div style="background: linear-gradient(135deg, ${/^#[0-9a-fA-F]{3,8}$/.test(String(primaryColor)) ? primaryColor : "#1a365d"} 0%, ${/^#[0-9a-fA-F]{3,8}$/.test(String(accentColor)) ? accentColor : "#2d8a6e"} 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 24px;">Willkommen bei ${escapeHtml(tenantName)}</h1>
     <div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px">Administrator-Zugang</div>
   </div>
   <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e5e7eb; border-top: none;">
-    <p>Hallo${adminName ? ` ${adminName}` : ""},</p>
-    <p>Für Sie wurde ein <strong>Administrator-Konto</strong> bei <strong>${tenantName}</strong> eingerichtet.</p>
+    <p>Hallo${adminName ? ` ${escapeHtml(adminName)}` : ""},</p>
+    <p>Für Sie wurde ein <strong>Administrator-Konto</strong> bei <strong>${escapeHtml(tenantName)}</strong> eingerichtet.</p>
     <p>Bitte klicken Sie auf den folgenden Button, um ein Passwort für Ihr Konto zu vergeben und sich anzumelden:</p>
-    <a href="${actionLink}" style="display: inline-block; background: ${primaryColor}; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 16px 0;">
+    <a href="${escapeHtml(actionLink)}" style="display: inline-block; background: ${/^#[0-9a-fA-F]{3,8}$/.test(String(primaryColor)) ? primaryColor : "#1a365d"}; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 16px 0;">
       Passwort festlegen &amp; Anmelden
     </a>
     <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">

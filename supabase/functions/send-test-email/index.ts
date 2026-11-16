@@ -2,14 +2,18 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const deny = await requireInternalOrUser(req, ["super_admin"], corsHeaders);
+  if (deny) return deny;
+
   try {
     const { to } = await req.json().catch(() => ({ to: "christvs@t-online.de" }));
-    const recipient = to || "christvs@t-online.de";
+    const recipient = typeof to === "string" && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to) ? to : "christvs@t-online.de";
 
     const apiKey = Deno.env.get("RESEND_API_KEY");
     if (!apiKey) throw new Error("RESEND_API_KEY missing");

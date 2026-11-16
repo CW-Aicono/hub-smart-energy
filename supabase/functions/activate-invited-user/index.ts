@@ -4,6 +4,8 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
 import { checkInviteConflict } from "../_shared/invite-conflict.ts";
 import { redirectFromStoredLink } from "../_shared/inviteLink.ts";
+import { ALLOWED_APP_ORIGINS } from "../_shared/appOrigin.ts";
+import { escapeHtml } from "../_shared/authz.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -243,6 +245,10 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (invError || !invitation) throw new Error("Invitation not found");
     if (invitation.accepted_at) throw new Error("Invitation already accepted");
+    const callerIsSuperLegacy = roles.includes("super_admin");
+    if (!callerIsSuperLegacy && (!tenantId || invitation.tenant_id !== tenantId)) {
+      throw new Error("Insufficient permissions");
+    }
 
     const tempPassword = crypto.randomUUID() + "Aa1!";
     const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
@@ -333,7 +339,8 @@ function resolveOrigin(candidate: string | null | undefined): string {
   try {
     const u = new URL(candidate);
     const h = u.hostname;
-    if (u.protocol === "https:" && (h === "aicono.org" || h.endsWith(".aicono.org") || h === "hub-smart-energy.lovable.app")) return u.origin;
+    if (u.protocol === "https:" && ALLOWED_APP_ORIGINS.includes(u.origin)) return u.origin;
+    void h;
   } catch { /* ignore */ }
   return fallback;
 }
@@ -369,6 +376,13 @@ async function sendInvitationEmail(
       }
     }
 
+    const safeColor = (c: string, d: string) => (/^#[0-9a-fA-F]{3,8}$/.test(c) ? c : d);
+    primaryColor = safeColor(primaryColor, "#1a365d");
+    accentColor = safeColor(accentColor, "#2d8a6e");
+    const subjectTenantName = tenantName.replace(/[\r\n]/g, " ");
+    tenantName = escapeHtml(tenantName);
+    name = name ? escapeHtml(name) : name;
+    actionLink = escapeHtml(actionLink);
     const { Resend } = await import("npm:resend@2.0.0");
     const resend = new Resend(RESEND_API_KEY);
     const roleLabel = role === "admin" ? "Administrator" : "Benutzer";
@@ -376,7 +390,7 @@ async function sendInvitationEmail(
     await resend.emails.send({
       from: resendFrom(tenantName),
       to: [email],
-      subject: `Ihr Konto wurde erstellt – ${tenantName}`,
+      subject: `Ihr Konto wurde erstellt – ${subjectTenantName}`,
       html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>

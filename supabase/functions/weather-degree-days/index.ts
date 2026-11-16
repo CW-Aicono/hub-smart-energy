@@ -77,6 +77,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // The location must belong to the requested tenant (prevents cross-tenant cache reads/writes).
+    const { data: locRow } = await supabase.from("locations").select("tenant_id").eq("id", locationId).maybeSingle();
+    if (!locRow || locRow.tenant_id !== tenantId) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Check cache
     const { data: cached } = await supabase
       .from("weather_degree_days")
@@ -208,7 +217,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("Error:", err);
     return new Response(
-      JSON.stringify({ error: "Internal server error", message: String(err) }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
     );
   }

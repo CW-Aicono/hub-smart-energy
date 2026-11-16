@@ -2,6 +2,7 @@
 // Schreibt einen Audit-Eintrag nach Validierung der User-Session.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { z } from "https://esm.sh/zod@3.23.8";
+import { resolveCaller, canAccessTenant } from "../_shared/authz.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -121,6 +122,18 @@ Deno.serve(async (req) => {
       if (ss) { supportSessionId = ss.id; supportTenantId = ss.tenant_id; }
     }
 
+    // Tenant/partner scope must belong to the caller; never trust client-supplied ids.
+    const caller = await resolveCaller(req, admin);
+    if (!caller) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (body.tenant_id && !(await canAccessTenant(admin, caller, body.tenant_id))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (body.partner_id && !caller.roles.includes("super_admin") && !caller.partnerIds.includes(body.partner_id)) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const { error: insertErr } = await admin.from("audit_logs").insert({
       support_session_id: supportSessionId,
       actor_user_id: user.id,
@@ -141,7 +154,7 @@ Deno.serve(async (req) => {
 
     if (insertErr) {
       console.error("audit-log insert failed", insertErr);
-      return new Response(JSON.stringify({ error: insertErr.message }), {
+      return new Response(JSON.stringify({ error: "Insert failed" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -153,7 +166,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("audit-log-write error", e);
-    return new Response(JSON.stringify({ error: String(e) }), {
+    return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

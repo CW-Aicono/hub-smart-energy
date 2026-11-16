@@ -1,3 +1,4 @@
+import { safeCell } from "@/lib/spreadsheetSafe";
 import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAdhocSessions, useAdhocSessionEvents } from "@/hooks/useAdhocPayment";
@@ -141,7 +142,7 @@ export function AdHocTransactionsContent({ embedded = false }: { embedded?: bool
       "Karte": [s.card_brand, s.card_last4].filter(Boolean).join(" •••• "),
       "E-Mail": s.customer_email ?? "",
     }));
-    const ws = XLSX.utils.json_to_sheet(rows);
+    const ws = XLSX.utils.json_to_sheet(rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, safeCell(v)]))));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Ad-Hoc Transaktionen");
     XLSX.writeFile(wb, `adhoc-transaktionen-${format(new Date(), "yyyyMMdd")}.xlsx`);

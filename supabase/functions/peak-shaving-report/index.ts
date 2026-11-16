@@ -1,4 +1,4 @@
-import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { resolveCaller, canAccessTenant } from "../_shared/authz.ts";
 // Peak-Shaving Report — PDF-Generierung (On-Demand & monatlich automatisch)
 //
 // Modes:
@@ -213,8 +213,10 @@ async function sendReportEmail(to: string[], data: ReportData, pdfBase64: string
 }
 
 Deno.serve(async (req) => {
-  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const deny = (status: number, error: string) => new Response(JSON.stringify({ ok: false, error }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const caller = await resolveCaller(req, admin);
+  if (!caller) return deny(401, "Unauthorized");
   try {
     const body = await req.json().catch(() => ({}));
     const mode = body.mode ?? "ondemand";
@@ -227,6 +229,8 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      const { data: cfgScope } = await admin.from("peak_shaving_configs").select("tenant_id").eq("id", config_id).maybeSingle();
+      if (!cfgScope || !(await canAccessTenant(admin, caller, (cfgScope as any).tenant_id))) return deny(403, "Forbidden");
       const data = await loadReportData(config_id, Number(year), Number(month));
       if (!data) {
         return new Response(JSON.stringify({ ok: false, error: "config not found" }), {
@@ -242,6 +246,7 @@ Deno.serve(async (req) => {
     }
 
     if (mode === "monthly_cron") {
+      if (!caller.internal) return deny(403, "Forbidden");
       // Vormonat
       const now = new Date();
       const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -281,7 +286,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("[peak-shaving-report] error", e);
-    return new Response(JSON.stringify({ ok: false, error: (e as Error).message }), {
+    return new Response(JSON.stringify({ ok: false, error: "Internal error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 import { encrypt, decrypt, isEncrypted, mask } from "../_shared/crypto.ts";
 
 const json = (body: unknown, status = 200, corsHeaders: Record<string, string>) =>
@@ -29,20 +30,9 @@ Deno.serve(async (req) => {
 
     // ── Migrate uses service-role auth (no user JWT needed) ──
     if (action === "migrate") {
-      const authHeader = req.headers.get("Authorization");
-      const token = authHeader?.replace("Bearer ", "") || "";
-      if (token !== supabaseServiceKey && token !== supabaseAnonKey) {
-        // Also allow user JWT if they are admin – but for simplicity, 
-        // validate via service-role key match
-        // Try user JWT auth as fallback
-        const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-          global: { headers: { Authorization: authHeader || "" } },
-        });
-        const { error: claimsError } = await authClient.auth.getUser(token);
-        if (claimsError) {
-          return json({ success: false, error: "Unauthorized" }, 401, corsHeaders);
-        }
-      }
+      // Global migration: only internal (service key / cron) or portal admins.
+      const deny = await requireInternalOrUser(req, ["super_admin"], corsHeaders);
+      if (deny) return deny;
 
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
       const { data: allSettings, error } = await supabase

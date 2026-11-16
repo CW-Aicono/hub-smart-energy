@@ -45,3 +45,5 @@
 - PV surplus control decisions are computed in `supabase/functions/_shared/pvSurplusDecision.ts` and stored in `solar_charging_log.decision`; UI views only read that log — what the user sees is exactly what the controller decided.
 - Route-to-module access is defined once in `src/lib/routeModules.ts` for both ModuleGuard and sidebar; unmapped paths are fail-closed and a test checks every guarded route and sidebar link — menu and guard can never disagree.
 - Manual invoice options use `manualInvoiceQuote` for preview and authorized `create_quoted_manual_invoice` for independent server pricing; keep the legacy RPC and create only one draft without entitlements or recurring sales — preserves existing invoice callers and prevents accidental double billing.
+
+- Edge functions resolve the caller and tenant access through `_shared/authz.ts` (resolveCaller/canAccessTenant/canAdminTenant) and never trust client-supplied tenant IDs or unverified JWT claims; HTML/CSV output escapes user text via escapeHtml/sanitizeHtml/safeCell — prevents cross-tenant access, injection and formula attacks.

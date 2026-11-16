@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { escapeHtml } from "@/lib/sanitizeHtml";
 import QRCode from "qrcode";
 import { Meter } from "@/hooks/useMeters";
 import {
@@ -47,7 +48,7 @@ export function MeterQrCode({ meter, open, onOpenChange }: MeterQrCodeProps) {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
     printWindow.document.write(`
-      <html><head><title>QR-Code: ${meter.name}</title>
+      <html><head><title>QR-Code: ${escapeHtml(meter.name)}</title>
       <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
         img { width: 250px; height: 250px; }
@@ -55,8 +56,8 @@ export function MeterQrCode({ meter, open, onOpenChange }: MeterQrCodeProps) {
         p { color: #666; font-size: 14px; margin-top: 4px; }
         @media print { button { display: none; } }
       </style></head><body>
-      <h2>${meter.name}</h2>
-      ${meter.meter_number ? `<p>Nr: ${meter.meter_number}</p>` : ""}
+      <h2>${escapeHtml(meter.name)}</h2>
+      ${meter.meter_number ? `<p>Nr: ${escapeHtml(meter.meter_number)}</p>` : ""}
       <img src="${qrDataUrl}" alt="QR-Code" />
       <p>Smart Energy Hub – Zähler-QR-Code</p>
       <br/><button onclick="window.print()">Drucken</button>

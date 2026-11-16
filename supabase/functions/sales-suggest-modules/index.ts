@@ -1,4 +1,5 @@
 import { requireInternalOrUser } from "../_shared/internalAuth.ts";
+import { canAccessSalesProject } from "../_shared/authz.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -27,6 +28,10 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "project_id required" }), {
         status: 400, headers: { ...cors, "Content-Type": "application/json" },
       });
+    }
+
+    if (!(await canAccessSalesProject(req, project_id))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     const supabase = createClient(
