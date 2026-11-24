@@ -1,5 +1,10 @@
 # Roadmap
 
+## Loxone: Stellungnahme zur Remote-Connect-Ausnahme (24.11., Leon)
+- [x] Softwarezweck und benötigte Loxone-Zugriffe anhand der Implementierung geprüft; Antwortvorlage für Loxone zusammengestellt, keine Funktionsänderung/keine neue Softwareversion.
+- [x] Frühere Containerprüfung belegt 91.99.170.143 für Live- und Staging-WS-Worker; aktuell fünf unterschiedliche aktiv konfigurierte Miniserver in Staging gezählt, nicht als Live-Gesamtzahl ausgegeben.
+- [ ] Wartet auf Nutzer/Serverprüfung: unterschiedliche Miniserver in der separaten Live-Datenbank zählen und aktuelle ausgehende Adressen aller zugreifenden Dienste bestätigen; kein Live-Zugriff verfügbar.
+
 ## Ladevorlagen beim Live-Deploy absichern (12.11., Hendrik)
 - [x] v1.45.1: Tatsächliche Spalten, Vorlagenschutz, ELMI/Gemini-Varianten und aktuelle Vestel-Register prüfen; Drift trotz Tracking vor abhängigen Migrationen reparieren, 0082 zuletzt. Unreparierbare Katalogzustände stoppen den Deploy.
 - [x] 35 Tests erfolgreich: echte SQL-Teilinstallation, manuelle/ELMI-Anlage, FC-0x04-Reparatur, Stationserhalt, wiederholter Deploy, sicherer Abbruch, Einrichtung und Übersetzungen. Preview-Build OK; Version und Handbuch vier Sprachen gepflegt. Kein Live-Deploy gestartet.

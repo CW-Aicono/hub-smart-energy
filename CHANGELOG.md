@@ -1,5 +1,9 @@
 # Änderungsprotokoll (intern)
 
+## Recherche Loxone Remote Connect – 24.11.2026 (keine Funktionsänderung)
+- Stellungnahme für Loxone: AICONO-Softwarezweck, Struktur-/Status-/Statistikzugriffe und Steuerbefehle anhand des Codes geprüft. Laut von Leon übermittelter offizieller Antwort sperrt Loxone seit Miniserver 17.3.11.10 Webinterface/Web-Befehle über Remote Connect; keine bloß vermutete Rechenzentrums-IP-Sperre als Ursache dargestellt.
+- Frühere Benutzer-Containerprüfung belegt 91.99.170.143 für beide WS-Worker; fünf unterschiedliche aktiv konfigurierte Miniserver in Staging gezählt. Separate Live-Gesamtzahl, aktuelle vollständige IPv4-/IPv6-Ausgangsadressen und direkte Cloud-Zugriffe bleiben extern zu bestätigen. Keine Datenbank-/Softwareänderung oder Veröffentlichung.
+
 ## v1.45.3 – 16.11.2026
 - Sicherheits-Härtung: neues `_shared/authz.ts` (Aufrufer-/Tenant-Prüfung serverseitig), über 30 Edge Functions prüfen Tenant/Rolle statt Client-Angaben (u. a. Support-Sitzung, Netzbetreiber-Abregelung, Lade-/Peak-Berichte, Sales, Wallbox-Vorlagen, Sentron/Schneider, Lexware, Ad-hoc-Zahlungen nur Admins, Gateway-Befehle/Loxone-Schreibaufträge/Ausführungslogs tenant-gebunden, ausstehende Gateways nur Admins, RFID-Wildcards, Fern-Stopp nur eigener Tenant).
 - E-Mails/Rechnungen/Berichte: HTML-Escaping und Farbprüfung; Einladungs-Weiterleitungen nur erlaubte AICONO-Adressen; Einladungen nur für eigenen Tenant.
