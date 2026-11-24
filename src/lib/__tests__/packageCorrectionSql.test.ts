@@ -27,7 +27,7 @@ beforeAll(async () => {
  await db.exec(readFileSync("drizzle/migrations/0062_half_month_billing_partner_discount.sql","utf8").split("ALTER TABLE")[0]);
  const old = readFileSync("drizzle/migrations/0069_temporary_package_discounts.sql","utf8"); await db.exec(old.slice(0,old.indexOf("CREATE OR REPLACE FUNCTION public.finalize_license_sale_discount")));
  await db.exec(`CREATE FUNCTION bill_license_sale(uuid,date,boolean) RETURNS void LANGUAGE sql AS $$ SELECT bill_catalog_license_sale($1,$2,$3) $$;`);
- for (const name of ["0074_package_sale_corrections_yearly","0075_package_effective_entitlements","0076_package_correction_security_guard","0077_package_correction_collective_invoice_guard","0078_package_correction_fail_closed_auth"]) await db.exec(readFileSync(`drizzle/migrations/${name}.sql`,"utf8"));
+ for (const name of ["0074_package_sale_corrections_yearly","0075_package_effective_entitlements","0076_package_correction_security_guard","0077_package_correction_collective_invoice_guard","0078_package_correction_fail_closed_auth","0093_restore_package_mistake_reversal"]) await db.exec(readFileSync(`drizzle/migrations/${name}.sql`,"utf8"));
  await db.exec(`INSERT INTO tenants VALUES('${tenant}','Test',null); INSERT INTO pricing_packages VALUES('p1',99,false); INSERT INTO pricing_package_modules VALUES('p1','automation_building'); INSERT INTO tenant_modules VALUES('${tenant}','automation_building',true,false);
  INSERT INTO license_sales(id,tenant_id,product_kind,product_code,label,quantity,cadence,payment_method,sale_price,purchase_price,starts_on,request_id,list_sale_price,customer_discount_pct) VALUES('${sale}','${tenant}','package','p1','Test package',1,'monthly','invoice',99,74,'2026-11-01','bca3231c-fee5-47f0-83e8-000000000001',99,0); SELECT bill_license_sale('${sale}','2026-11-01',true);`);
 },30000);
@@ -53,6 +53,47 @@ it("expires entitlements without deleting modules and restores them on renewed c
 });
 it("calculates yearly billing to December 31 and 600 euros for twelve months at 50 euros",async()=>{
  expect((await db.query<any>("SELECT license_period_end('2028-02-16','yearly')::text e,license_period_amount(50,1,'2027-01-01','2027-12-31','yearly') a")).rows[0]).toEqual({e:"2028-12-31",a:"600.00"});
+});
+const ready = async () => (await db.query<{package_corrections_ready:boolean}>(readFileSync("supabase/deploy/package-corrections-ready.sql","utf8"))).rows[0].package_corrections_ready;
+it("restores a missing reversal with the named RPC parameters and authenticated-only access, repeatably",async()=>{
+ await db.exec("DROP FUNCTION cancel_mistaken_license_sale(uuid,text);");
+ expect(await ready()).toBe(false);
+ const restore=readFileSync("drizzle/migrations/0093_restore_package_mistake_reversal.sql","utf8");
+ await db.exec(restore); await db.exec(restore);
+ expect(await ready()).toBe(true);
+ // Named arguments match the EMS request, not just the positional signature.
+ await expect(db.exec(`SELECT cancel_mistaken_license_sale(p_reason=>'Protect issued invoice',p_sale=>'${sale}');`)).rejects.toThrow('Ausgestellte Rechnung');
+});
+it("fails readiness if the authenticated reversal grant is missing",async()=>{
+ await db.exec("REVOKE EXECUTE ON FUNCTION cancel_mistaken_license_sale(uuid,text) FROM authenticated;");
+ expect(await ready()).toBe(false);
+ await db.exec("GRANT EXECUTE ON FUNCTION cancel_mistaken_license_sale(uuid,text) TO authenticated;");
+ expect(await ready()).toBe(true);
+});
+it("fails readiness if reversal is exposed anonymously",async()=>{
+ await db.exec("GRANT EXECUTE ON FUNCTION cancel_mistaken_license_sale(uuid,text) TO anon;");
+ expect(await ready()).toBe(false);
+ await db.exec("REVOKE EXECUTE ON FUNCTION cancel_mistaken_license_sale(uuid,text) FROM anon;");
+ expect(await ready()).toBe(true);
+});
+it("fails readiness if correction parameters no longer match the EMS request",async()=>{
+ const definition=(await db.query<{definition:string}>("SELECT pg_get_functiondef('correct_license_sale(uuid,numeric,integer,text,numeric,date,date,text,text)'::regprocedure) definition")).rows[0].definition;
+ await db.exec("DROP FUNCTION correct_license_sale(uuid,numeric,integer,text,numeric,date,date,text,text);");
+ await db.exec(definition.split('p_reason').join('wrong_reason'));
+ expect(await ready()).toBe(false);
+ await db.exec("DROP FUNCTION correct_license_sale(uuid,numeric,integer,text,numeric,date,date,text,text);");
+ await db.exec(definition);
+ await db.exec("REVOKE ALL ON FUNCTION correct_license_sale(uuid,numeric,integer,text,numeric,date,date,text,text) FROM PUBLIC,anon; GRANT EXECUTE ON FUNCTION correct_license_sale(uuid,numeric,integer,text,numeric,date,date,text,text) TO authenticated;");
+ expect(await ready()).toBe(true);
+});
+it("fails readiness if reversal parameters no longer match the EMS request and restores them",async()=>{
+ const restore=readFileSync("drizzle/migrations/0093_restore_package_mistake_reversal.sql","utf8");
+ await db.exec("DROP FUNCTION cancel_mistaken_license_sale(uuid,text);");
+ await db.exec(restore.split('p_sale').join('wrong_sale'));
+ expect(await ready()).toBe(false);
+ await db.exec("DROP FUNCTION cancel_mistaken_license_sale(uuid,text);");
+ await db.exec(restore);
+ expect(await ready()).toBe(true);
 });
 it("rejects corrections when both permission checks return null",async()=>{
  await db.exec(`CREATE OR REPLACE FUNCTION can_portal_write(uuid,text) RETURNS boolean LANGUAGE sql AS $$ SELECT null::boolean $$; CREATE OR REPLACE FUNCTION can_manage_partner_billing(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT null::boolean $$;`);

@@ -39,6 +39,7 @@ beforeAll(async()=>{
  const cancel=sql("0076_package_correction_security_guard");
  await db.exec(cancel.slice(cancel.indexOf("CREATE OR REPLACE FUNCTION public.cancel")));
  const migration=sql("0090_package_fixed_terms_total_price"); await db.exec(migration); await db.exec(migration);
+ await db.exec(sql("0093_restore_package_mistake_reversal"));
 },30000);
 afterAll(async()=>{await db.close();});
 beforeEach(async()=>{

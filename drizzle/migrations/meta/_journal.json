@@ -652,6 +652,13 @@
       "when": 1794853788451,
       "tag": "0092_restrict_module_prices_read",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1795531416075,
+      "tag": "0093_restore_package_mistake_reversal",
+      "breakpoints": true
     }
   ]
 }

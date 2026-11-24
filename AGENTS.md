@@ -38,7 +38,7 @@
 - All tenant creation paths explicitly initialize setup; impersonation checks session classification availability before creating users or tokens and never falls back to unlogged access — schema drift must not bypass handover or consent.
 - Partner tenant lists tolerate additive schema rollout, remain scoped by partner ID and surface errors; missing setup state never grants setup access — deployment compatibility must not weaken remote-support consent.
 
-- Package corrections use authorized correct_license_sale and audit rows; draft-only periods may be rebuilt, issued documents are immutable and future changes retain EK — prevents duplicate billing and historical repricing.
+- Package corrections use authorized RPCs and audit rows; deployment validates named arguments and execution grants, and restores the full current reversal last. Draft-only periods may be rebuilt, issued documents are immutable and future changes retain EK — prevents missing API functions, duplicate billing and historical repricing.
 - Effective package entitlements are resolved by effective_tenant_modules for UI, scheduler and gateway sync; stored rules are retained and local rules carry known expiry — ends feature execution without deleting data or changing control algorithms.
 - Partner invoice previews resolve visual branding from the issuing partner; issuance freezes it in sender_snapshot, and PDFs use only that snapshot afterwards — keeps historical documents independent of later branding changes.
 

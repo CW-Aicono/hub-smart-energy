@@ -1,5 +1,11 @@
 # Änderungsprotokoll (intern)
 
+## v1.45.4 – 24.11.2026
+- Screenshot: Rücknahme-RPC fehlt im API-Schema der separaten Kundenumgebung; Funktion und korrekte Parameter sind in Cloud vorhanden, Hagemann dort nicht hinterlegt. Keine reale Kundenbuchung automatisch geändert.
+- Migration 0093 stellt die vollständige aktuelle Rücknahme inklusive Rechte, Partner-Sammelrechnungen, Kapazitätsschutz und unveränderter ausgestellter/stornierter Belege wieder her; API-Schema wird neu geladen. Installation verändert keine Buchungsdaten.
+- Live-Prüfung kontrolliert zusätzlich benannte RPC-Parameter, Ausführungsrechte und aktuellen Rechnungsschutz; Reparatur spielt die aktuelle vollständige Rücknahme zuletzt ein. Bei verbleibenden Fehlern keine Aktivierung.
+- Handbuch vier Sprachen, Versionshinweise und SQL-/Deploy-Regressionen gepflegt. Angemeldet Prüfpaket gebucht, Rücknahme mit 204 abgeschlossen und nach erneutem Öffnen „Beendet“ bestätigt, keine Browserfehler. Prüftenant/-buchung entfernt; keine Rechnungen erstellt/versandt. Separate Live-Datenbank benötigt den externen Deploy; kein Live-Serverzugriff verfügbar.
+
 ## Recherche Loxone Remote Connect – 24.11.2026 (keine Funktionsänderung)
 - Stellungnahme für Loxone: AICONO-Softwarezweck, Struktur-/Status-/Statistikzugriffe und Steuerbefehle anhand des Codes geprüft. Laut von Leon übermittelter offizieller Antwort sperrt Loxone seit Miniserver 17.3.11.10 Webinterface/Web-Befehle über Remote Connect; keine bloß vermutete Rechenzentrums-IP-Sperre als Ursache dargestellt.
 - Frühere Benutzer-Containerprüfung belegt 91.99.170.143 für beide WS-Worker; fünf unterschiedliche aktiv konfigurierte Miniserver in Staging gezählt. Separate Live-Gesamtzahl, aktuelle vollständige IPv4-/IPv6-Ausgangsadressen und direkte Cloud-Zugriffe bleiben extern zu bestätigen. Keine Datenbank-/Softwareänderung oder Veröffentlichung.

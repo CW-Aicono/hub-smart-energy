@@ -1,5 +1,10 @@
 # Roadmap
 
+## Fehlbuchung zurücknehmen: fehlende Datenbankfunktion (24.11., Dirk)
+- [x] v1.45.4: Aktuelle Rücknahmefunktion als eigenständige wiederholbare Migration 0093 in Cloud installiert; Parameter, Rechte und Schutz ausgestellter Belege beim Deploy prüfen, Reparatur zuletzt wiederherstellen.
+- [x] SQL-/Deploy-Regressionen erfolgreich; angemeldet getrenntes Prüfpaket gebucht und über Rücknahme beendet (204), nach erneutem Öffnen „Beendet“ bestätigt. Prüfdaten entfernt; kein Versand/keine Kundenbuchung verändert. Handbuch vier Sprachen, Version und Versionshinweise gepflegt; Preview-Build OK.
+- [ ] Extern: separate Kundenumgebung aktualisieren und Hagemanns Rücknahme prüfen; hier kein Live-Serverzugriff.
+
 ## Loxone: Stellungnahme zur Remote-Connect-Ausnahme (24.11., Leon)
 - [x] Softwarezweck und benötigte Loxone-Zugriffe anhand der Implementierung geprüft; Antwortvorlage für Loxone zusammengestellt, keine Funktionsänderung/keine neue Softwareversion.
 - [x] Frühere Containerprüfung belegt 91.99.170.143 für Live- und Staging-WS-Worker; aktuell fünf unterschiedliche aktiv konfigurierte Miniserver in Staging gezählt, nicht als Live-Gesamtzahl ausgegeben.

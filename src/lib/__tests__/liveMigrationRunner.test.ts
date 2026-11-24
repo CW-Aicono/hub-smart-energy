@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
-function fixture(failRelease = false, failCharger = false) {
+function fixture(failRelease = false, failCharger = false, failCorrections = false) {
   const dir = mkdtempSync(join(tmpdir(), "live-runner-")); dirs.push(dir);
   for (const folder of ["bin", "scripts", "supabase/deploy", "supabase/migrations", "drizzle/migrations", "supabase/functions/_shared", "supabase/functions/support-session-impersonate", "supabase/functions/generate-monthly-invoices", "supabase/functions/ocpp-central", "supabase/functions/partner-create-tenant", "supabase/functions/license-sale", "supabase/functions/automation-scheduler", "supabase/functions/gateway-ingest"]) mkdirSync(join(dir, folder), { recursive: true });
   for (const file of ["drizzle/migrations/0090_package_fixed_terms_total_price.sql", "supabase/deploy/package-fixed-terms-ready.sql","drizzle/migrations/0089_deploy_audit_billing_security.sql", "supabase/deploy/deploy-audit-ready.sql", "drizzle/migrations/0088_manual_invoice_booking_options.sql", "supabase/deploy/manual-invoice-ready.sql", "scripts/apply-migrations.sh", "supabase/deploy/tenant-setup-ready.sql", "supabase/deploy/live-release-check.sql", "supabase/deploy/verify-live-release.sh", "drizzle/migrations/0070_tenant_setup_phase.sql", "drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql", "drizzle/migrations/0072_charger_templates_variants.sql", "drizzle/migrations/0073_vestel_modbus_registers.sql", "drizzle/migrations/0074_package_sale_corrections_yearly.sql", "drizzle/migrations/0075_package_effective_entitlements.sql", "drizzle/migrations/0076_package_correction_security_guard.sql", "drizzle/migrations/0077_package_correction_collective_invoice_guard.sql", "drizzle/migrations/0078_package_correction_fail_closed_auth.sql", "drizzle/migrations/0079_tenant_setup_deploy_contract.sql", "drizzle/migrations/0083_effective_modules_auth_fix.sql", "supabase/deploy/package-entitlements-ready.sql", "supabase/deploy/package-corrections-ready.sql", "supabase/functions/_shared/supportSessionKind.ts"]) copyFileSync(file, join(dir,file));
@@ -17,6 +17,7 @@ function fixture(failRelease = false, failCharger = false) {
   writeFileSync(join(dir,"supabase/functions/generate-monthly-invoices/index.ts"), "session_kind");
   writeFileSync(join(dir,"supabase/functions/ocpp-central/index.ts"), "supports_connector_lock");
   for (const file of ["supabase/deploy/charger-templates-ready.sql", "drizzle/migrations/0082_vestel_modbus_spec_v115.sql"]) copyFileSync(file, join(dir,file));
+  copyFileSync("drizzle/migrations/0093_restore_package_mistake_reversal.sql",join(dir,"drizzle/migrations/0093_restore_package_mistake_reversal.sql"));
   const docker = join(dir,"bin/docker");
   writeFileSync(docker, `#!/usr/bin/env bash
 set -eu
@@ -46,7 +47,7 @@ elif [[ "$input" == *"CREATE OR REPLACE FUNCTION public.create_quoted_manual_inv
 elif [[ "$input" == *"AS tenant_setup_ready"* ]]; then
   if [ -f "$REPO_ROOT/repaired" ]; then echo t; else echo f; fi
 elif [[ "$input" == *"license_sale_corrections') IS NOT NULL"* ]]; then
-  if [ -f "$REPO_ROOT/corrected" ] || [ -f "$REPO_ROOT/corrections_present" ]; then echo t; else echo f; fi
+  if [ "${failCorrections ? "1" : "0"}" = 0 ] && { [ -f "$REPO_ROOT/corrected" ] || [ -f "$REPO_ROOT/corrections_present" ]; }; then echo t; else echo f; fi
 elif [[ "$input" == *"pricing_package_modules') IS NOT NULL"* ]]; then
   echo t
 elif [[ "$input" == *"CREATE OR REPLACE FUNCTION public.cancel_mistaken_license_sale"* ]]; then
@@ -117,6 +118,17 @@ describe("live migration runner release gate", () => {
     writeFileSync(join(dir,"corrections_present"),"");
     run();
     expect(existsSync(join(dir,"corrected"))).toBe(false);
+  });
+  it("replays the complete current reversal last, preserving cancelled issued invoices", () => {
+    const {dir,run}=fixture(); run();
+    const queries=readFileSync(join(dir,"queries.log"),"utf8");
+    expect(queries).toContain('complete reversal restore v1454');
+    expect(queries.indexOf('complete reversal restore v1454')).toBeGreaterThan(queries.indexOf('CREATE OR REPLACE FUNCTION public.correct_license_sale'));
+  });
+  it("stops before API activation if correction RPC readiness still fails", () => {
+    const {dir,run}=fixture(false,false,true);
+    expect(run).toThrow();
+    expect(existsSync(join(dir,"notified"))).toBe(false);
   });
   it("fails the existing deploy when the actual release check fails, without reloading the API", () => {
     const { dir,run } = fixture(true);

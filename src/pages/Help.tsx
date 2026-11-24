@@ -102,6 +102,7 @@ const Help = () => {
   ];
 
   const changelog = [
+    { version: "1.45.4", date: "2026-11-24", changes: [{ type: "fix", textKey: "manual.packageReversal1454" }] },
     { version: "1.45.3", date: "2026-11-16", changes: [{ type: "fix", textKey: "manual.security1453" }] },
     { version: "1.45.2", date: "2026-11-16", changes: [{ type: "fix", textKey: "manual.loxoneDirect1452" }] },
     { version: "1.45.1", date: "2026-11-12", changes: [{ type: "fix", textKey: "manual.chargerDeploy1451" }] },

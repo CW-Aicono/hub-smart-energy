@@ -1,5 +1,9 @@
 # Versionshinweise
 
+## v1.45.4 – 24.11.2026
+- Wiederherstellung der fehlenden Funktion „Fehlbuchung zurücknehmen“ beim Live-Update abgesichert; Parameter und Zugriffsrechte werden vor Freigabe geprüft.
+- Ausgestellte Rechnungen zuerst stornieren. Historische Belege und Tenant-Daten bleiben erhalten; nur offene Entwürfe werden angepasst.
+
 ## v1.45.3 – 16.11.2026
 - Sicherheitsupdate: strengere Zugriffsprüfungen zwischen Tenants, geschützte E-Mails, Berichte und Exporte. Modulpreise sehen nur noch Portal- und Partner-Berechtigte.
 

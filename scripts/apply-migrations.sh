@@ -28,7 +28,7 @@ filter_psql_noise() {
   grep -vE '^(ALTER|CREATE|DROP|GRANT|REVOKE|COMMENT|COPY|SET|CALL|TRUNCATE|INSERT|UPDATE|DELETE|VALUES|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|REINDEX|VACUUM|ANALYZE|CLUSTER|LOCK|LISTEN|NOTIFY|SELECT|FETCH|MOVE|CLOSE|DECLARE|PREPARE|EXECUTE|DEALLOCATE|EXPLAIN|REASSIGN|SECURITY|REFRESH|IMPORT|LOAD|CHECKPOINT|DISCARD|SHOW|RESET) ?[A-Z0-9_-]*$|^[[:space:]]*setval[[:space:]]*$|^[[:space:]]*-+[[:space:]]*$|^[[:space:]]*[0-9]+[[:space:]]*$|^\([0-9]+ rows?\)$|^[[:space:]]*$' || true
 }
 
-for required in supabase/deploy/verify-live-release.sh supabase/deploy/charger-templates-ready.sql drizzle/migrations/0072_charger_templates_variants.sql drizzle/migrations/0073_vestel_modbus_registers.sql drizzle/migrations/0082_vestel_modbus_spec_v115.sql supabase/deploy/tenant-setup-ready.sql supabase/deploy/live-release-check.sql drizzle/migrations/0070_tenant_setup_phase.sql drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql drizzle/migrations/0079_tenant_setup_deploy_contract.sql; do
+for required in supabase/deploy/verify-live-release.sh supabase/deploy/charger-templates-ready.sql drizzle/migrations/0072_charger_templates_variants.sql drizzle/migrations/0073_vestel_modbus_registers.sql drizzle/migrations/0082_vestel_modbus_spec_v115.sql supabase/deploy/tenant-setup-ready.sql supabase/deploy/live-release-check.sql drizzle/migrations/0070_tenant_setup_phase.sql drizzle/migrations/0071_tenant_setup_phase_audit_fix.sql drizzle/migrations/0079_tenant_setup_deploy_contract.sql drizzle/migrations/0093_restore_package_mistake_reversal.sql supabase/deploy/package-corrections-ready.sql; do
   if [ ! -s "$REPO_ROOT/$required" ]; then
     log "FEHLER: Pflichtdatei fehlt: $required"
     exit 1
@@ -513,7 +513,7 @@ if [ -f "$REPO_ROOT/supabase/deploy/package-corrections-ready.sql" ]; then
   corrections_ready="$(psql_exec -At < "$REPO_ROOT/supabase/deploy/package-corrections-ready.sql")"
   if [ "$corrections_ready" != 't' ]; then
     log "Reparatur: Paketkorrekturen/Fehlbuchung fehlen trotz Migrationsstand"
-    for correction_file in 0074_package_sale_corrections_yearly.sql 0075_package_effective_entitlements.sql 0076_package_correction_security_guard.sql 0077_package_correction_collective_invoice_guard.sql 0078_package_correction_fail_closed_auth.sql 0083_effective_modules_auth_fix.sql; do
+    for correction_file in 0074_package_sale_corrections_yearly.sql 0075_package_effective_entitlements.sql 0076_package_correction_security_guard.sql 0077_package_correction_collective_invoice_guard.sql 0078_package_correction_fail_closed_auth.sql 0083_effective_modules_auth_fix.sql 0093_restore_package_mistake_reversal.sql; do
       if ! run_migration_with_autoheal "$DRIZZLE_MIG_DIR/$correction_file"; then
         log "FEHLER: Paketkorrekturen konnten nicht installiert werden ($correction_file)"
         exit 1
