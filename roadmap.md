@@ -3,7 +3,7 @@
 ## Lovable Cloud: Ressourcenprüfung (24.11., Hendrik)
 - [x] Diagnose abgeschlossen, keine neue Softwareversion (weiter v1.45.4): zwei Gesundheitsmessungen, Top-20-Abfragen nach Zeit/Reads, Tabellen-/Wartungs-/Slotprüfung, begrenzte Fehlerstichprobe und tatsächliche Cloud-Kosten geprüft; Bericht in Files.
 - [x] Cloud erreichbar; RAM 66–68 %, Verbindungen 15–17/60, Datenplatte 88 %. Aktuell rund 4.276 Loxone-Verbindungsfehler mit HTTP 403 pro 15 Minuten; Bridge-Logs 2,93 GB inkl. Indizes, täglicher Partitionsjob mit Historien-Vollscan. Aktuelle CPU-/Disk-IO-Sättigung nicht messbar; separate Hetzner-Kundenumgebung nicht geprüft.
-- [ ] Wartet auf Nutzer: identische Loxone-Fehler mit Wiederholungszähler bündeln; Messdaten und Steuerung unverändert, keine Optimierung vor Freigabe. Zusätzlich Mini mit Kostenvergleich sowie separate Plattenreserve zur Freigabe anbieten; keine Ressourcenänderung ohne Zustimmung.
+- [ ] Wartet auf Nutzer: identische Loxone-Fehler mit Wiederholungszähler bündeln; Messdaten und Steuerung unverändert, keine Optimierung vor Freigabe. Vergrößerung auf Mini wurde vom Nutzer abgelehnt (nicht erneut anbieten, außer auf Wunsch); Instanz bleibt Tiny. Separate Plattenreserve bei 88 % Belegung bleibt Angebot; keine Ressourcenänderung ohne Zustimmung.
 
 ## Fehlbuchung zurücknehmen: fehlende Datenbankfunktion (24.11., Dirk)
 - [x] v1.45.4: Aktuelle Rücknahmefunktion als eigenständige wiederholbare Migration 0093 in Cloud installiert; Parameter, Rechte und Schutz ausgestellter Belege beim Deploy prüfen, Reparatur zuletzt wiederherstellen.

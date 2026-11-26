@@ -3,7 +3,7 @@
 ## Cloud-Ressourcenprüfung – 24.11.2026 (keine Funktionsänderung)
 - Lovable Cloud zweimal erreichbar geprüft: RAM 66–68 %, Verbindungen 15–17/60, Datenplatte 88 %, Datenbank 6,56 GB; DiskIO-Alarm von 18:19 UTC mit Budgetwert 20 ist historisch, aktuelle CPU-/Disk-IO-Sättigung nicht direkt messbar.
 - Top-20-Statements nach Zeit und Reads, Tabellenstatistik, Autovacuum, bestehende Indizes und Replikationsslot geprüft: 4.276 aktuelle ws_connect_failed-Meldungen mit HTTP 403 je 15 Minuten, Bridge-Log 2,93 GB inkl. Indizes mit erfolgreicher 7-Tage-Bereinigung; täglicher Partitionsjob scannt Messhistorie. Keine Daten gelöscht, keine Messdaten/Steuerung reduziert.
-- Bericht in Files mit tatsächlichen Cloud-Raten, Optimierungsvorschlägen, Mini- und separatem Disk-Kostenvergleich; Freigaben ausstehend. Keine neue Version, Schema-/App-Änderung oder Veröffentlichung; separate Hetzner-Kundenumgebung nicht geprüft.
+- Bericht in Files mit tatsächlichen Cloud-Raten, Optimierungsvorschlägen, Mini- und separatem Disk-Kostenvergleich; Vergrößerung auf Mini vom Nutzer abgelehnt, Instanz bleibt Tiny; Freigabe der Optimierung ausstehend. Keine neue Version, Schema-/App-Änderung oder Veröffentlichung; separate Hetzner-Kundenumgebung nicht geprüft.
 
 ## v1.45.4 – 24.11.2026
 - Screenshot: Rücknahme-RPC fehlt im API-Schema der separaten Kundenumgebung; Funktion und korrekte Parameter sind in Cloud vorhanden, Hagemann dort nicht hinterlegt. Keine reale Kundenbuchung automatisch geändert.
