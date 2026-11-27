@@ -1,5 +1,10 @@
 # Änderungsprotokoll (intern)
 
+## v1.45.5 – 27.11.2026
+- Sicherheit, Migration 0094 (wiederholbar): Lese-Regeln mit `USING (true)` ersetzt. `pricing_package_modules`/`module_catalog_flags` nur `can_read_price_catalog`; `cp_firmware_artifacts`/`wallbox_modbus_templates` nur Tenant-Admin/-Benutzer, Partner-Mitglieder, Portal technisch; `gateway_release_channels` nur Portal (App liest über Backend-Funktion). Schreibrechte und Daten unverändert.
+- Geprüft: Regeln in der Datenbank gelesen; alle 9 Tenant-Profile der Testumgebung haben Rolle Admin/Benutzer. Nicht mit echten Konten im Browser durchgeklickt.
+- Weiter offen (Entscheidung/Server-Schritt nötig): OCPP-Backend-Secret ist in der Cloud nicht gesetzt, Schnittstelle Ladeserver ↔ Backend daher weiter ohne Prüfung; 5 von 7 Ladepunkten der Testumgebung ohne Passwort; Zählerstände ohne Modulprüfung auf Datenbankebene (betrifft auch Basis-Dashboard, Liegenschaften, Grundrisse, Zähler-App).
+
 ## Cloud-Ressourcenprüfung – 24.11.2026 (keine Funktionsänderung)
 - Lovable Cloud zweimal erreichbar geprüft: RAM 66–68 %, Verbindungen 15–17/60, Datenplatte 88 %, Datenbank 6,56 GB; DiskIO-Alarm von 18:19 UTC mit Budgetwert 20 ist historisch, aktuelle CPU-/Disk-IO-Sättigung nicht direkt messbar.
 - Top-20-Statements nach Zeit und Reads, Tabellenstatistik, Autovacuum, bestehende Indizes und Replikationsslot geprüft: 4.276 aktuelle ws_connect_failed-Meldungen mit HTTP 403 je 15 Minuten, Bridge-Log 2,93 GB inkl. Indizes mit erfolgreicher 7-Tage-Bereinigung; täglicher Partitionsjob scannt Messhistorie. Keine Daten gelöscht, keine Messdaten/Steuerung reduziert.

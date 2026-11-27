@@ -168,7 +168,10 @@
 - [ ] CRA: Security-by-Default-Review (Checkliste)
 
 ## Offen – wartet auf Nutzer (07.10.)
-- [ ] Passwort Ladeserver (gemeinsames Secret Ladeserver ↔ Cloud)
+- [ ] Passwort Ladeserver (gemeinsames Secret Ladeserver ↔ Cloud) — 27.11. erneut im Sicherheits-Scan (4 kritische Funde); Secret in Cloud weiter nicht gesetzt
+- [ ] Ladepunkte ohne Passwort: Passwortpflicht je Station entscheiden (27.11., 5 von 7 in Testumgebung ohne Passwort)
+- [ ] Zählerstände nur mit gebuchtem Modul lesbar? Entscheidung nötig (27.11.), betrifft Basis-Dashboard
+- [x] v1.45.5: Katalogtabellen nur noch für berechtigte Rollen lesbar (Migration 0094)
 - [ ] Live-Deploy v1.6.1 freigeben
 - [ ] AICONO Partner GmbH: neuen Admin einladen oder Partner löschen
 - [x] Roadmap nur im Staging + Board-Pflege

@@ -1,5 +1,8 @@
 # Versionshinweise
 
+## v1.45.5 – 27.11.2026
+- Sicherheitsupdate: Paketzuordnungen, Ladepunkt-Firmware, Wallbox-Vorlagen und Gateway-Versionskanäle sind nur noch für berechtigte Rollen lesbar; Konten der Mieter-App haben darauf keinen Zugriff mehr.
+
 ## v1.45.4 – 24.11.2026
 - Wiederherstellung der fehlenden Funktion „Fehlbuchung zurücknehmen“ beim Live-Update abgesichert; Parameter und Zugriffsrechte werden vor Freigabe geprüft.
 - Ausgestellte Rechnungen zuerst stornieren. Historische Belege und Tenant-Daten bleiben erhalten; nur offene Entwürfe werden angepasst.

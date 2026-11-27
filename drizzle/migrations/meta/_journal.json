@@ -659,6 +659,13 @@
       "when": 1795531416075,
       "tag": "0093_restore_package_mistake_reversal",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1795785654336,
+      "tag": "0094_restrict_catalog_reads",
+      "breakpoints": true
     }
   ]
 }
