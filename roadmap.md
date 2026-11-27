@@ -1,5 +1,12 @@
 # Roadmap
 
+## Chat-Zusammenfassung als Datei (27.11., Hendrik)
+- [x] Zusammenfassung des gesamten Verlaufs (Februar–November 2026) als Markdown in Files abgelegt; ältere Monate per Stichprobe, keine Softwareänderung/keine neue Version (weiter v1.45.4).
+
+## Mieter-App: Messwerte je Mieter (27.11., Leon)
+- [x] Fünf Entscheidungen abgestimmt: Mieter-App /te, 5-Minuten- und Monatswerte, Selbstregistrierung, alle Medien, Sicht erst ab Einzugsdatum.
+- [ ] Wartet auf Nutzer: Freigabe zur Umsetzung; bisher nichts gebaut.
+
 ## Lovable Cloud: Ressourcenprüfung (24.11., Hendrik)
 - [x] Diagnose abgeschlossen, keine neue Softwareversion (weiter v1.45.4): zwei Gesundheitsmessungen, Top-20-Abfragen nach Zeit/Reads, Tabellen-/Wartungs-/Slotprüfung, begrenzte Fehlerstichprobe und tatsächliche Cloud-Kosten geprüft; Bericht in Files.
 - [x] Cloud erreichbar; RAM 66–68 %, Verbindungen 15–17/60, Datenplatte 88 %. Aktuell rund 4.276 Loxone-Verbindungsfehler mit HTTP 403 pro 15 Minuten; Bridge-Logs 2,93 GB inkl. Indizes, täglicher Partitionsjob mit Historien-Vollscan. Aktuelle CPU-/Disk-IO-Sättigung nicht messbar; separate Hetzner-Kundenumgebung nicht geprüft.
